@@ -15,6 +15,7 @@ struct ParcelShareSheet: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @StateObject private var model: ParcelShareModel
     @State private var handingOut: HandedAddress?
+    @State private var shareButton = ShareButtonAnchor()
     @State private var copied = false
     /// The sheet is as tall as what it shows, and opens fully to write a gift's note.
     @State private var contentHeight: CGFloat = 470
@@ -74,15 +75,33 @@ struct ParcelShareSheet: View {
             #endif
         }
         .sheet(item: $handingOut) { address in
-            LinkActivitySheet(url: address.url) { shared, error in
-                if shared { DeliveryAnalytics.shared.action("parcel-link-share", .success) }
-                else if error != nil {
-                    DeliveryAnalytics.shared.action("parcel-link-share", .error)
-                    model.handOutFailed()
-                }
-            }
-            .presentationDetents([.medium, .large])
-            .ignoresSafeArea()
+            LinkActivitySheet(url: address.url, finished: handedOut)
+                .presentationDetents([.medium, .large])
+                .ignoresSafeArea()
+        }
+    }
+
+    /// An iPad's share sheet comes as a popover from the Share button rather than a small sheet
+    /// at the window's foot; a phone's rises from the bottom.
+    private func handOut(_ url: URL) {
+        guard UIDevice.current.userInterfaceIdiom == .pad, let button = shareButton.view,
+              var top = button.window?.rootViewController else {
+            handingOut = HandedAddress(url: url)
+            return
+        }
+        while let next = top.presentedViewController, !next.isBeingDismissed { top = next }
+        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, shared, _, error in handedOut(shared, error) }
+        controller.popoverPresentationController?.sourceView = button
+        controller.popoverPresentationController?.sourceRect = button.bounds
+        top.present(controller, animated: true)
+    }
+
+    private func handedOut(_ shared: Bool, _ error: Error?) {
+        if shared { DeliveryAnalytics.shared.action("parcel-link-share", .success) }
+        else if error != nil {
+            DeliveryAnalytics.shared.action("parcel-link-share", .error)
+            model.handOutFailed()
         }
     }
 
@@ -123,9 +142,10 @@ struct ParcelShareSheet: View {
                 Task {
                     guard let url = await model.addressToHandOut() else { return }
                     writing = nil
-                    handingOut = HandedAddress(url: url)
+                    handOut(url)
                 }
             }
+            .background(ShareButtonAnchor.Marker(anchor: shareButton))
             .disabled(model.loading)
             if model.link != nil {
                 Button { Task { await model.stop() } } label: {
@@ -469,6 +489,24 @@ private struct SharePreviewCard: View {
         } else {
             SmallPip(label: label).frame(width: Self.boxWidth)
         }
+    }
+}
+
+/// The Share button's place in the window, for an iPad's share popover to point at.
+private final class ShareButtonAnchor {
+    weak var view: UIView?
+
+    struct Marker: UIViewRepresentable {
+        let anchor: ShareButtonAnchor
+
+        func makeUIView(context: Context) -> UIView {
+            let view = UIView()
+            view.isUserInteractionEnabled = false
+            anchor.view = view
+            return view
+        }
+
+        func updateUIView(_ view: UIView, context: Context) { anchor.view = view }
     }
 }
 
