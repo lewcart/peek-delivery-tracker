@@ -2778,12 +2778,13 @@ extension ParcelLogicTests {
         var chosen = DeliveriesNavigation()
         chosen.open(a)
         func keys(
-            free: Bool = true, typing: Bool = false, _ arrangement: DeliveriesArrangement = .stacked,
+            free: Bool = true, searching: Bool = false, typing: Bool = false,
+            _ arrangement: DeliveriesArrangement = .stacked,
             _ navigation: DeliveriesNavigation = DeliveriesNavigation(), cards: [UUID] = [a, b],
             hasParcels: Bool = true, canUndo: Bool = false
         ) -> Set<DeliveriesKey> {
-            DeliveriesKey.available(free: free, typing: typing, arrangement: arrangement, navigation: navigation,
-                                    cards: cards, hasParcels: hasParcels, canUndo: canUndo)
+            DeliveriesKey.available(free: free, searching: searching, typing: typing, arrangement: arrangement,
+                                    navigation: navigation, cards: cards, hasParcels: hasParcels, canUndo: canUndo)
         }
         // The list by itself: Add and Find, and Undo while an archive's toast shows.
         XCTAssertEqual(keys(), [.add, .find])
@@ -2795,8 +2796,12 @@ extension ParcelLogicTests {
         XCTAssertEqual(keys(.sideBySide, automatic), [.add, .find, .previous, .next, .open])
         XCTAssertEqual(keys(.sideBySide, chosen), [.add, .find, .previous, .next])
         XCTAssertEqual(keys(.sideBySide, chosen, cards: []), [.add, .find])
-        // Typing in the search, the field keeps the keys it edits with.
-        XCTAssertEqual(keys(typing: true, .sideBySide, automatic, canUndo: true), [.add, .find])
+        // Typing in the search, the field keeps the keys it edits with; Escape closes the search, typing or not.
+        XCTAssertEqual(keys(searching: true, typing: true, .sideBySide, automatic, canUndo: true),
+                       [.add, .find, .closeSearch])
+        XCTAssertEqual(keys(searching: true), [.add, .find, .closeSearch])
+        // A parcel open over the list keeps Escape for going back, though the search under it is open.
+        XCTAssertEqual(keys(searching: true, .stacked, chosen), [.add])
         // Another tab, or a sheet, an alert or a question over the deliveries or their parcel: none.
         XCTAssertEqual(keys(free: false, .sideBySide, automatic, canUndo: true), [])
     }

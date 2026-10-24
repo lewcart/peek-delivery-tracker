@@ -120,6 +120,8 @@ struct ParcelDetailView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
+                    // On an iPad the question is a popover: off the menu, not off the page, where it covered the list.
+                    .parcelDeleteConfirmation(isPresented: $showingDeleteConfirmation) { delete(parcel) }
                 }
             }
         }
@@ -173,9 +175,6 @@ struct ParcelDetailView: View {
         #endif
         .parcelRenameAlert(isPresented: $showingTitleEditor, name: $editedTitle) { label in
             if let parcel { run { try await store.rename(parcel, label: label) } }
-        }
-        .parcelDeleteConfirmation(isPresented: $showingDeleteConfirmation) {
-            if let parcel { delete(parcel) }
         }
     }
 

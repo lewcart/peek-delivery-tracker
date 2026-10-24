@@ -206,6 +206,8 @@ struct AddParcelView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(localizer.text("common.close"))
             .accessibilityIdentifier("addParcel.close")
+            // Escape closes Add, but not from under the carrier picker or the scanner, which it would close too.
+            .keyboardShortcut(showingCarrierPicker || showingScanner ? nil : KeyboardShortcut(.escape, modifiers: []))
             .disabled(saving)
         }
         .foregroundStyle(Brand.ink)

@@ -738,24 +738,25 @@ struct DeliveriesNavigation: Equatable {
     }
 }
 
-/// A key the deliveries answer, besides the parcel's own and the refresh button's ⌘R: ⌘N adds, ⌘F finds, ⌘Z
-/// undoes an archive while its toast shows, and beside a parcel, ↑ and ↓ open the card before or after it and
-/// Return opens the one shown by itself.
+/// A key the deliveries answer, besides the parcel's own and the refresh button's ⌘R: ⌘N adds, ⌘F finds, Escape
+/// closes the search, ⌘Z undoes an archive while its toast shows, and beside a parcel, ↑ and ↓ open the card
+/// before or after it and Return opens the one shown by itself.
 enum DeliveriesKey: Hashable {
-    case add, find, undo, previous, next, open
+    case add, find, closeSearch, undo, previous, next, open
 
     /// The keys that act on what is in front. SwiftUI keeps every shortcut in the window, the list's under the
     /// parcel open over it and a tab's behind the tab chosen since, so there are none unless the deliveries are
     /// `free`: in front, with nothing open over the list or its parcel. While someone types in the search, the
-    /// field keeps the keys it edits with.
+    /// field keeps the keys it edits with, and Escape closes the search, which the field doesn't hear.
     static func available(
-        free: Bool, typing: Bool, arrangement: DeliveriesArrangement, navigation: DeliveriesNavigation,
-        cards: [UUID], hasParcels: Bool, canUndo: Bool
+        free: Bool, searching: Bool, typing: Bool, arrangement: DeliveriesArrangement,
+        navigation: DeliveriesNavigation, cards: [UUID], hasParcels: Bool, canUndo: Bool
     ) -> Set<Self> {
         guard free else { return [] }
         let listShown = arrangement == .sideBySide || navigation.chosen == nil
         var keys: Set<Self> = [.add]
         if listShown, hasParcels { keys.insert(.find) }
+        if listShown, searching { keys.insert(.closeSearch) }
         guard !typing else { return keys }
         if listShown, canUndo { keys.insert(.undo) }
         if arrangement == .sideBySide, !cards.isEmpty { keys.formUnion([.previous, .next]) }

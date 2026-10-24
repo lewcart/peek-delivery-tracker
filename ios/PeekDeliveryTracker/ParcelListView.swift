@@ -607,8 +607,9 @@ private struct DeliveryListView: View {
     /// The deliveries' keys, which do what their buttons do. The parcel's own are on its page.
     @ViewBuilder private func keyboard(_ layout: DeliveryListLayout) -> some View {
         let keys = DeliveriesKey.available(
-            free: keyboardFree, typing: searchFocused, arrangement: windowArrangement, navigation: navigation,
-            cards: rows(layout), hasParcels: !store.parcels.isEmpty, canUndo: store.undoParcel != nil
+            free: keyboardFree, searching: showingSearch, typing: searchFocused, arrangement: windowArrangement,
+            navigation: navigation, cards: rows(layout), hasParcels: !store.parcels.isEmpty,
+            canUndo: store.undoParcel != nil
         )
         if !keys.isEmpty {
             KeyboardShortcuts {
@@ -618,6 +619,10 @@ private struct DeliveryListView: View {
                 }
                 if keys.contains(.find) {
                     Button(localizer.text("view.search")) { find() }.keyboardShortcut(MenuKey.find)
+                }
+                if keys.contains(.closeSearch) {
+                    Button(localizer.text("view.hideControls")) { closeSearch() }
+                        .keyboardShortcut(.escape, modifiers: [])
                 }
                 if keys.contains(.undo), let parcel = store.undoParcel {
                     Button(localizer.text("app.undo")) { restore(parcel) }.keyboardShortcut("z", modifiers: .command)
@@ -640,8 +645,9 @@ private struct DeliveryListView: View {
     /// What the menu bar's Add, Search and Refresh do now. Refresh also works where the list has no button.
     private func menu(_ layout: DeliveryListLayout) -> DeliveriesMenu {
         let keys = DeliveriesKey.available(
-            free: keyboardFree, typing: searchFocused, arrangement: windowArrangement, navigation: navigation,
-            cards: rows(layout), hasParcels: !store.parcels.isEmpty, canUndo: store.undoParcel != nil
+            free: keyboardFree, searching: showingSearch, typing: searchFocused, arrangement: windowArrangement,
+            navigation: navigation, cards: rows(layout), hasParcels: !store.parcels.isEmpty,
+            canUndo: store.undoParcel != nil
         )
         return DeliveriesMenu(
             add: keys.contains(.add) ? { sharedDraft = nil; showingAdd = true } : nil,
@@ -655,6 +661,12 @@ private struct DeliveryListView: View {
     private func find() {
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { showingSearch = true }
         searchFocused = true
+    }
+
+    /// Closes the search, as Escape does: the field never hears that key.
+    private func closeSearch() {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { showingSearch = false }
+        searchFocused = false
     }
 
     /// Shows the card before or after the parcel beside the list, and brings it into view.
@@ -914,11 +926,6 @@ private struct DeliveryListView: View {
         }
         .font(.subheadline)
         .buttonStyle(.plain)
-        .onKeyPress(.escape) {
-            withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { showingSearch = false }
-            searchFocused = false
-            return .handled
-        }
         .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)).combined(with: .offset(y: -10)))
     }
 
