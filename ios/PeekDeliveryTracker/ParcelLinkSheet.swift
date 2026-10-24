@@ -425,6 +425,10 @@ private struct SharedParcelCard: View {
     @State private var open = 0.0
     /// Where the delivering carrier's mark stands on the card, which the map keeps clear of.
     @State private var deliveryMark: CGRect?
+    /// Where the refresh and globe buttons stand on the card, which the map's names keep clear of. Each is measured on its
+    /// own, so the row shares out its width as it always has.
+    @State private var refreshButton: CGRect?
+    @State private var globeButton: CGRect?
 
     /// The card, from its top left corner: where its map is drawn from.
     private static let cardSpace = "shared-parcel-card"
@@ -459,6 +463,7 @@ private struct SharedParcelCard: View {
                 marks(identity, delivery: delivery).layoutPriority(1)
                 Spacer(minLength: 8)
                 LinkRefreshButton(parcel: parcel, refreshing: refreshing, tint: identity.ink, action: onRefresh)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.cardSpace)) } action: { refreshButton = $0 }
                 if placed {
                     Button { showingMap = true } label: {
                         Image(systemName: "globe")
@@ -470,6 +475,7 @@ private struct SharedParcelCard: View {
                     .foregroundStyle(identity.ink.opacity(0.75))
                     .disabled(route == nil)
                     .accessibilityLabel(localizer.text("map.open"))
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.cardSpace)) } action: { globeButton = $0 }
                 }
             }
             .frame(minHeight: 44)
@@ -536,11 +542,12 @@ private struct SharedParcelCard: View {
         .padding(18)
         .coordinateSpace(.named(Self.cardSpace))
         .background(alignment: .top) {
-            // A map that keeps clear of the second mark waits to know where it stands, rather than moving once it does.
-            if let atlas, let route, delivery == nil || deliveryMark != nil {
+            // A map that keeps clear of the second mark and the buttons waits to know where they stand, rather than moving
+            // once it does.
+            if let atlas, let route, delivery == nil || deliveryMark != nil, let refreshButton, let globeButton {
                 // The status is written over the bottom of the map, so Pip stays above it.
                 RouteEngraving(atlas: atlas, route: route, stage: parcel.currentStage, identity: identity, floor: 160 + room,
-                               covered: delivery == nil ? nil : deliveryMark, room: room)
+                               covered: delivery == nil ? nil : deliveryMark, buttons: refreshButton.union(globeButton), room: room)
                     .frame(height: 176 + room)
                     .clipShape(UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous))
                     .contentShape(Rectangle())

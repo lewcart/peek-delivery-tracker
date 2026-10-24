@@ -636,6 +636,33 @@ final class ParcelRouteTests: XCTestCase {
         XCTAssertEqual(name(clear, "Bern"), name(plain, "Bern"))
     }
 
+    func testAMapKeepsItsNamesAndPipOffTheCardsButtons() throws {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "World", withExtension: "json"))
+        let atlas = try WorldAtlas(data: Data(contentsOf: url))
+        // The parcel's page, with its globe, share and bell buttons in the top right corner.
+        let size = CGSize(width: 358, height: 176)
+        let card = EdgeInsets(top: 40, leading: 16, bottom: 44, trailing: 16)
+        let buttons = CGRect(x: 208, y: 18, width: 132, height: 44)
+        let route = ParcelRoute(places: [city("Wilmington", "US", -75.55, 39.74), city("Haiger", "DE", 8.21, 50.74)])
+        func overlay(_ camera: GlobeCamera, buttons: CGRect?) -> MapOverlay {
+            MapOverlay(route: route, camera: camera, size: size, insets: card, labels: .ends, mode: .journey, context: false, atlas: atlas,
+                       locale: Locale(identifier: "en"), countryName: { $0 }, pip: PipRequest(mood: .look, ceiling: 52, floor: 160),
+                       buttons: buttons)
+        }
+        /// The frame the map takes, with room for Pip beside the parcel's dot.
+        func framed(_ buttons: CGRect?) -> GlobeCamera {
+            .framing(route, mode: .journey, in: size, insets: card, shown: { camera, _ in overlay(camera, buttons: buttons).shown }, pip: true)
+        }
+
+        // The route ends in the buttons' corner: its last name went under them.
+        let before = overlay(framed(nil), buttons: nil)
+        XCTAssertTrue(before.labels.contains { $0.frame.intersects(buttons) })
+        let clear = overlay(framed(buttons), buttons: buttons)
+        XCTAssertEqual(clear.labels.map(\.text), ["Haiger", "Wilmington"])
+        XCTAssertFalse(clear.labels.contains { $0.frame.intersects(buttons) })
+        XCTAssertFalse(try XCTUnwrap(clear.pip).box.intersects(buttons))
+    }
+
     func testPipStandsBesideTheDotOffItsNameAndTheRoute() throws {
         let url = try XCTUnwrap(Bundle.main.url(forResource: "World", withExtension: "json"))
         let atlas = try WorldAtlas(data: Data(contentsOf: url))

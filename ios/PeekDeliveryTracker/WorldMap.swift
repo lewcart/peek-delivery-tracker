@@ -609,10 +609,12 @@ struct MapOverlay {
     }
 
     /// `towns` are the towns of the tiles in view, on a map that shows its close-ups in full. `covered` is a box the card
-    /// writes over the map, such as a second carrier's mark: the names, Pip and the chips on the edge keep clear of it.
+    /// writes over the map, such as a second carrier's mark, and `buttons` the box of the buttons it puts over its top:
+    /// the names, Pip and the chips on the edge keep clear of both.
     init(route: ParcelRoute, camera: GlobeCamera, size: CGSize, insets: EdgeInsets, labels labelSet: MapLabels,
          sites: Bool = false, mode: ParcelRoute.Mode, context: Bool, atlas: WorldAtlas, locale: Locale,
-         countryName: (String) -> String, pip request: PipRequest? = nil, towns: [DetailTile.Town]? = nil, covered: CGRect? = nil) {
+         countryName: (String) -> String, pip request: PipRequest? = nil, towns: [DetailTile.Town]? = nil, covered: CGRect? = nil,
+         buttons: CGRect? = nil) {
         let projection = GlobeProjection(camera)
         let visible = { (point: GeoPoint) in projection.sees(point) }
         let at = { (point: GeoPoint) in projection.project(point) }
@@ -685,9 +687,9 @@ struct MapOverlay {
 
         // Place names, most important first, skipping any that would collide.
         var placed = dots.map { CGRect(x: $0.point.x - 6, y: $0.point.y - 6, width: 12, height: 12) }
-        // What the card writes over the map is a mark like any other, with a little air around it: names and Pip keep off it.
-        let written = covered?.insetBy(dx: -3, dy: -3)
-        if let written { placed.append(written) }
+        // What the card writes or puts over the map is a mark like any other, with a little air around it: names and Pip keep off it.
+        let written = [covered, buttons].compactMap { $0?.insetBy(dx: -3, dy: -3) }
+        placed.append(contentsOf: written)
         let overlaps = { (box: CGRect, taken: [CGRect]) -> Bool in
             taken.contains { box.minX < $0.maxX && box.maxX > $0.minX && box.minY < $0.maxY && box.maxY > $0.minY }
         }
@@ -810,10 +812,10 @@ struct MapOverlay {
                 // A chip the card would write over stands beside it or just below it instead: off the parcel's own dot first,
                 // then whichever is nearer.
                 let chip = { (x: CGFloat, y: CGFloat) in CGRect(x: x - half, y: y - 13, width: width, height: 26) }
-                if let written, overlaps(chip(x, y), [written]) {
+                if let box = written.first(where: { overlaps(chip(x, y), [$0]) }) {
                     let dot = at(current.place.point)
                     let parcel = CGRect(x: dot.x - 10, y: dot.y - 10, width: 20, height: 20)
-                    let nearest = [CGPoint(x: written.maxX + half + 4, y: y), CGPoint(x: x, y: min(size.height - insets.bottom - 21, written.maxY + 13))]
+                    let nearest = [CGPoint(x: box.maxX + half + 4, y: y), CGPoint(x: x, y: min(size.height - insets.bottom - 21, box.maxY + 13))]
                         .filter { $0.x <= size.width - insets.trailing - half - 8 }
                         .map { (spot: $0, onParcel: overlaps(chip($0.x, $0.y), [parcel]) ? 1 : 0, far: abs($0.x - x) + abs($0.y - y)) }
                         .min { ($0.onParcel, $0.far) < ($1.onParcel, $1.far) }
@@ -857,7 +859,7 @@ struct MapOverlay {
                 // Inside the map, below the card's top row, and never on what the card writes over the map, whatever the other
                 // spots cost.
                 guard box.minX >= west, box.maxX <= east, box.minY >= ceiling, box.maxY <= floor,
-                      !(written.map { overlaps(box, [$0]) } ?? false) else { continue }
+                      !overlaps(box, written) else { continue }
                 let place = PipPlacement(origin: origin, width: width, mood: request.mood, side: side, below: spot.below, box: box, spot: spot)
                 if request.held != nil {
                     best = (0, place)
@@ -1297,6 +1299,8 @@ struct WorldMapView: View {
     var insets = EdgeInsets()
     /// A box the card writes over the map, such as a second carrier's mark: the route, the names and Pip keep clear of it.
     var covered: CGRect?
+    /// The buttons the card puts over the top of the map: the route may run under them, but the names and Pip keep clear.
+    var buttons: CGRect?
     /// Changes to bring a moved map back to the parcel.
     var recenter = 0
     var language: AppLanguage = .en
@@ -1336,7 +1340,7 @@ struct WorldMapView: View {
                 let overlay = MapOverlay(
                     route: route, camera: shown, size: size, insets: insets, labels: labels, sites: sites, mode: mode, context: showsContext,
                     atlas: atlas, locale: language.locale, countryName: { TrackingLocation.countryName($0, language: language) },
-                    pip: pipRequest(moving: moving), towns: close.towns, covered: covered
+                    pip: pipRequest(moving: moving), towns: close.towns, covered: covered, buttons: buttons
                 )
                 ZStack(alignment: .topLeading) {
                     ZStack(alignment: .topLeading) {
@@ -1381,7 +1385,7 @@ struct WorldMapView: View {
         // end is framed with room for him there.
         let shown = { (camera: GlobeCamera, box: CGRect?) in
             MapOverlay(route: route, camera: camera, size: size, insets: insets, labels: labels, sites: sites, mode: mode, context: false,
-                       atlas: atlas, locale: language.locale, countryName: { $0 }, pip: standing, covered: box).shown
+                       atlas: atlas, locale: language.locale, countryName: { $0 }, pip: standing, covered: box, buttons: buttons).shown
         }
         return .framing(route, mode: mode, in: size, insets: insets, covered: covered, shown: shown, pip: standing != nil, closeUps: detail != nil)
     }
@@ -1407,7 +1411,7 @@ struct WorldMapView: View {
         let overlay = MapOverlay(
             route: route, camera: camera, size: size, insets: insets, labels: labels, sites: sites, mode: mode, context: showsContext,
             atlas: atlas, locale: language.locale, countryName: { TrackingLocation.countryName($0, language: language) }, pip: pip,
-            covered: covered
+            covered: covered, buttons: buttons
         )
         return overlay.pip?.spot
     }

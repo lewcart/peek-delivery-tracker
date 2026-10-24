@@ -43,6 +43,8 @@ struct ParcelDetailView: View {
     @State private var atlas: WorldAtlas?
     /// Where the delivering carrier's mark stands on the card, which the map keeps clear of.
     @State private var deliveryMark: CGRect?
+    /// Where the globe, share and bell buttons stand on the card, which the map's names keep clear of.
+    @State private var buttonRow: CGRect?
     /// How tall the card's top row stands, which at the largest text sizes holds the buttons on a line of their own.
     @State private var headerHeight: CGFloat = 0
 
@@ -338,6 +340,7 @@ struct ParcelDetailView: View {
                                 : parcel.notificationsMuted ? "detail.unmute" : "detail.mute"))
                         }
                     }
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.cardSpace)) } action: { buttonRow = $0 }
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
                 if placed {
@@ -422,11 +425,13 @@ struct ParcelDetailView: View {
             .padding(18)
             .coordinateSpace(.named(Self.cardSpace))
             .background(alignment: .top) {
-                // A map that keeps clear of the second mark waits to know where it stands, rather than moving once it does.
-                if let atlas, let route, delivery == nil || deliveryMark != nil, !typeSize.isAccessibilitySize || headerHeight > 0 {
+                // A map that keeps clear of the second mark and the buttons waits to know where they stand, rather than moving
+                // once it does.
+                if let atlas, let route, delivery == nil || deliveryMark != nil, buttonRow != nil,
+                   !typeSize.isAccessibilitySize || headerHeight > 0 {
                     // The title is written over the bottom of the map, so Pip stays above it.
                     RouteEngraving(atlas: atlas, route: route, stage: parcel.currentStage, identity: branding, floor: 160 + room + lower,
-                                   covered: delivery == nil ? nil : deliveryMark, room: room + lower)
+                                   covered: delivery == nil ? nil : deliveryMark, buttons: buttonRow, room: room + lower)
                         .frame(height: 176 + room + lower)
                         .clipShape(UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18))
                         .contentShape(Rectangle())
