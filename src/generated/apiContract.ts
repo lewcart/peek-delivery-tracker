@@ -31050,12 +31050,12 @@ export const CARRIER_CAPABILITIES = {
     "countries": [
       "US"
     ],
-    "color": "#80ca35",
+    "color": "#055aa1",
     "selectable": true,
     "timezone": "UTC",
     "tracking": {
       "mode": "automatic",
-      "adapter": "universal"
+      "adapter": "ywe"
     },
     "trackingUrlTemplate": "https://www.yanwenexpress.com/tracking.html?label={trackingNumber}",
     "linkRules": [
