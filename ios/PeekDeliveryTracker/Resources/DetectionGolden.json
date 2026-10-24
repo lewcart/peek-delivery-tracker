@@ -73575,6 +73575,14 @@
     ]
   },
   {
+    "input": "FARZZ0000000001YQ",
+    "carrier": "far-international",
+    "confidence": "high",
+    "candidates": [
+      "far-international"
+    ]
+  },
+  {
     "input": "FC2404051641097",
     "carrier": "unknown",
     "confidence": "low",
@@ -87628,6 +87636,17 @@
     "candidates": []
   },
   {
+    "input": "RTZ5P00D00000001",
+    "carrier": "unknown",
+    "confidence": "low",
+    "candidates": [
+      "aliexpress"
+    ],
+    "asked": [
+      "aliexpress"
+    ]
+  },
+  {
     "input": "RU170511-221402",
     "carrier": "unknown",
     "confidence": "none",
@@ -92946,6 +92965,17 @@
     "confidence": "high",
     "candidates": [
       "correios-br"
+    ]
+  },
+  {
+    "input": "YF0000000001CN",
+    "carrier": "unknown",
+    "confidence": "low",
+    "candidates": [
+      "dhlink"
+    ],
+    "asked": [
+      "dhlink"
     ]
   },
   {

@@ -268,6 +268,10 @@
           "confidence": "low"
         },
         {
+          "pattern": "^RTZ5P\\d{2}D\\d{8}$",
+          "confidence": "low"
+        },
+        {
           "pattern": "^\\d{3}[A-Z]\\d{8}[A-Z]$",
           "confidence": "low"
         },
@@ -14297,6 +14301,10 @@
         },
         {
           "pattern": "^QH\\d{12}FS$",
+          "confidence": "low"
+        },
+        {
+          "pattern": "^YF\\d{10}CN$",
           "confidence": "low"
         }
       ],
@@ -31082,6 +31090,44 @@
         }
       ],
       "trackingSearchUrl": "https://www.yanwenexpress.com/tracking.html"
+    },
+    "far-international": {
+      "displayName": "FAR International",
+      "aliases": [
+        "FAR International Logistics",
+        "Far International Logistics",
+        "泛远国际",
+        "泛远国际物流"
+      ],
+      "countries": [
+        "CN"
+      ],
+      "color": "#003b75",
+      "selectable": true,
+      "timezone": "Asia/Shanghai",
+      "tracking": {
+        "mode": "automatic",
+        "adapter": "universal"
+      },
+      "trackingUrlTemplate": "https://www.far800.com/logistics/result?key={trackingNumber}",
+      "linkRules": [
+        {
+          "domains": [
+            "www.far800.com"
+          ],
+          "pathPattern": "^/logistics/result/?$",
+          "params": [
+            "key"
+          ]
+        }
+      ],
+      "detectionRules": [
+        {
+          "pattern": "^FAR[A-Z]{2}\\d{10}YQ$",
+          "confidence": "high"
+        }
+      ],
+      "trackingSearchUrl": "https://www.far800.com/"
     }
   },
   "servers": [
@@ -34659,7 +34705,8 @@
           "shouwu",
           "meihoo-pegasus",
           "yypost",
-          "ywe"
+          "ywe",
+          "far-international"
         ]
       },
       "Stage": {
