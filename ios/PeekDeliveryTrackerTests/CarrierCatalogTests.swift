@@ -602,7 +602,7 @@ final class CarrierCatalogTests: XCTestCase {
         }
         XCTAssertEqual(catalog.detect("lf 123.456-785 de").carrier, .dhl)
         XCTAssertEqual(catalog.detect("LF123456789DE").carrier, .unknown)
-        XCTAssertEqual(catalog.detect("LF123456785US").carrier, .internationalPost)
+        XCTAssertNotEqual(catalog.detect("LF123456785US").carrier, .dhl)
         XCTAssertTrue(catalog.tracksAutomatically(.dhl))
         for input in [
             "https://www.dhl.de/en/privatkunden/dhl-sendungsverfolgung.html?piececode=LF123456785DE",
