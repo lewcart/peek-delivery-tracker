@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { JsonObject } from './types';
-import { datedObservations, filledPlaceholders, misdatedCopies, restatedIdentities, retimedScans, sameInstantIdentities, sharedScans, relayedScans, withIdentities, withoutCopyDrift } from './eventIdentity';
+import { datedObservations, filledPlaceholders, misdatedCopies, restatedIdentities, retimedScans, sameInstantIdentities, sharedScans, relayedScans, withIdentities, withoutCopyDrift, withStatedClocks } from './eventIdentity';
 
 // New events carry the sync's ISO spelling; stored rows come back from
 // PostgREST with an explicit +00:00 offset. Both name the same instant.
@@ -586,12 +586,18 @@ describe('scans a carrier and a universal provider both report', () => {
     const skipped = (occurredAt: string, description = 'Out for Delivery') => sharedScans(
       [scan('unknown:out', occurredAt, description)], stored,
     ).skipped.size;
-    for (const occurredAt of ['2026-01-04T12:45:00Z', '2026-01-04T17:30:00Z', '2026-01-05T02:00:00Z', '2026-01-03T22:00:00Z']) {
+    // A copy with seconds of its own meets a carrier's scan in whole minutes at the copy's minute.
+    for (const occurredAt of ['2026-01-04T12:45:00Z', '2026-01-04T17:30:00Z', '2026-01-05T02:00:00Z', '2026-01-03T22:00:00Z', '2026-01-04T13:00:01Z']) {
       expect(skipped(occurredAt), occurredAt).toBe(1);
     }
-    for (const occurredAt of ['2026-01-04T13:00:01Z', '2026-01-04T12:20:00Z', '2026-01-05T02:15:00Z', '2026-01-03T21:45:00Z', 'not a time']) {
+    for (const occurredAt of ['2026-01-04T12:20:00Z', '2026-01-05T02:15:00Z', '2026-01-03T21:45:00Z', '2026-01-04T13:01:01Z', 'not a time']) {
       expect(skipped(occurredAt), occurredAt).toBe(0);
     }
+    // A carrier's scan with seconds is compared to the second.
+    expect(sharedScans([scan('unknown:out', '2026-01-04T13:00:30Z', 'Out for Delivery')],
+      [row('gofo:out', '2026-01-04T12:00:30+00:00', 'Out for Delivery')]).skipped.size).toBe(1);
+    expect(sharedScans([scan('unknown:out', '2026-01-04T13:00:01Z', 'Out for Delivery')],
+      [row('gofo:out', '2026-01-04T12:00:30+00:00', 'Out for Delivery')]).skipped.size).toBe(0);
     for (const description of ['Out for delivery today', 'Delivered', '']) expect(skipped('2026-01-04T15:00:00Z', description)).toBe(0);
     // A trailing sentence counts only after a finished one.
     expect(sharedScans([scan('unknown:x', '2026-01-04T15:00:00Z', 'Out for Delivery. Call us')],
@@ -917,6 +923,66 @@ describe('scans a carrier and a universal provider both report', () => {
       [observed]).skipped.size).toBe(0);
     expect(sharedScans([scan('unknown:dated', '2026-09-25T10:00:00Z', 'Delivered', 'delivered')],
       [observed]).skipped.size).toBe(0);
+  });
+});
+
+describe('a carrier\'s scan whose zone the scraper deduced', () => {
+  // A wall clock in no zone, dated on a neighbouring scan's Pacific clock; a provider's copy states the carrier's
+  // Mountain offset and adds seconds of its own. Wording and clocks are invented.
+  const wording = 'In Transit to Next Facility';
+  const deduced = { ...scan('usps:transit', '2026-01-14T17:40:00Z', wording, 'in_transit'), raw_data: {
+    time: '2026-01-14T09:40:00-08:00', local_time: '2026-01-14T09:40:00', time_zone: 'America/Los_Angeles', time_zone_basis: 'neighbour' } };
+  const stored = { ...row('usps:transit', '2026-01-14T17:40:00+00:00', wording, 'in_transit'),
+    time: '2026-01-14T09:40:00-08:00', local_time: '2026-01-14T09:40:00', time_zone_basis: 'neighbour' };
+  const stating = { provider_time_iso: '2026-01-14T09:40:18-07:00', time_provenance: 'carrier_reported' };
+  const copy = (provenance = 'carrier_reported') => ({ ...scan('unknown:transit', '2026-01-14T16:40:18Z', wording, 'in_transit'),
+    location: 'US', raw_data: { universal_provider: '17TRACK', ...stating, time_provenance: provenance } });
+  const storedCopy = { ...row('unknown:transit', '2026-01-14T16:40:18+00:00', wording, 'in_transit'), location: 'US',
+    universal_provider: '17TRACK', ...stating };
+
+  it('leaves out a copy whose offset the provider inferred, as a clock offset', () => {
+    const inferred = sharedScans([copy('provider_inferred')], [stored]);
+    expect(pairs(inferred.skipped)).toEqual([['unknown:transit', 'usps:transit']]);
+    expect(inferred.reused.size).toBe(0);
+    expect([...inferred.shifted]).toEqual(['unknown:transit']);
+  });
+
+  it('lets a copy stating the carrier\'s offset take the row over, and the carrier\'s next scans keep that offset', () => {
+    const taking = sharedScans([copy()], [stored]);
+    expect(pairs(taking.reused)).toEqual([['unknown:transit', 'usps:transit']]);
+    expect(taking.skipped.size + taking.shifted.size).toBe(0);
+    const taken = { ...row('usps:transit', '2026-01-14T16:40:18+00:00', wording, 'in_transit'), location: 'US', ...stating };
+    const [restated] = withStatedClocks([deduced], [taken]);
+    expect(restated).toMatchObject({ provider_event_id: 'usps:transit', occurred_at: '2026-01-14T16:40:00Z',
+      raw_data: { time: '2026-01-14T09:40:00-07:00', local_time: '2026-01-14T09:40:00', time_zone_basis: 'stated' } });
+    expect(restated!.raw_data).not.toHaveProperty('time_zone');
+    // The row the restated scan rewrote keeps the offset once no copy states it.
+    const kept = { ...row('usps:transit', '2026-01-14T16:40:00+00:00', wording, 'in_transit'),
+      time: '2026-01-14T09:40:00-07:00', local_time: '2026-01-14T09:40:00', time_zone_basis: 'stated' };
+    expect(withStatedClocks([deduced], [kept])[0]).toMatchObject({ occurred_at: '2026-01-14T16:40:00Z' });
+    expect(sharedScans([copy()], [kept]).skipped.size).toBe(1);
+  });
+
+  it('takes the offset of a copy stored first, then that copy\'s row within its minute', () => {
+    const events = withStatedClocks([deduced], [storedCopy]);
+    expect(events[0]).toMatchObject({ occurred_at: '2026-01-14T16:40:00Z' });
+    const shared = sharedScans(events, [storedCopy]);
+    expect(pairs(shared.reused)).toEqual([['usps:transit', 'unknown:transit']]);
+    expect(shared.shifted.size).toBe(0);
+  });
+
+  it('keeps the deduced zone without one stated offset for its wall clock and wording', () => {
+    for (const witness of [{ ...storedCopy, time_provenance: 'provider_inferred' }, { ...storedCopy, description: 'Arrived at Facility' },
+      { ...storedCopy, provider_time_iso: '2026-01-14T09:41:18-07:00' }]) {
+      expect(withStatedClocks([deduced], [witness])[0]).toBe(deduced);
+    }
+    const disagreeing = { ...storedCopy, provider_event_id: 'unknown:other', provider_time_iso: '2026-01-14T09:40:18-06:00' };
+    expect(withStatedClocks([deduced], [storedCopy, disagreeing])[0]).toBe(deduced);
+    // A provider's own scan, or a carrier's scan in a stated zone, has no deduced zone to replace.
+    const universal = { ...deduced, provider_event_id: 'unknown:transit' };
+    expect(withStatedClocks([universal], [storedCopy])[0]).toBe(universal);
+    const placed = { ...deduced, raw_data: { time: '2026-01-14T09:40:00-08:00' } };
+    expect(withStatedClocks([placed], [storedCopy])[0]).toBe(placed);
   });
 });
 

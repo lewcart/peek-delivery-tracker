@@ -5522,6 +5522,9 @@ function eventStore() {
       observed_without_provider_timestamp: (row.raw_data as JsonObject | undefined)?.observed_without_provider_timestamp,
       universal_provider: (row.raw_data as JsonObject | undefined)?.universal_provider,
       local_time: (row.raw_data as JsonObject | undefined)?.local_time,
+      time_zone_basis: (row.raw_data as JsonObject | undefined)?.time_zone_basis,
+      time_provenance: (row.raw_data as JsonObject | undefined)?.time_provenance,
+      provider_time_iso: (row.raw_data as JsonObject | undefined)?.provider_time_iso,
     })),
     batch: () => (client.applyTrackingSync.mock.calls.at(-1)?.[2] ?? []) as JsonObject[],
   };
@@ -6629,6 +6632,46 @@ describe('scans a carrier and a universal provider both report', () => {
       expect(store.rows.has(universal(loaded))).toBe(false);
       expect(store.rows.get('gofo:loaded')).toMatchObject({ occurred_at: '2026-01-03T01:05:00Z' });
     });
+  });
+});
+
+describe('a carrier scan whose zone the scraper deduced', () => {
+  // USPS gives a wall clock in no zone, which the scraper dates on a neighbouring scan's Pacific clock; 17TRACK copies
+  // the scan with the carrier's own Mountain offset and seconds of its own. The number, wording and clocks are invented.
+  const parcel = { id: 'usps-zone', user_id: 'owner', carrier: 'usps', tracking_number: '9400100000000000000002', current_stage: 'in_transit' };
+  const scan = { local_time: '2026-01-14T09:40:00', time: '2026-01-14T09:40:00-08:00', time_zone: 'America/Los_Angeles',
+    time_zone_basis: 'neighbour', description: 'In Transit to Next Facility', stage: 'in_transit' };
+  const own: CarrierResult = { status: 'in_transit', current_stage: 'in_transit', last_status_text: scan.description,
+    last_update: scan.time, events: [scan] };
+  const copied: CarrierResult = { status: 'in_transit', current_stage: 'in_transit', last_status_text: scan.description,
+    last_update: '2026-01-14T16:40:18Z', tracking_provider: '17TRACK', events: [{ time: '2026-01-14T16:40:18Z',
+      description: scan.description, stage: 'in_transit', location: 'US', provider_time_iso: '2026-01-14T09:40:18-07:00',
+      time_provenance: 'carrier_reported' }] };
+  const down = new Error('USPS tracking endpoint is unavailable');
+
+  it.each([
+    ['the carrier', [own, down, own, own, down]],
+    ['the provider', [down, own, own, down]],
+  ] as const)('stores it once, at the offset the provider states, when %s answers first', async (_first, answers) => {
+    vi.spyOn(observability, 'reportRoutingEvent').mockImplementation(() => undefined);
+    const store = eventStore();
+    const client = { ...store.client,
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-01-15T12:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined),
+    };
+    const fetch = vi.fn();
+    const adapter = { fetch, fetchUniversal: vi.fn().mockResolvedValue(copied) };
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date('2026-01-15T12:00:00Z'));
+    for (const answer of answers) {
+      if (answer instanceof Error) fetch.mockRejectedValueOnce(answer);
+      else fetch.mockResolvedValueOnce(answer);
+      await service.syncPackage({ ...parcel, [STORED_EVENT_IDENTITIES]: store.identities() });
+      expect(store.rows.size).toBe(1);
+    }
+    expect([...store.rows.values()][0]).toMatchObject({ occurred_at: '2026-01-14T16:40:00Z',
+      raw_data: { time: '2026-01-14T09:40:00-07:00', local_time: '2026-01-14T09:40:00', time_zone_basis: 'stated' } });
+    // The offset is the scraper's deduction, put right: no provider clock to fix.
+    expect(client.updatePackage.mock.calls.map(([, values]) => (values.carrier_data as JsonObject | undefined)?.clock_offsets).filter(Boolean)).toEqual([]);
   });
 });
 

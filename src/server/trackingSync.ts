@@ -35,7 +35,7 @@ import {
 import type { DeliveryEmailService } from './email/deliveryEmails';
 import { PushDispatchError, type CompositePushNotificationService } from './push';
 import { REDETECTION_PAGE, STORED_EVENT_IDENTITIES, SyncJobLeaseLost, type SupabaseServiceClient } from './supabase';
-import { clockDay, datedObservations, filledPlaceholders, misdatedCopies, restatedIdentities, retimedScans, sameInstantIdentities, scanDay, sharedScans, relayedScans, UNIVERSAL_PROVIDER, UNWORDED_STEP, withIdentities, withoutCopyDrift } from './eventIdentity';
+import { clockDay, datedObservations, filledPlaceholders, misdatedCopies, restatedIdentities, retimedScans, sameInstantIdentities, scanDay, sharedScans, relayedScans, UNIVERSAL_PROVIDER, UNWORDED_STEP, withIdentities, withoutCopyDrift, withStatedClocks } from './eventIdentity';
 import {
   askedForCheck,
   providerFailureSummary,
@@ -698,7 +698,8 @@ export function buildEvents(
       },
     });
   }
-  return rows;
+  // A zone the scraper deduced gives way to the offset the carrier stated for the scan elsewhere; the identity keeps the deduced time.
+  return withStatedClocks(rows, storedEventIdentities(parcel));
 }
 
 // Local-clock scans can need review even though they cannot supply a timed

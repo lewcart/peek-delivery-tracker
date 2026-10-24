@@ -54,7 +54,7 @@
  *   stored (relayCopies.ts), but only the delivery carrier's scan takes over a
  *   universal copy (`relayedScans`).
  */
-import { DateTime } from 'luxon';
+import { DateTime, FixedOffsetZone } from 'luxon';
 import { eventTimestamp, sameInstantIdentityPolicy, trackingPlace, type SameInstantIdentityPolicy, type SameInstantScan } from 'universal-parcel-scraper/app';
 import { isRecord, type JsonObject } from './types';
 
@@ -370,6 +370,11 @@ function zoneApart(left: number, right: number): boolean {
   return shift !== 0 && shift % QUARTER_HOUR_MS === 0 && Math.abs(shift) <= MAX_ZONE_SHIFT_MS;
 }
 
+/** `zoneApart` for a copy of a carrier's scan in whole minutes, at the copy's minute: 17TRACK adds seconds to USPS's minute. */
+function minuteApart(copy: number, scan: number): boolean {
+  return scan % MINUTE_MS === 0 && zoneApart(Math.floor(copy / MINUTE_MS) * MINUTE_MS, scan);
+}
+
 function sourceOf(id: string): string {
   const separator = id.indexOf(':');
   return separator > 0 ? id.slice(0, separator) : '';
@@ -589,7 +594,8 @@ export function retimedScans(
  * retells the next one's scans to the minute, as India Post does La Poste's,
  * so its scan to the minute meets no copy to the second. Failing that, the same wording matches a
  * whole number of quarter hours up to 14 h away: the same scan read in the
- * wrong zone. Failing that, a carrier's row for a universal scan, or a
+ * wrong zone, a copy compared to the minute of a carrier's scan in whole
+ * minutes (17TRACK's seconds on USPS's minute). Failing that, a carrier's row for a universal scan, or a
  * universal row for a carrier's scan, at least an hour away matches in any
  * wording when the stages agree and the time has seconds other than zero: a provider whose clock is
  * off by a zone's offset from UTC. Times to the minute fall whole quarter
@@ -600,8 +606,10 @@ export function retimedScans(
  * ambiguous and stays unmatched.
  *
  * A carrier's scan takes over the universal row it matches. A universal scan
- * that matches any row is left out, and so is one whose own identity is stored
- * at another instant: a carrier's scan has taken that row over and corrected
+ * that matches any row is left out, unless it states the offset of a carrier's
+ * row whose zone the scraper deduced, at the row's wall clock: it takes the row
+ * over, and the carrier's scan keeps that offset (`withStatedClocks`). A universal scan whose own identity
+ * is stored at another instant is left out too: a carrier's scan has taken that row over and corrected
  * its time. At the same instant a universal scan still rewrites its own row,
  * so a row DPD took over follows whichever source answered last.
  *
@@ -695,10 +703,11 @@ export function sharedScans(
       const [copy, own] = universal ? [event, row] : [row, event];
       return instantOf(copy) % MINUTE_MS === 0 || (instantOf(own) % MINUTE_MS === 0 && sourceOf(identity(own)) !== relaying);
     });
-    const zoned = occupied.has(at) ? [] : eligible.filter((row) => (
-      zoneApart(at, instantOf(row)) && !shown.has(instantOf(row)) && !placesConflict(place, placeWords(row))
-    ));
-    const shifted = zoned.filter((row) => sameWording(wordingOf(row), wording));
+    const apart = occupied.has(at) ? [] : eligible.filter((row) => !shown.has(instantOf(row)) && !placesConflict(place, placeWords(row)));
+    const zoned = apart.filter((row) => zoneApart(at, instantOf(row)));
+    const paired = (row: JsonObject) => (sourceOf(identity(row)) === UNIVERSAL) !== universal;
+    const shifted = apart.filter((row) => sameWording(wordingOf(row), wording) && (zoneApart(at, instantOf(row))
+      || (paired(row) && (universal ? minuteApart(at, instantOf(row)) : minuteApart(instantOf(row), at)))));
     const reclocked = Math.floor(at / 1_000) % 60 === 0 ? [] : zoned.filter((row) => (
       (sourceOf(identity(row)) === UNIVERSAL) !== universal && Math.abs(at - instantOf(row)) >= HOUR_MS
       && stagesAgree(stageOf(row), stageOf(event))
@@ -722,9 +731,10 @@ export function sharedScans(
     const id = identity(scan);
     const row = storedById.get(rowId)!;
     const offset = instantOf(scan) !== instantOf(row) && !sameTruncated(instantOf(scan), instantOf(row));
-    if (sourceOf(id) !== UNIVERSAL || (offset && followsClock(row, scan))) shared.reused.set(id, rowId);
+    const restated = offset && sourceOf(id) === UNIVERSAL && restates(scan, row);
+    if (sourceOf(id) !== UNIVERSAL || (offset && followsClock(row, scan)) || restated) shared.reused.set(id, rowId);
     else shared.skipped.set(id, rowId);
-    if (offset && !dayAlone(row) && !dayAlone(scan)) shared.shifted.add(id);
+    if (offset && !restated && !dayAlone(row) && !dayAlone(scan)) shared.shifted.add(id);
   }
   // Each copy at a carrier's instant goes: a scan that matched no row takes one over, and the others are absorbed.
   const kept = new Set([...shared.reused.values(), ...shared.skipped.values()]);
@@ -885,6 +895,71 @@ export function clockDay(scan: JsonObject): string | null {
 function localTimeOf(row: JsonObject): string {
   const local = row.local_time ?? (isRecord(row.raw_data) ? row.raw_data.local_time : undefined);
   return typeof local === 'string' ? local : '';
+}
+
+/** How a carrier's scan on a wall clock in no zone got its offset: `stated` once another source gave it (`withStatedClocks`). */
+const STATED = 'stated';
+const MINUTE_CLOCK = "yyyy-LL-dd'T'HH:mm";
+
+function rawOf(row: JsonObject, key: string): unknown {
+  return row[key] ?? (isRecord(row.raw_data) ? row.raw_data[key] : undefined);
+}
+
+/**
+ * The wall clock and offset the carrier stated for a scan: a provider's copy
+ * that kept the carrier's own offset (17TRACK's `carrier_reported` time), or
+ * a carrier's scan that took one.
+ */
+function statedClock(row: JsonObject): DateTime | null {
+  const time = rawOf(row, 'time_provenance') === 'carrier_reported' ? rawOf(row, 'provider_time_iso')
+    : rawOf(row, 'time_zone_basis') === STATED ? rawOf(row, 'time') : undefined;
+  if (typeof time !== 'string' || !NUMERIC_OFFSET.test(time)) return null;
+  const clock = DateTime.fromISO(time, { setZone: true });
+  return clock.isValid ? clock : null;
+}
+
+/** The wall clock, to the minute, of a carrier's scan whose zone the scraper deduced (`time_zone_basis`). */
+function deducedClock(row: JsonObject): string | null {
+  const basis = rawOf(row, 'time_zone_basis');
+  const local = localTimeOf(row);
+  return typeof basis === 'string' && basis !== STATED && LOCAL_CLOCK.test(local) ? local.slice(0, 16) : null;
+}
+
+/** A copy that states the offset of a carrier's row whose zone was deduced, at the row's wall clock. */
+function restates(copy: JsonObject, row: JsonObject): boolean {
+  const clock = statedClock(copy);
+  return clock !== null && clock.toFormat(MINUTE_CLOCK) === deducedClock(row);
+}
+
+/**
+ * A carrier's scan whose zone the scraper deduced for its wall clock takes the
+ * offset the carrier stated elsewhere for that wall clock, to the minute, in
+ * the same wording and from no conflicting place: in a provider's copy, stored
+ * or in the batch (17TRACK's USPS times, which USPS's own scans lack), or in
+ * the scan's row that took it, so the offset outlasts the copy. The scan then
+ * says so (`time_zone_basis` `stated`, its `time` at that offset). Stated
+ * offsets that disagree leave it as it is.
+ */
+export function withStatedClocks(events: readonly JsonObject[], stored: readonly JsonObject[]): JsonObject[] {
+  const stated = [...stored, ...events].flatMap((row) => {
+    const clock = statedClock(row);
+    return clock && !observedOnly(row) ? [{ row, clock }] : [];
+  });
+  if (stated.length === 0) return [...events];
+  return events.map((event) => {
+    const wall = deducedClock(event);
+    if (!wall || ['', 'app', UNIVERSAL].includes(sourceOf(identity(event))) || observedOnly(event)) return event;
+    const offsets = new Set(stated.filter(({ row, clock }) => clock.toFormat(MINUTE_CLOCK) === wall
+      && sameWording(wordingOf(row), wordingOf(event)) && !placesConflict(placeWords(row), placeWords(event)))
+      .map(({ clock }) => clock.offset));
+    if (offsets.size !== 1) return event;
+    const time = DateTime.fromISO(localTimeOf(event), { zone: FixedOffsetZone.instance([...offsets][0]!) });
+    if (time.toMillis() === instantOf(event)) return event;
+    const raw: JsonObject = { ...(isRecord(event.raw_data) ? event.raw_data : {}),
+      time: time.toISO({ suppressMilliseconds: true }), time_zone_basis: STATED };
+    delete raw.time_zone;
+    return { ...event, occurred_at: time.toUTC().toISO({ suppressMilliseconds: true }), raw_data: raw };
+  });
 }
 
 /** Whether a scan's instant can be the wall clock a sighting kept: in the scan's zone or another, up to 14 h away. */
