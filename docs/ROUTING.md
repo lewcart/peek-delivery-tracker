@@ -600,12 +600,15 @@ A parcel often changes carrier at the border. The origin history is always kept.
   Post again at once; without news the gap doubles with each miss, from 55 min up to 6 h
   (5 min on a refresh by hand). When Cainiao fails after Swiss Post was asked, the check
   saves that ask without a miss.
-- When an account also follows the Swiss Post leg as a parcel of its own, a check merges the
-  two into that Swiss Post parcel, once it has a scan and when neither matches another
-  parcel: when Swiss Post names the earlier leg's number as the item's international
-  number, or, after a handoff to Swiss Post, when the two share any number Swiss Post gave
-  the item (international or domestic). The merged parcel keeps both names and histories
-  (`auto_link_package_tracking`).
+- When an account also follows a later leg as a parcel of its own, under another carrier,
+  the two merge into the later leg's parcel once it has a scan and a carrier confirms the
+  match: the later carrier names the earlier leg's number as the item's international
+  number; the earlier leg was handed over to it and they share a number it gave the item
+  (international or domestic); or the earlier carrier names it as its delivery partner,
+  under one of its numbers. A parcel matching more than one other, or two naming each
+  other, stay apart (`is_later_leg`). The merge follows the check that stores the news,
+  before that news goes out, and a scan both parcels held keeps the receipts of either
+  copy, so it is announced once. The merged parcel keeps both names and histories.
 
 ## UPU history
 

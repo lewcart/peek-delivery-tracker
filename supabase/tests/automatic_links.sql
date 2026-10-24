@@ -95,4 +95,46 @@ begin
   end if;
 end;
 $$;
+-- Legs merge whatever their carriers, once a carrier names the other leg's number.
+insert into packages (id,user_id,tracking_number,label,carrier,current_stage,sync_status,carrier_data) values
+ ('84000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','XA000000001FR','Shoes','chronopost','in_transit','ok','{"delivery_carrier":"poste-italiane","delivery_tracking_number":"PI000000001"}'),
+ ('84000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','PI000000001','Italian leg','poste-italiane','in_transit','ok','{}'),
+ ('84000000-0000-0000-0000-000000000003','10000000-0000-0000-0000-000000000001','LTN000000002N1','Books','landmark-global','in_transit','ok','{}'),
+ ('84000000-0000-0000-0000-000000000004','10000000-0000-0000-0000-000000000001','CC000000002BE','Belgian leg','bpost','in_transit','ok','{"international_tracking_number":"LTN000000002N1"}'),
+ -- One carrier's two numbers for an item are no handoff.
+ ('84000000-0000-0000-0000-000000000005','10000000-0000-0000-0000-000000000001','990000000000000021','Domestic','swiss-post','in_transit','ok','{"international_tracking_number":"RR000000003CH"}'),
+ ('84000000-0000-0000-0000-000000000006','10000000-0000-0000-0000-000000000001','RR000000003CH','International','swiss-post','in_transit','ok','{"canonical_tracking_number":"990000000000000021"}'),
+ -- Each names the other as its delivery partner: which leg came later is open.
+ ('84000000-0000-0000-0000-000000000007','10000000-0000-0000-0000-000000000001','1Z0000000000000001','Either A','ups','in_transit','ok','{"delivery_carrier":"usps","delivery_tracking_number":"9200000000000000000001"}'),
+ ('84000000-0000-0000-0000-000000000008','10000000-0000-0000-0000-000000000001','9200000000000000000001','Either B','usps','in_transit','ok','{"delivery_carrier":"ups","delivery_tracking_number":"1Z0000000000000001"}');
+insert into tracking_events (id,package_id,stage,description,provider_event_id,created_at) values
+ ('84100000-0000-0000-0000-000000000001','84000000-0000-0000-0000-000000000001','in_transit','Arrived in Italy','poste-italiane:arrival','2026-09-10T08:00:00Z'),
+ ('84100000-0000-0000-0000-000000000002','84000000-0000-0000-0000-000000000002','in_transit','Arrived in Italy','poste-italiane:arrival','2026-09-10T09:00:00Z');
+insert into push_subscriptions (id,user_id,endpoint,p256dh,auth,subscribed_at) values
+ ('84200000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','https://fcm.googleapis.com/fcm/send/auto-link','public-encryption-key','auth-secret','2026-09-01T00:00:00Z');
+insert into push_deliveries (subscription_id,event_id) values
+ ('84200000-0000-0000-0000-000000000001','84100000-0000-0000-0000-000000000001');
+do $$
+begin
+  if public.auto_link_package_tracking('10000000-0000-0000-0000-000000000001') <> 2 then
+    raise exception 'Expected the partner and international-number legs to merge, and nothing else';
+  end if;
+  if not exists(select 1 from packages where id='84000000-0000-0000-0000-000000000002'
+    and label='Shoes / Italian leg' and carrier_data->>'original_carrier'='chronopost') then
+    raise exception 'A delivery partner named by the earlier carrier stayed apart';
+  end if;
+  if not exists(select 1 from packages where id='84000000-0000-0000-0000-000000000004'
+    and label='Books / Belgian leg' and carrier_data->>'original_carrier'='landmark-global') then
+    raise exception 'A carrier naming the earlier number as international stayed apart';
+  end if;
+  if (select count(*) from packages where id in ('84000000-0000-0000-0000-000000000005','84000000-0000-0000-0000-000000000006',
+    '84000000-0000-0000-0000-000000000007','84000000-0000-0000-0000-000000000008')) <> 4 then
+    raise exception 'Merged one carrier''s numbers, or two legs that each name the other';
+  end if;
+  if not exists(select 1 from push_deliveries where event_id='84100000-0000-0000-0000-000000000002'
+    and subscription_id='84200000-0000-0000-0000-000000000001') then
+    raise exception 'The kept copy of a scan lost the receipt of the copy announced before the merge';
+  end if;
+end;
+$$;
 rollback;

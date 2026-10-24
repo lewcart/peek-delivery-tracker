@@ -1052,25 +1052,26 @@ export class TrackingSyncService {
         ...shares.filter((parcel) => rechecks.has(parcel)).slice(0, MAX_UNSEEN_RECHECKS_PER_SYNC)];
       // Copies of one number, in several accounts or followed without one, share their lookups.
       const lookups = new SharedLookups(parcels);
-      let legs: Set<string> | null | undefined;
-      let announceAtEnd = false;
+      // The accounts whose parcels a merge changed during the run.
+      const merged = new Set<string>();
       for (const [index, parcel] of parcels.entries()) {
         // At shutdown the run stops between checks; its job goes back to the queue, and the
         // replacement checks the parcels still due.
         if (context.stopping?.aborted) throw context.stopping.reason;
         // A check since the run listed it, such as a release's re-check on another server, stands in for a recheck.
         if (rechecks.has(parcel) && !await this.uncheckedSinceListed(parcel, context.signal)) continue;
+        // A merge earlier in the run removed the parcel or gave it the other leg: the next run checks it.
+        if (merged.has(String(parcel.user_id)) && !await this.unmergedSinceListed(parcel, context.signal)) continue;
         summary.checked += 1;
         const outcome = await this.syncOne(parcel, context, lookups);
         summary[outcome] += 1;
+        if (outcome !== 'updated') continue;
+        // The news can show the parcel is a leg of another of its account's parcels: they merge
+        // before it goes out, so the merged parcel announces its newest scan once.
+        if (typeof parcel.user_id === 'string' && await this.linkConfirmedParcels(parcel.user_id) > 0) merged.add(parcel.user_id);
         // A parcel's news goes out once it is stored, not after the slowest check of the
-        // run; the last parcel's goes with the run's own dispatch. A leg the reconciliation
-        // below may merge waits for it, so the merged parcel announces its newest scan
-        // once, and so does every parcel checked after one, as a dispatch sends all news.
-        if (announceAtEnd || outcome !== 'updated' || index === parcels.length - 1) continue;
-        if (legs === undefined) legs = await this.mergeableLegs(parcels, context.signal);
-        announceAtEnd = legs === null || parcels.slice(0, index + 1).some((checked) => legs!.has(String(checked.id)));
-        if (!announceAtEnd) await this.dispatchNotifications(summary, context.signal);
+        // run; the last parcel's goes with the run's own dispatch.
+        if (index < parcels.length - 1) await this.dispatchNotifications(summary, context.signal);
       }
       await this.linkConfirmedParcels();
       await this.dispatchNotifications(summary, context.signal);
@@ -1244,27 +1245,29 @@ export class TrackingSyncService {
   }
 
   /**
-   * The parcels of the run's accounts that the run's reconciliation may merge, read when
-   * a parcel's news could go out early, or null when they cannot be read.
+   * Whether the parcel is still the one the run listed: no merge removed it or gave it
+   * another leg. One that cannot be read is checked, which a merge at worst supersedes.
    */
-  private async mergeableLegs(parcels: readonly JsonObject[], signal?: AbortSignal): Promise<Set<string> | null> {
-    const owners = [...new Set(parcels.flatMap((parcel) => typeof parcel.user_id === 'string' ? [parcel.user_id] : []))];
-    if (owners.length === 0) return new Set();
+  private async unmergedSinceListed(parcel: JsonObject, signal?: AbortSignal): Promise<boolean> {
     try {
-      return mergeableLegs(await this.client.unarchivedParcelLegs(owners));
+      const current = await this.client.getPackage(String(parcel.id));
+      const merged = (row: JsonObject) => isRecord(row.carrier_data) ? row.carrier_data.original_package_id ?? null : null;
+      return current !== null && current.id === parcel.id && merged(current) === merged(parcel);
     } catch (error) {
       signal?.throwIfAborted();
-      captureOperationalError(error, { component: 'tracking', operation: 'list_parcel_legs' });
-      return null;
+      captureOperationalError(error, { component: 'tracking', operation: 'reread_merged_parcel' });
+      return true;
     }
   }
 
-  private async linkConfirmedParcels(userId?: string): Promise<void> {
-    try { await this.client.autoLinkPackages(userId); }
+  /** Merges the legs a carrier confirms are one parcel, and says how many pairs it merged. */
+  private async linkConfirmedParcels(userId?: string): Promise<number> {
+    try { return await this.client.autoLinkPackages(userId); }
     catch (error) {
       // A transient linking failure must not erase a successful tracking update.
       // The next scheduled or manual refresh retries reconciliation.
       captureOperationalError(error, { component: 'tracking', operation: 'auto_link_packages' });
+      return 0;
     }
   }
 
@@ -2496,30 +2499,6 @@ function providerWatermark(saved: JsonObject, stored: readonly JsonObject[]): { 
   const watermark = Date.parse(String(isRecord(saved.routing) ? saved.routing.last_event_at ?? '' : ''));
   return typeof saved.tracking_provider === 'string' && saved.tracking_provider !== 'UPU' && stored.length
     ? { withStored: true, explained: [watermark] } : { withStored: true };
-}
-
-/**
- * The parcels `auto_link_package_tracking` may merge into one, an earlier carrier's leg
- * and Swiss Post's delivery leg in one account: those of accounts holding both kinds.
- * It leaves out the stage and number checks, which a check can change.
- */
-export function mergeableLegs(parcels: readonly JsonObject[]): Set<string> {
-  const legs = new Map<string, { origins: string[]; deliveries: string[] }>();
-  for (const parcel of parcels) {
-    if (typeof parcel.user_id !== 'string' || parcel.archived_at != null) continue;
-    const data = isRecord(parcel.carrier_data) ? parcel.carrier_data : {};
-    const owner = legs.get(parcel.user_id) ?? { origins: [], deliveries: [] };
-    legs.set(parcel.user_id, owner);
-    if (parcel.carrier === 'swiss-post') {
-      if (!('original_carrier' in data)) owner.deliveries.push(String(parcel.id));
-    } else if (!('original_package_id' in data)
-      && (!('original_carrier' in data) || data.original_carrier === parcel.carrier)) {
-      owner.origins.push(String(parcel.id));
-    }
-  }
-  return new Set([...legs.values()]
-    .filter((owner) => owner.origins.length > 0 && owner.deliveries.length > 0)
-    .flatMap((owner) => [...owner.origins, ...owner.deliveries]));
 }
 
 export function fairSyncPackages(
