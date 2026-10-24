@@ -88,7 +88,11 @@ All tables and views here are service-role only.
 - `tracking_sync_steps`: `selected`, `fetch`, `normalize`, `persist_events`,
   `persist_package`, `complete`, each with status and duration. `persist_events` has
   `events_persisted`, the rows written, `events_new`, and `copies_absorbed`, the universal
-  copies of the carrier's scans it deleted. When the check restaged stored
+  copies of the carrier's scans it deleted. `persist_package` has `selected_stage` and
+  `saved_stage`, the stage the parcel keeps, and `stage_held` when the two differ:
+  `answer_set_aside` when the check kept the saved summary (an older or unproven answer, or a
+  delivery or return the answer does not dispute), `earlier_stage` when the answer reads as an
+  earlier stage than the saved one or the stored scans show. When the check restaged stored
   scans into a delivery or pickup readiness to announce, it has `scans_reannounced`, the
   scans whose receipts it dropped, and `reannouncement_failed` when that failed (also
   reported to Sentry as `reopen_announcements`). A not-yet-announced number

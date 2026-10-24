@@ -2049,12 +2049,19 @@ export class TrackingSyncService {
         values.carrier_data = { ...(isRecord(values.carrier_data) ? values.carrier_data : previousData),
           clock_offsets: [...offsetsShown, ...offsetRows.filter((row) => !offsetsShown.includes(row))] };
       }
+      // The log line names the stage the parcel keeps, and why it is not the selected one: the answer
+      // was set aside (an older or unproven summary, a delivery it does not dispute), or it reads as
+      // an earlier stage than the saved one or the stored scans show.
+      const savedStage = String(values.current_stage ?? previousStage);
       operation = 'persist_package';
       await audit.step('persist_package', async () => {
         await persist(values, persistedEvents, keepSaved ? [] : deleteDescriptions, removed);
       }, () => ({
         outcome,
         selected_stage: selectedStage,
+        saved_stage: savedStage,
+        ...(selectedStage !== null && savedStage !== selectedStage
+          ? { stage_held: preserveSummary ? 'answer_set_aside' : 'earlier_stage' } : {}),
       }));
       // A correction to the carrier detection names or asks first is expected: it is logged and is no signal.
       if (values.carrier) audit.reportRouting('carrier_auto_swapped', {

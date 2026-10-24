@@ -4485,12 +4485,33 @@ describe('TrackingSyncService', () => {
         expect.objectContaining({ step: 'fetch', status: 'succeeded' }),
         expect.objectContaining({ step: 'normalize', status: 'succeeded' }),
         expect.objectContaining({ step: 'persist_events', status: 'succeeded' }),
-        expect.objectContaining({ step: 'persist_package', status: 'succeeded' }),
+        expect.objectContaining({ step: 'persist_package', status: 'succeeded', details: {
+          outcome: 'updated', selected_stage: 'delivered', saved_stage: 'delivered',
+        } }),
         expect.objectContaining({ step: 'complete', status: 'succeeded', details: expect.objectContaining({
           support_lookup_number: '06080000000002', support_provider: null, support_direct_progress: true,
         }) }),
       ]),
     );
+  });
+
+  it.each([
+    ['an answer set aside', 'delivered', { status: 'in_transit', description: 'In transit' }, 'answer_set_aside'],
+    ['an earlier stage', 'in_transit', { status: 'accepted', description: 'Parcel accepted' }, 'earlier_stage'],
+  ])('logs the stage it saved when %s holds it', async (_case, saved, answer, held) => {
+    const parcel = { id: 'package-held', user_id: 'user-1', carrier: 'dpd', tracking_number: '06080000000002', current_stage: saved };
+    const client = fakeClient([parcel]);
+    const adapter: TrackingAdapter = {
+      fetch: vi.fn().mockResolvedValue({ status: answer.status, last_status_text: answer.description, last_update: '2026-08-04T12:38:28Z',
+        events: [{ time: '2026-08-04T12:38:28Z', description: answer.description }] }),
+    };
+    await new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null,
+      () => new Date('2026-08-04T13:00:00Z')).syncPackage(parcel);
+    const steps = client.completeSyncAttempt.mock.calls.at(-1)![2] as JsonObject[];
+    expect(steps.find((step) => step.step === 'persist_package')?.details).toMatchObject({
+      selected_stage: answer.status, saved_stage: saved, stage_held: held,
+    });
+    expect(client.updatePackage.mock.calls.at(-1)?.[1]?.current_stage ?? saved).toBe(saved);
   });
 
   it('prefers an explicit current failure over an older timestamped milestone', async () => {
