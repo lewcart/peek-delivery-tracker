@@ -87,7 +87,8 @@ describe('carrier picker', () => {
     const user = userEvent.setup();
     const { picker, onSelect, onClose } = renderPicker({ selected: 'dhl', auto: undefined });
     expect(within(picker).queryByRole('option', { name: /^Detect automatically/ })).not.toBeInTheDocument();
-    expect(await within(within(picker).getByRole('group', { name: 'All carriers' })).findByRole('option', { name: 'DHL' }))
+    await everyCarrierListed(picker);
+    expect(within(within(picker).getByRole('group', { name: 'All carriers' })).getByRole('option', { name: 'DHL' }))
       .toHaveAttribute('aria-selected', 'true');
     await user.click(within(within(picker).getByRole('group', { name: 'Fits this number' })).getByRole('option', { name: 'Ciblex' }));
     expect(onSelect).toHaveBeenCalledWith('ciblex');
