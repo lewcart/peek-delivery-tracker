@@ -113,7 +113,7 @@ struct FriendsView: View {
                 .navigationTitle(value.title(localizer)).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button(text("common.close")) { panel = nil; model.errorKey = nil }.disabled(model.working) } }
             }
-            .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : value.detents)
+            .formOnPad(phoneDetents: dynamicTypeSize.isAccessibilitySize ? [.large] : value.detents)
             .presentationDragIndicator(.visible).interactiveDismissDisabled(model.working)
         }
     }

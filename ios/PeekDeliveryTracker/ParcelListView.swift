@@ -321,7 +321,6 @@ private struct DeliveryListView: View {
                 ChangeCarrierView(parcel: parcel)
                     .environmentObject(store)
                     .environmentObject(localizer)
-                    .formOnPad()
             }
     }
 

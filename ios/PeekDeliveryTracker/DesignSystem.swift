@@ -235,6 +235,19 @@ extension View {
         }
     }
 
+    /// The same form on an iPad; on a phone, these detents. iPadOS would pin a sheet with detents to the window's
+    /// bottom edge at their height rather than centre it.
+    @ViewBuilder
+    func formOnPad(phoneDetents detents: Set<PresentationDetent>, selection: Binding<PresentationDetent>? = nil) -> some View {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            presentationSizing(.form)
+        } else if let selection {
+            presentationDetents(detents, selection: selection)
+        } else {
+            presentationDetents(detents)
+        }
+    }
+
     @ViewBuilder
     func glassSurface<S: Shape>(in shape: S) -> some View {
         if #available(iOS 26.0, *) {

@@ -152,7 +152,6 @@ struct ParcelDetailView: View {
                 ChangeCarrierView(parcel: parcel, initialCarrier: request.initialCarrier)
                     .environmentObject(store)
                     .environmentObject(localizer)
-                    .formOnPad()
             }
         }
         .sheet(isPresented: $showingShare) {
@@ -1167,7 +1166,7 @@ struct ChangeCarrierView: View {
             }
         }
         // Inputs and their help sit below the half-height sheet: open fully for them.
-        .presentationDetents([.medium, .large], selection: $detent)
+        .formOnPad(phoneDetents: [.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .onChange(of: requirements.isEmpty, initial: true) { _, empty in
             if !empty { detent = .large }
