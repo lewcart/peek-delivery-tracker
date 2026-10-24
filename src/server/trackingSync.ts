@@ -36,7 +36,7 @@ import {
 import type { DeliveryEmailService } from './email/deliveryEmails';
 import { PushDispatchError, type CompositePushNotificationService } from './push';
 import { REDETECTION_PAGE, STORED_EVENT_IDENTITIES, SyncJobLeaseLost, type SupabaseServiceClient } from './supabase';
-import { clockDay, datedObservations, filledPlaceholders, misdatedCopies, restatedIdentities, retimedScans, sameInstantIdentities, scanDay, sharedScans, relayedScans, UNIVERSAL_PROVIDER, UNWORDED_STEP, withIdentities, withoutCopyDrift, withStatedClocks } from './eventIdentity';
+import { clockDay, datedObservations, filledPlaceholders, misdatedCopies, requalifiedPlaces, restatedIdentities, retimedScans, sameInstantIdentities, scanDay, sharedScans, strippedMarkup, relayedScans, UNIVERSAL_PROVIDER, UNWORDED_STEP, withIdentities, withoutCopyDrift, withStatedClocks } from './eventIdentity';
 import {
   askedForCheck,
   providerFailureSummary,
@@ -1834,7 +1834,9 @@ export class TrackingSyncService {
       // and a scan both a carrier and a universal provider reported is stored once.
       // A handoff's batch also carries the earlier carrier's scans, under that carrier's policy.
       // A scan meets the row an earlier take-over left under an old identity before any policy,
-      // then the row whose template placeholder an adapter left unfilled, whatever the carrier.
+      // then the row whose template placeholder an adapter left unfilled, the row whose place it
+      // names with a part more or less, and the row of its words with an adapter's HTML left in,
+      // whatever the carrier.
       const stored = storedEventIdentities(parcel);
       const reworded = restatedIdentities(events, stored);
       const adopt = (matches: ReadonlyMap<string, string>) => {
@@ -1842,6 +1844,8 @@ export class TrackingSyncService {
         for (const [id, saved] of matches) if (!reworded.has(id) && !taken.has(saved)) reworded.set(id, saved);
       };
       adopt(filledPlaceholders(events, stored));
+      adopt(requalifiedPlaces(events, stored));
+      adopt(strippedMarkup(events, stored));
       const policyCarriers = fetched.earlierResult && fetched.earlierCarrierId && fetched.earlierCarrierId !== sourceCarrierId
         ? [sourceCarrierId, fetched.earlierCarrierId] : [sourceCarrierId];
       for (const policyCarrier of policyCarriers) adopt(sameInstantIdentities(events, stored, policyCarrier));

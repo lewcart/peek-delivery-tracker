@@ -316,6 +316,33 @@ function filledTemplate(row: JsonObject): RegExp | null {
 }
 
 /**
+ * Maps the computed identity of each new scan to the one stored row `restates` says it restates, matched one to one:
+ * never an observation, a scan whose own identity is not stored and a row no event of the batch carries.
+ */
+function restatedRows(
+  events: readonly JsonObject[],
+  stored: readonly JsonObject[],
+  restates: (scan: JsonObject, row: JsonObject) => boolean,
+): Map<string, string> {
+  const taken = new Map<string, string>();
+  const storedIds = new Set(stored.map(identity));
+  const claimed = new Set(events.map(identity));
+  const rows = stored.filter((row) => sourceOf(identity(row)) !== '' && !claimed.has(identity(row)) && !observedOnly(row));
+  if (rows.length === 0) return taken;
+  const scans = events.filter((event) => {
+    const source = sourceOf(identity(event));
+    return source !== '' && source !== 'app' && !storedIds.has(identity(event)) && !observedOnly(event);
+  });
+  for (const scan of scans) {
+    const matching = rows.filter((row) => restates(scan, row));
+    if (matching.length !== 1) continue;
+    if (scans.filter((other) => restates(other, matching[0]!)).length !== 1) continue;
+    taken.set(identity(scan), identity(matching[0]!));
+  }
+  return taken;
+}
+
+/**
  * Maps the computed identity of each new scan to the stored row whose wording it fills in: a
  * row an adapter stored with a placeholder of the carrier's template left in ("Item available at
  * the {{bboxRebrand}}"), which the wording identifies, so the scraper's fix would otherwise store
@@ -326,31 +353,75 @@ export function filledPlaceholders(
   events: readonly JsonObject[],
   stored: readonly JsonObject[],
 ): Map<string, string> {
-  const filled = new Map<string, string>();
-  const storedIds = new Set(stored.map(identity));
-  const claimed = new Set(events.map(identity));
-  const templates = stored.flatMap((row) => {
-    const template = sourceOf(identity(row)) === '' || claimed.has(identity(row)) || observedOnly(row) ? null : filledTemplate(row);
-    return template ? [{ row, template }] : [];
+  const templates = new Map(stored.map((row) => [row, filledTemplate(row)]));
+  return restatedRows(events, stored, (scan, row) => {
+    const template = templates.get(row);
+    return template !== null && template !== undefined
+      && sourceOf(identity(row)) === sourceOf(identity(scan)) && instantOf(row) === instantOf(scan)
+      && String(row.location ?? '').trim() === String(scan.location ?? '').trim()
+      && !PLACEHOLDER.test(String(scan.description ?? ''))
+      && template.test(String(scan.description ?? '').replace(/\s+/g, ' ').trim());
   });
-  if (templates.length === 0) return filled;
-  const fills = (event: JsonObject, { row, template }: { row: JsonObject; template: RegExp }) => (
-    sourceOf(identity(row)) === sourceOf(identity(event)) && instantOf(row) === instantOf(event)
-    && String(row.location ?? '').trim() === String(event.location ?? '').trim()
-    && !PLACEHOLDER.test(String(event.description ?? ''))
-    && template.test(String(event.description ?? '').replace(/\s+/g, ' ').trim())
-  );
-  const scans = events.filter((event) => {
-    const source = sourceOf(identity(event));
-    return source !== '' && source !== 'app' && !storedIds.has(identity(event)) && !observedOnly(event);
+}
+
+/** A row and a scan of one source, and of one universal provider when that source is one. */
+function sameSource(scan: JsonObject, row: JsonObject): boolean {
+  return sourceOf(identity(row)) === sourceOf(identity(scan)) && providerOf(row) === providerOf(scan);
+}
+
+/** The parts of a scan's place between its commas, without case or extra spaces. */
+function placeParts(row: JsonObject): string[] {
+  return String(row.location ?? '').split(',')
+    .map((part) => part.replace(/\s+/g, ' ').trim().toLocaleLowerCase('en-US')).filter(Boolean);
+}
+
+/** Two places of which one names the other with parts more: "São Paulo" and "São Paulo, SP", or none and "Poland". */
+function requalified(left: JsonObject, right: JsonObject): boolean {
+  const [one, other] = [placeParts(left), placeParts(right)];
+  if (one.length === other.length) return false;
+  const [fewer, more] = one.length < other.length ? [one, other] : [other, one];
+  return fewer.every((part) => more.includes(part));
+}
+
+/**
+ * Maps the computed identity of each new scan to the stored row whose place it names with a part
+ * more or less: a release that adds a qualifier to the carrier's place ("São Paulo, SP" for
+ * "São Paulo"), or a source that names the country in one answer and no place in the next, would
+ * otherwise store the scan beside its row, the place being part of the identity. The same source
+ * (and universal provider), instant, wording and stage, codes that agree when both carry one, never an observation, a scan
+ * whose own identity is not stored and a row no event of the batch carries, matched one to one.
+ */
+export function requalifiedPlaces(
+  events: readonly JsonObject[],
+  stored: readonly JsonObject[],
+): Map<string, string> {
+  return restatedRows(events, stored, (scan, row) => sameSource(scan, row)
+    && instantOf(row) === instantOf(scan) && stageOf(row) === stageOf(scan)
+    && wordingOf(row) !== '' && wordingOf(row) === wordingOf(scan) && codesAgree(scan, row) && requalified(scan, row));
+}
+
+/** An HTML tag an adapter left in a scan's words, such as a link around them. */
+const MARKUP = /<\/?[a-z][a-z0-9]*(?:\s[^<>]*)?\/?>/iu;
+const MARKUP_TAGS = new RegExp(MARKUP.source, 'giu');
+
+/**
+ * Maps the computed identity of each new scan to the stored row whose words it gives without the
+ * HTML an adapter left in them (YunExpress's link around "CARD LEFT"), which the scraper's fix
+ * would otherwise store beside it, often in another stage. The same source (and universal
+ * provider), instant and place, codes that agree when both carry one, in any stage, never an observation, a scan whose own
+ * identity is not stored and a row no event of the batch carries, matched one to one.
+ */
+export function strippedMarkup(
+  events: readonly JsonObject[],
+  stored: readonly JsonObject[],
+): Map<string, string> {
+  return restatedRows(events, stored, (scan, row) => {
+    const words = String(row.description ?? '');
+    return sameSource(scan, row) && instantOf(row) === instantOf(scan)
+      && placeOf(row) === placeOf(scan) && codesAgree(scan, row)
+      && MARKUP.test(words) && !MARKUP.test(String(scan.description ?? '')) && wordingOf(scan) !== ''
+      && words.replace(MARKUP_TAGS, ' ').replace(/\s+/g, ' ').trim().toLocaleLowerCase('en-US') === wordingOf(scan);
   });
-  for (const scan of scans) {
-    const matching = templates.filter((template) => fills(scan, template));
-    if (matching.length !== 1) continue;
-    if (scans.filter((other) => fills(other, matching[0]!)).length !== 1) continue;
-    filled.set(identity(scan), identity(matching[0]!.row));
-  }
-  return filled;
 }
 
 const UNIVERSAL = 'unknown';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { JsonObject } from './types';
-import { datedObservations, filledPlaceholders, misdatedCopies, restatedIdentities, retimedScans, sameInstantIdentities, sharedScans, relayedScans, withIdentities, withoutCopyDrift, withStatedClocks } from './eventIdentity';
+import { datedObservations, filledPlaceholders, misdatedCopies, requalifiedPlaces, restatedIdentities, retimedScans, sameInstantIdentities, sharedScans, strippedMarkup, relayedScans, withIdentities, withoutCopyDrift, withStatedClocks } from './eventIdentity';
 
 // New events carry the sync's ISO spelling; stored rows come back from
 // PostgREST with an explicit +00:00 offset. Both name the same instant.
@@ -450,6 +450,94 @@ describe('rows stored with a placeholder of the carrier\'s template left in', ()
     expect(filledPlaceholders([scan, { ...saved }], [saved]).size).toBe(0);
     expect(filledPlaceholders([scan, { ...scan, provider_event_id: 'bpost:other', description: 'Item available at the Parcel Locker' }], [saved]).size).toBe(0);
     expect(filledPlaceholders([scan], [saved, { ...saved, provider_event_id: 'bpost:copy' }]).size).toBe(0);
+  });
+});
+
+describe('rows stored with a place the source now names with a part more or less', () => {
+  // A release added the state to the carrier's town; another source names the country in one answer and no place in the next.
+  const saved = { provider_event_id: 'correios-br:town', occurred_at: '2026-10-21T07:41:00+00:00', stage: 'in_transit',
+    description: 'Object in transit', location: 'Example Town' };
+  const scan = { provider_event_id: 'correios-br:town-state', occurred_at: '2026-10-21T07:41:00.000Z', stage: 'in_transit',
+    description: 'Object in transit', location: 'Example Town, EX' };
+
+  it('lets the scan whose place gains or loses a part take the row over', () => {
+    expect(pairs(requalifiedPlaces([scan], [saved]))).toEqual([['correios-br:town-state', 'correios-br:town']]);
+    expect(pairs(requalifiedPlaces([{ ...saved, provider_event_id: 'correios-br:again' }], [{ ...scan }])))
+      .toEqual([['correios-br:again', 'correios-br:town-state']]);
+    const country = { ...saved, provider_event_id: 'dhl:country', location: 'Examplia', provider_code: 'PU' };
+    expect(pairs(requalifiedPlaces([{ ...country, provider_event_id: 'dhl:none', location: '' }], [country])))
+      .toEqual([['dhl:none', 'dhl:country']]);
+    expect(pairs(requalifiedPlaces([{ ...scan, location: '  example  town , EX ' }], [saved])))
+      .toEqual([['correios-br:town-state', 'correios-br:town']]);
+    const parcelsApp = { raw_data: { universal_provider: 'ParcelsApp' } };
+    expect(pairs(requalifiedPlaces([{ ...scan, ...parcelsApp, provider_event_id: 'unknown:town-state' }], [{ ...saved, ...parcelsApp, provider_event_id: 'unknown:town' }])))
+      .toEqual([['unknown:town-state', 'unknown:town']]);
+  });
+
+  it('needs the same source, instant, wording and stage, codes that agree, and a place whose parts it keeps', () => {
+    for (const row of [
+      { ...saved, provider_event_id: 'dhl:town' },
+      { ...saved, provider_event_id: 'app:pending' },
+      // Two universal providers' copies are matched by the copy rules, which weigh the carrier's own scan.
+      { ...saved, provider_event_id: 'unknown:town', raw_data: { universal_provider: '17TRACK' } },
+      { ...saved, occurred_at: '2026-10-21T07:41:01+00:00' },
+      { ...saved, description: 'Object posted' },
+      { ...saved, description: '' },
+      // A stage the carrier changed is another reading of the scan, which the place alone cannot tell.
+      { ...saved, stage: 'out_for_delivery' },
+      { ...saved, provider_code: 'MD1' },
+      { ...saved, observed_without_provider_timestamp: true },
+      // As many parts as the scan: another place, not a qualifier ("Other Town, EX" beside "Example Town, EX").
+      { ...saved, location: 'Other Town, EX' },
+      { ...saved, location: 'Example Town, EX' },
+      // One part more that drops one of the scan's: another place.
+      { ...saved, location: 'Example Town, OT, Examplia' },
+      { ...saved, location: 'Example' },
+    ]) expect(requalifiedPlaces([{ ...scan, provider_code: 'TA' }], [row]).size, JSON.stringify(row)).toBe(0);
+  });
+
+  it('leaves a scan stored under its own identity, a row the batch carries, and two alike scans or rows alone', () => {
+    expect(requalifiedPlaces([scan], [saved, { ...scan }]).size).toBe(0);
+    expect(requalifiedPlaces([scan, { ...saved }], [saved]).size).toBe(0);
+    // The same answer naming the scan's place twice is the source's own repetition, not a restatement.
+    expect(requalifiedPlaces([scan, { ...scan, provider_event_id: 'correios-br:region', location: 'Example Town, Region, EX' }], [saved]).size).toBe(0);
+    expect(requalifiedPlaces([scan], [saved, { ...saved, provider_event_id: 'correios-br:copy', location: 'EX' }]).size).toBe(0);
+  });
+});
+
+describe('rows stored with the HTML an adapter left in their words', () => {
+  // An adapter stored a link around the carrier's note; its fix gives the words alone and reads their stage.
+  const saved = { provider_event_id: 'yunexpress:markup', occurred_at: '2026-10-15T02:41:00+00:00', stage: 'in_transit',
+    description: "1 item has been transferred to 0000 (example) <b><a href='/Contact?tracNum=REF0000'>CARD LEFT</a></b>", location: '' };
+  const scan = { provider_event_id: 'yunexpress:clean', occurred_at: '2026-10-15T02:41:00.000Z', stage: 'failed_attempt',
+    description: '1 item has been transferred to 0000 (example) CARD LEFT', location: '' };
+
+  it('lets the scan that gives the words without the markup take the row over, in any stage', () => {
+    expect(pairs(strippedMarkup([scan], [saved]))).toEqual([['yunexpress:clean', 'yunexpress:markup']]);
+    expect(pairs(strippedMarkup([{ ...scan, description: 'Delivered to the front door' }], [{ ...saved, description: 'Delivered<br/>to the front door<br>' }])))
+      .toEqual([['yunexpress:clean', 'yunexpress:markup']]);
+  });
+
+  it('needs the same source, instant and place, codes that agree, a tag in the row and none in the scan', () => {
+    for (const row of [
+      { ...saved, provider_event_id: 'couriersplease:markup' },
+      { ...saved, occurred_at: '2026-10-15T02:41:01+00:00' },
+      { ...saved, location: 'Example Town' },
+      { ...saved, provider_code: 'CL' },
+      { ...saved, observed_without_provider_timestamp: true },
+      // An airport code in angle brackets is the carrier's words, not markup.
+      { ...saved, description: 'Departed <BOG> 1 item has been transferred to 0000 (example) CARD LEFT' },
+      { ...saved, description: '1 item has been transferred to 0000 (example) CARD LEFT' },
+      // Words beyond the markup's: another scan.
+      { ...saved, description: "1 item has been transferred to 0000 (example) <a href='/x'>CARD LEFT</a> again" },
+    ]) expect(strippedMarkup([{ ...scan, provider_code: 'DL' }], [row]).size, JSON.stringify(row)).toBe(0);
+    expect(strippedMarkup([{ ...scan, description: '<b>1 item has been transferred to 0000 (example) CARD LEFT</b>' }], [saved]).size).toBe(0);
+  });
+
+  it('leaves a scan stored under its own identity, a row the batch carries, and two alike rows alone', () => {
+    expect(strippedMarkup([scan], [saved, { ...scan }]).size).toBe(0);
+    expect(strippedMarkup([scan, { ...saved }], [saved]).size).toBe(0);
+    expect(strippedMarkup([scan], [saved, { ...saved, provider_event_id: 'yunexpress:copy', description: `<i>${scan.description}</i>` }]).size).toBe(0);
   });
 });
 

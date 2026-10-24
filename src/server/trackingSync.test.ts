@@ -5876,6 +5876,30 @@ it('rewrites in place a scan stored with a placeholder of the carrier\'s templat
     .toEqual([{ id: 'row-0', provider_event_id: 'bpost:placeholder', description: 'Item available at the bbox locker' }]);
 });
 
+it('rewrites in place a scan whose place gains a qualifier and one stored with an adapter\'s HTML in its words', async () => {
+  const store = eventStore();
+  const arrived = { time: '2026-10-14T22:10:00Z', stage: 'in_transit', description: 'Arrived at the hub', location: 'Example Town, EX' };
+  const card = { time: '2026-10-15T02:41:00Z', stage: 'failed_attempt', description: 'Item left at a depot CARD LEFT', location: '' };
+  const adapter = { fetch: vi.fn().mockResolvedValue({ status: 'failed_attempt', current_stage: 'failed_attempt',
+    last_update: card.time, last_status_text: card.description, events: [arrived, card] }) };
+  const service = new TrackingSyncService(store.client as unknown as SupabaseServiceClient, adapter, null,
+    () => new Date('2026-10-15T12:00:00Z'));
+  store.rows.set('yunexpress:town', { id: 'row-0', package_id: 'restated-parcel', provider_event_id: 'yunexpress:town',
+    occurred_at: arrived.time, stage: 'in_transit', description: arrived.description, location: 'Example Town', raw_data: { time: arrived.time } });
+  store.rows.set('yunexpress:markup', { id: 'row-1', package_id: 'restated-parcel', provider_event_id: 'yunexpress:markup',
+    occurred_at: card.time, stage: 'in_transit', description: "Item left at a depot <b><a href='/Contact'>CARD LEFT</a></b>", location: '',
+    raw_data: { time: card.time } });
+  const load = () => ({ id: 'restated-parcel', user_id: 'owner', carrier: 'yunexpress', tracking_number: 'TEST1234',
+    current_stage: 'in_transit', [STORED_EVENT_IDENTITIES]: store.identities() });
+  await service.syncPackage(load());
+  await service.syncPackage(load());
+  expect([...store.rows.values()].map(({ id, provider_event_id, stage, description, location }) => ({ id, provider_event_id, stage, description, location })))
+    .toEqual([
+      { id: 'row-0', provider_event_id: 'yunexpress:town', stage: 'in_transit', description: 'Arrived at the hub', location: 'Example Town, EX' },
+      { id: 'row-1', provider_event_id: 'yunexpress:markup', stage: 'failed_attempt', description: card.description, location: null },
+    ]);
+});
+
 it('moves the row of a scan its carrier restates a little later, and keeps the next day\'s scan in the same words', async () => {
   const store = eventStore();
   // A carrier moves a departure an hour later and lists only the later time; a day later it lists a new departure
