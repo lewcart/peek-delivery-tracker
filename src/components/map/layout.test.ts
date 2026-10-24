@@ -123,6 +123,53 @@ describe('layout', () => {
     expect(legs.map((leg) => leg.kind)).toEqual(['remaining']);
     expect(stroke).toBe(0);
   });
+
+  /** How many kilometres a frame of SIZE spans across its shorter side. */
+  const spanKm = (camera: Camera) => Math.min(SIZE.width, SIZE.height) / camera.scale * 6371;
+  const winterthur = city('Winterthur', 'CH', 8.72, 47.5);
+
+  it('frames places a town apart as it frames one place, and comes closer on a map that draws close-ups', () => {
+    const town = buildRoute([scan(zurich), scan(winterthur, 'out_for_delivery')]);
+    expect(town.scale).toBe('city');
+    const card = spanKm(targetCamera(town, 'journey', SIZE, NO_INSETS, 'rect'));
+    expect(card).toBeCloseTo(spanKm(targetCamera(buildRoute([scan(zurich)]), 'journey', SIZE, NO_INSETS, 'rect')), 3);
+    // With rivers, roads and towns around them, the two places are set apart, and still a town or two of land around.
+    const opened = spanKm(targetCamera(town, 'journey', SIZE, NO_INSETS, 'rect', undefined, undefined, false, true));
+    expect(opened).toBeGreaterThan(60);
+    expect(opened).toBeLessThan(card / 2.5);
+    // Places further apart, and a single place, are framed as before.
+    for (const route of [buildRoute([scan(lyon), scan(zurich)]), buildRoute([scan(zurich)])]) {
+      expect(targetCamera(route, 'journey', SIZE, NO_INSETS, 'rect', undefined, undefined, false, true))
+        .toEqual(targetCamera(route, 'journey', SIZE, NO_INSETS, 'rect'));
+    }
+  });
+
+  it("marks places too close to tell apart once, for the parcel's place, and runs the route to that mark", async () => {
+    await loadWorld();
+    const dubendorf = city('Dübendorf', 'CH', 8.62, 47.4);
+    const route = buildRoute([scan(lyon), scan(dubendorf), scan(zurich, 'out_for_delivery')]);
+    const { dots, legs, labels } = overlay(route, 'journey');
+    expect(dots.map((dot) => dot.kind)).toEqual(['origin', 'current']);
+    expect(labels.map((label) => label.text)).toEqual(['Zürich', 'Lyon']);
+    // One line, from Lyon to the dot that stands for Dübendorf and Zürich: none from one to the other under it.
+    expect(legs).toHaveLength(1);
+    const end = legs[0].d.match(/-?\d+(?:\.\d+)?/g)!.map(Number).slice(-2);
+    const current = dots.find((dot) => dot.kind === 'current')!;
+    expect(Math.hypot(end[0] - current.x, end[1] - current.y)).toBeLessThan(1);
+    // Up close, each place has its own mark again, and the hop between them is drawn.
+    const near = layout(route, camera(SIZE.height / (40 / 6371), [8.58, 47.39]), SIZE, NO_INSETS, 'rect', 'all', false, 'journey', false, 'en',
+      null, (text) => text.length * 6);
+    expect(near.dots.map((dot) => dot.kind)).toEqual(['origin', 'stop', 'current']);
+    expect(near.legs).toHaveLength(2);
+  });
+
+  it("keeps the first place's mark over a later one beside it", async () => {
+    await loadWorld();
+    const route = buildRoute([scan(winterthur), scan(city('Frankfurt', 'DE', 8.68, 50.11)), scan(zurich), scan(city('Hamburg', 'DE', 9.99, 53.55))]);
+    const { dots, labels } = overlay(route, 'journey');
+    expect(dots.map((dot) => dot.kind)).toEqual(['origin', 'stop', 'current']);
+    expect(labels.map((label) => label.text)).toEqual(['Hamburg', 'Winterthur']);
+  });
 });
 
 describe('layout of the opened map', () => {

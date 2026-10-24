@@ -61,6 +61,9 @@ Key server modules:
   Lines between recorded stops are solid; approximate areas have dotted markers.
   On the web the route is drawn as one stroke, from its first place to the parcel's, and
   the way still to go shows once the stroke has arrived.
+  A card frames places a town or two apart as it frames a single place, and the opened
+  map comes no closer than about 70 km across. Places too close to tell apart in a frame
+  share one dot, the parcel's or else the first place's, and the route runs to it.
   The opened map shows more as it closes in: rivers, lakes, built-up areas, main roads
   and towns, from tiles the site serves itself (`public/atlas`, built by
   [`build-detail.mjs`](../src/components/map/build-detail.mjs)). The iPhone app ships the

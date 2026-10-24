@@ -300,7 +300,12 @@ describe('WorldMap', () => {
   it('frames a town, a single place and nothing at all', async () => {
     const town = buildRoute([scan(mulligen), scan(zurich)]);
     const { container, rerender } = render(<WorldMap route={town} mode="journey" time={time} />);
-    await waitFor(() => expect(container.querySelector('path[data-kind="travelled"]')).not.toBeNull());
+    // On a card the town's two places are one mark, at the parcel's: no hop, no second name.
+    await waitFor(() => expect(container.querySelector('g[data-kind="current"]')).not.toBeNull());
+    expect(container.querySelectorAll('g[data-kind]')).toHaveLength(1);
+    expect(container.querySelector('path[data-kind="travelled"]')).toBeNull();
+    expect(screen.getByText('Zürich')).toHaveAttribute('data-kind', 'current');
+    expect(screen.queryByText('Mülligen')).toBeNull();
     rerender(<WorldMap route={buildRoute([scan(zurich)])} mode="journey" time={time} />);
     expect(screen.getByRole('img')).toHaveAccessibleName('Map: Zürich');
     rerender(<WorldMap route={buildRoute([])} mode="journey" time={time} />);
@@ -333,7 +338,7 @@ describe('WorldMap', () => {
     vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => element instanceof HTMLElement && element.dataset.color
       ? { color: colors[element.dataset.color] ?? 'rgb(10, 20, 30)' } as CSSStyleDeclaration
       : original(element, pseudo));
-    const route = buildRoute([scan(mulligen), scan(zurich)]);
+    const route = buildRoute([scan(basel), scan(zurich)]);
     const { container } = render(<WorldMap route={route} mode="journey" time={time} look="tint" night />);
     await waitFor(() => expect(container.querySelector('path[data-kind="travelled"]')).not.toBeNull());
     expect(context.globalCompositeOperation).toBe('source-over');
@@ -690,6 +695,16 @@ describe('WorldMap', () => {
       rerender(<WorldMap route={buildRoute([scan(kyoto), scan(zurich)])} mode="journey" time={time} interactive detail />);
       await waitFor(() => expect(screen.queryByText('Winterthur')).toBeNull());
       expect(fetched).toHaveBeenCalledTimes(2);
+    });
+
+    it('comes close enough to a town to set its places apart', async () => {
+      vi.stubGlobal('fetch', tiles());
+      const town = buildRoute([scan(mulligen), scan(zurich)]);
+      const { container } = render(<WorldMap route={town} mode="journey" time={time} interactive detail />);
+      // A card marks them once; the opened map, with its roads and towns around, draws both and the hop between them.
+      await waitFor(() => expect(container.querySelector('path[data-kind="travelled"]')).not.toBeNull());
+      expect([...container.querySelectorAll('g[data-kind]')].map((dot) => dot.getAttribute('data-kind'))).toEqual(['origin', 'current']);
+      expect(screen.getByText('Mülligen')).toBeInTheDocument();
     });
 
     it('asks for no tiles on a card', async () => {

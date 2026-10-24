@@ -256,7 +256,8 @@ final class ParcelRouteTests: XCTestCase {
         let box = CGRect(x: 40, y: 40, width: 320, height: 220)
         func names(_ route: ParcelRoute, sites: Bool, mode: ParcelRoute.Mode = .journey) -> (labels: [String], pointers: [String]) {
             let points = mode == .now ? route.near.map(\.place.point) : route.stops.map(\.place.point)
-            let overlay = MapOverlay(route: route, camera: GlobeCamera.fit(points, in: box, minimumKilometres: 120), size: size,
+            // Close enough for the centre's dot and the town's to stand apart.
+            let overlay = MapOverlay(route: route, camera: GlobeCamera.fit(points, in: box, minimumKilometres: 80), size: size,
                                      insets: EdgeInsets(), labels: .all, sites: sites, mode: mode, context: false, atlas: atlas,
                                      locale: Locale(identifier: "en"), countryName: { $0 })
             return (overlay.labels.map(\.text), overlay.pointers.map(\.name))
@@ -269,6 +270,56 @@ final class ParcelRouteTests: XCTestCase {
         let far = ParcelRoute(places: [centre, kyoto])
         XCTAssertEqual(names(far, sites: false, mode: .now).pointers, ["Zürich"])
         XCTAssertEqual(names(far, sites: true, mode: .now).pointers, ["Zürich-Mülligen"])
+    }
+
+    func testATownIsFramedAsOnePlaceOnACardAndCloserWithCloseUps() {
+        let size = CGSize(width: 400, height: 300)
+        let span = { (camera: GlobeCamera) in Double(min(size.width, size.height)) / camera.scale * GeoPoint.earthKilometres }
+        let winterthur = city("Winterthur", "CH", 8.72, 47.5)
+        let town = ParcelRoute(places: [zurich, winterthur])
+        XCTAssertEqual(town.scale, .city)
+        let card = span(.framing(town, mode: .journey, in: size, insets: EdgeInsets()))
+        XCTAssertEqual(card, span(.framing(ParcelRoute(places: [zurich]), mode: .journey, in: size, insets: EdgeInsets())), accuracy: 0.001)
+        // With rivers, roads and towns around them, the two places are set apart, and still a town or two of land around.
+        let opened = span(.framing(town, mode: .journey, in: size, insets: EdgeInsets(), closeUps: true))
+        XCTAssertGreaterThan(opened, 60)
+        XCTAssertLessThan(opened, card / 2.5)
+        // Places further apart, and a single place, are framed as before.
+        for route in [ParcelRoute(places: [city("Lyon", "FR", 4.84, 45.76), zurich]), ParcelRoute(places: [zurich])] {
+            XCTAssertEqual(GlobeCamera.framing(route, mode: .journey, in: size, insets: EdgeInsets(), closeUps: true),
+                           GlobeCamera.framing(route, mode: .journey, in: size, insets: EdgeInsets()))
+        }
+    }
+
+    func testPlacesTooCloseToTellApartAreOneMark() throws {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "World", withExtension: "json"))
+        let atlas = try WorldAtlas(data: Data(contentsOf: url))
+        let size = CGSize(width: 400, height: 300)
+        func overlay(_ route: ParcelRoute, _ camera: GlobeCamera) -> MapOverlay {
+            MapOverlay(route: route, camera: camera, size: size, insets: EdgeInsets(), labels: .ends, mode: .journey,
+                       context: false, atlas: atlas, locale: Locale(identifier: "en"), countryName: { $0 })
+        }
+        let lyon = city("Lyon", "FR", 4.84, 45.76)
+        let dubendorf = city("Dübendorf", "CH", 8.62, 47.4)
+        let route = ParcelRoute(places: [lyon, dubendorf, zurich])
+        // One dot and one name for Dübendorf and Zürich, at the parcel's, and one line from Lyon to that dot.
+        let whole = overlay(route, .framing(route, mode: .journey, in: size, insets: EdgeInsets()))
+        XCTAssertEqual(whole.dots.map(\.kind), [.origin, .current])
+        XCTAssertEqual(Set(whole.labels.map(\.text)), ["Lyon", "Zürich"])
+        XCTAssertEqual(whole.legs.count, 1)
+        let end = try XCTUnwrap(whole.legs.first?.path.currentPoint)
+        let current = try XCTUnwrap(whole.dots.last?.point)
+        XCTAssertLessThan(hypot(end.x - current.x, end.y - current.y), 1)
+        // Up close, each place has its own mark again, and the hop between them is drawn.
+        let box = CGRect(x: 40, y: 40, width: 320, height: 220)
+        let near = overlay(route, .fit([dubendorf.point, zurich.point], in: box, minimumKilometres: 40))
+        XCTAssertEqual(near.dots.map(\.kind), [.origin, .stop, .current])
+        XCTAssertEqual(near.legs.count, 2)
+        // Of a first place and a later one beside it, the first keeps its mark and its name.
+        let back = ParcelRoute(places: [city("Winterthur", "CH", 8.72, 47.5), city("Frankfurt", "DE", 8.68, 50.11), zurich, city("Hamburg", "DE", 9.99, 53.55)])
+        let far = overlay(back, .framing(back, mode: .journey, in: size, insets: EdgeInsets()))
+        XCTAssertEqual(far.dots.map(\.kind), [.origin, .stop, .current])
+        XCTAssertEqual(Set(far.labels.map(\.text)), ["Hamburg", "Winterthur"])
     }
 
     func testThePlaceOfTheParcelIsNamedInsideTheFrame() throws {

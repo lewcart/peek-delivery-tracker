@@ -5,7 +5,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncEx
 import { easeInOut, interpolateCamera, projection, subsolarPoint, zoomCamera, type Camera } from './camera';
 import { detailRead, levelStrengths, loadDetail, noDetail, onDetailLoaded, paintDetail, spanKm, tilesInView, type DetailTile } from './detail';
 import { geography, useWorld, type Coordinate } from './geography';
-import { circleOf, layout, mapView, shownOf, targetCamera, type Insets, type Overlay, type PipPlacing, type PipSpot, type Rect, type Shape, type Size } from './layout';
+import { circleOf, dotRadius, layout, mapView, shownOf, targetCamera, type Insets, type Overlay, type PipPlacing, type PipSpot, type Rect, type Shape, type Size } from './layout';
 import { InkPip } from './Pip';
 import { formatKm, type MapMode, type Route } from './route';
 import { springAt, springSettleTime, type Spring } from '../../lib/spring';
@@ -124,8 +124,8 @@ export function WorldMap({
     const standing = pipMood ? { mood: pipMood, ceiling: pipCeiling, floor: pipFloor, inset: pipInset } : null;
     const shown = (camera: Camera, box?: Rect) =>
       shownOf(layout(framed, camera, size, room, shape, labels, sites, mode, false, languageTag, standing, textWidth, undefined, box));
-    return targetCamera(framed, mode, size, room, shape, written, written || standing ? shown : undefined, !!standing);
-  }, [ready, framed, mode, size, top, right, bottom, left, shape, written, labels, sites, languageTag, pipMood, pipCeiling, pipFloor, pipInset]);
+    return targetCamera(framed, mode, size, room, shape, written, written || standing ? shown : undefined, !!standing, detail);
+  }, [ready, framed, mode, size, top, right, bottom, left, shape, written, labels, sites, languageTag, pipMood, pipCeiling, pipFloor, pipInset, detail]);
 
   // Only a change of view, or recentering, brings a moved map back; a new frame or scan leaves it where it was put.
   useEffect(() => {
@@ -434,12 +434,6 @@ function Leg({ leg: { d, kind, pen }, late }: { leg: Overlay['legs'][number]; la
   const [after] = useState(late);
   return <path d={d} className={styles.leg} data-kind={kind} data-late={after || undefined} pathLength={pen ? 1 : undefined}
     style={pen && { '--pen-from': pen.from.toFixed(4), '--pen-share': pen.share.toFixed(4), '--pen-reach': pen.reach.toFixed(4) } as CSSProperties} />;
-}
-
-/** How large a place is marked: the parcel's own place largest, a stop on the way smallest. A quiet route marks them all smaller. */
-function dotRadius(kind: Overlay['dots'][number]['kind'], quiet: boolean): number {
-  const radius = kind === 'current' ? 5 : kind === 'origin' ? 3.5 : kind === 'stop' ? 2.6 : 4.5;
-  return quiet ? radius * .64 : radius;
 }
 
 function describe(route: Route): string {

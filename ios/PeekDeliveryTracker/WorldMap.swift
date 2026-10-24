@@ -577,6 +577,15 @@ struct MapOverlay {
 
     /// A town is named once, however many of its sites the parcel passed through.
     private static let sameTownKilometres = 30.0
+    /// The room two dots need between their rings to read as two places: closer, they are one mark.
+    private static let markAir: CGFloat = 3
+
+    /// How a stop is marked: the parcel's place, or its last known one, the first place, a place on the way, or a country.
+    private static func dotKind(_ route: ParcelRoute, _ index: Int) -> DotKind {
+        let area = route.stops[index].place.isCountry
+        if index == route.stops.count - 1 { return route.latestLocated ? .current : area ? .area : .lastKnown }
+        return area ? .area : index == 0 ? .origin : .stop
+    }
 
     /// A leg as it is drawn, sampled along its curve: a short hop bows slightly to the left of travel, a long one follows the globe.
     static func track(from a: GeoPoint, to b: GeoPoint, kilometres: Double, _ projection: GlobeProjection)
@@ -629,9 +638,29 @@ struct MapOverlay {
             }
             return (path, drawn.points)
         }
+        // Places too close to tell apart in this frame are one mark, drawn and named for all of them: the parcel's place,
+        // else the first, else the newest. The route runs to that mark, and a hop between its places, which the dot would
+        // hide, is left out. Closer up, each place has its own mark again.
+        let kinds = route.stops.indices.map { Self.dotKind(route, $0) }
+        let last = route.stops.count - 1
+        let order = last < 0 ? [] : [last] + (last > 0 ? [0] : []) + (last > 1 ? Array((1..<last).reversed()) : [])
+        var marks: [(index: Int, point: CGPoint, radius: CGFloat)] = []
+        var markOf = Array(route.stops.indices)
+        for index in order where visible(route.stops[index].place.point) {
+            let point = at(route.stops[index].place.point)
+            let radius = MapPainter.dotRadius(kinds[index], quiet: false)
+            if let under = marks.first(where: { hypot($0.point.x - point.x, $0.point.y - point.y) < $0.radius + radius + Self.markAir }) {
+                markOf[index] = under.index
+            } else {
+                marks.append((index, point, radius))
+            }
+        }
+        let shows = { (index: Int) in markOf[index] == index }
+
         var tracks: [[CGPoint]] = []
-        for leg in route.legs {
-            let drawn = legPath(leg.from.point, leg.to.point, leg.kilometres)
+        // Each leg runs from one stop to the next.
+        for (index, leg) in route.legs.enumerated() where index + 1 < markOf.count && markOf[index] != markOf[index + 1] {
+            let drawn = legPath(route.stops[markOf[index]].place.point, route.stops[markOf[index + 1]].place.point, leg.kilometres)
             legs.append(Leg(path: drawn.path, kind: leg.isApproximate ? .approximate : .travelled))
             tracks.append(drawn.track)
         }
@@ -647,12 +676,8 @@ struct MapOverlay {
             return routeTracks.contains { $0.contains(where: reach.contains) }
         }
 
-        for (index, stop) in route.stops.enumerated() where visible(stop.place.point) {
-            let last = index == route.stops.count - 1
-            var kind: DotKind = last ? (route.latestLocated ? .current : .lastKnown)
-                : stop.place.isCountry ? .area : index == 0 ? .origin : .stop
-            if last && stop.place.isCountry && !route.latestLocated { kind = .area }
-            dots.append(Dot(point: at(stop.place.point), kind: kind))
+        for (index, stop) in route.stops.enumerated() where visible(stop.place.point) && shows(index) {
+            dots.append(Dot(point: at(stop.place.point), kind: kinds[index]))
         }
         if let destination = route.destination, visible(destination.point) {
             dots.insert(Dot(point: at(destination.point), kind: .destination), at: 0)
@@ -670,11 +695,12 @@ struct MapOverlay {
         var candidates: [Candidate] = []
         if let current = route.current { candidates.append(Candidate(id: current.id, place: current.place, kind: .current, priority: 0)) }
         if let destination = route.destination { candidates.append(Candidate(id: "destination", place: destination, kind: .end, priority: 1)) }
-        if let origin = route.origin, origin.id != route.current?.id {
+        if let origin = route.origin, origin.id != route.current?.id, shows(0) {
             candidates.append(Candidate(id: origin.id, place: origin.place, kind: .end, priority: 2))
         }
         if route.stops.count > 2 {
-            for stop in route.stops[1..<(route.stops.count - 1)] {
+            for index in 1..<(route.stops.count - 1) where shows(index) {
+                let stop = route.stops[index]
                 candidates.append(Candidate(id: stop.id, place: stop.place, kind: .stop, priority: 3))
             }
         }
@@ -1114,17 +1140,20 @@ extension GlobeCamera {
     /// would pass under the box, or that loses a name or Pip's spot to it, is framed below it or beside it: where it shows
     /// most, then where it is drawn larger. `pip` says Pip looks for a spot beside the parcel's dot, which a route that ends
     /// at the frame's edge can leave him none of: it is framed again with room for him there. Every other route keeps its
-    /// usual frame.
+    /// usual frame. `closeUps` says the map draws rivers, roads and towns up close, which lets it come closer to a short
+    /// journey.
     static func framing(_ route: ParcelRoute, mode: ParcelRoute.Mode, in size: CGSize, insets: EdgeInsets,
-                        covered: CGRect? = nil, shown: ((GlobeCamera, CGRect?) -> Double)? = nil, pip: Bool = false) -> GlobeCamera {
-        let usual = framed(route, mode: mode, in: size, insets: insets)
-        let clear = covered.map { clearOf(route, mode: mode, in: size, insets: insets, usual: usual, covered: $0, shown: shown) } ?? usual
+                        covered: CGRect? = nil, shown: ((GlobeCamera, CGRect?) -> Double)? = nil, pip: Bool = false,
+                        closeUps: Bool = false) -> GlobeCamera {
+        let framed = { (room: EdgeInsets) in Self.framed(route, mode: mode, in: size, insets: room, closeUps: closeUps) }
+        let usual = framed(insets)
+        let clear = covered.map { clearOf(route, insets: insets, framed: framed, usual: usual, covered: $0, shown: shown) } ?? usual
         guard clear == usual, pip, let shown else { return clear }
-        return roomForPip(route, mode: mode, in: size, insets: insets, usual: usual) { shown($0, covered) }
+        return roomForPip(route, in: size, insets: insets, framed: framed, usual: usual) { shown($0, covered) }
     }
 
     /// The frame of a route the card writes over, below the box or beside it when the usual one loses something to it.
-    private static func clearOf(_ route: ParcelRoute, mode: ParcelRoute.Mode, in size: CGSize, insets: EdgeInsets, usual: GlobeCamera,
+    private static func clearOf(_ route: ParcelRoute, insets: EdgeInsets, framed: (EdgeInsets) -> GlobeCamera, usual: GlobeCamera,
                                 covered: CGRect, shown: ((GlobeCamera, CGRect?) -> Double)?) -> GlobeCamera {
         let under = passesUnder(route, usual, covered)
         let names = { (camera: GlobeCamera) in shown?(camera, covered) ?? 0 }
@@ -1134,14 +1163,14 @@ extension GlobeCamera {
         lower.top = max(insets.top, covered.maxY)
         var narrower = insets
         narrower.leading = max(insets.leading, covered.maxX)
-        let below = framed(route, mode: mode, in: size, insets: lower)
-        let beside = framed(route, mode: mode, in: size, insets: narrower)
+        let below = framed(lower)
+        let beside = framed(narrower)
         var frames = [(camera: below, scale: below.scale), (camera: beside, scale: beside.scale)]
         // Further from the box for as long as the route is drawn as large: a name may need the room between them.
         for step in 1...6 {
             var further = narrower
             further.leading += CGFloat(step) * 16
-            let camera = framed(route, mode: mode, in: size, insets: further)
+            let camera = framed(further)
             if camera.scale < beside.scale * 0.999 { break }
             frames.append((camera, beside.scale))
         }
@@ -1156,8 +1185,8 @@ extension GlobeCamera {
     /// Pip stands beside the parcel's dot, and a route that ends at the frame's edge can leave him no room there. It is
     /// framed again with more room on the dot's side, across and along, a step at a time, and takes the largest frame where
     /// he stands and every place keeps its name. A route he already stands beside keeps its frame.
-    private static func roomForPip(_ route: ParcelRoute, mode: ParcelRoute.Mode, in size: CGSize, insets: EdgeInsets, usual: GlobeCamera,
-                                   shown: (GlobeCamera) -> Double) -> GlobeCamera {
+    private static func roomForPip(_ route: ParcelRoute, in size: CGSize, insets: EdgeInsets, framed: (EdgeInsets) -> GlobeCamera,
+                                   usual: GlobeCamera, shown: (GlobeCamera) -> Double) -> GlobeCamera {
         let kept = shown(usual)
         let projection = GlobeProjection(usual)
         // A name counts a whole point and Pip half of one: he has a spot already.
@@ -1174,7 +1203,7 @@ extension GlobeCamera {
             if top { along.top += further } else { along.bottom += further }
             var both = across
             if top { both.top += further } else { both.bottom += further }
-            frames += [across, along, both].map { framed(route, mode: mode, in: size, insets: $0) }
+            frames += [across, along, both].map(framed)
         }
         // The largest frame first, and of two as large, the one with less room added.
         return frames.enumerated().sorted { ($0.element.scale, -$0.offset) > ($1.element.scale, -$1.offset) }
@@ -1197,7 +1226,7 @@ extension GlobeCamera {
             || legs.contains { MapOverlay.track(from: $0.0, to: $0.1, kilometres: $0.2, projection).points.contains(where: near) }
     }
 
-    private static func framed(_ route: ParcelRoute, mode: ParcelRoute.Mode, in size: CGSize, insets: EdgeInsets) -> GlobeCamera {
+    private static func framed(_ route: ParcelRoute, mode: ParcelRoute.Mode, in size: CGSize, insets: EdgeInsets, closeUps: Bool) -> GlobeCamera {
         let inner = min(size.width - insets.leading - insets.trailing, size.height - insets.top - insets.bottom)
         let pad = min(40, inner * 0.12)
         let box = CGRect(x: insets.leading + pad, y: insets.top + pad,
@@ -1215,11 +1244,15 @@ extension GlobeCamera {
         var arcs = route.legs.map { ($0.from.point, $0.to.point, $0.kilometres) }
         if let current = route.current?.place.point, let destination { arcs.append((current, destination, route.remainingKilometres ?? 0)) }
         let middles = arcs.filter { $0.2 > 300 }.flatMap { from, to, _ in [0.25, 0.5, 0.75].map { from.interpolated(to: to, $0) } }
+        // How close the camera may come, across the frame's shorter side, by how far the journey's places spread. Places a
+        // town or two apart are framed as one place is: closer, a map of land alone is an empty field, and its places would
+        // still crowd one another. A map that draws close-ups has rivers, roads and towns to show around them, and comes
+        // closer to set them apart.
         let minimum: Double = switch route.scale {
         case .world: 400
         case .region: 300
         case .local: 120
-        case .city: 24
+        case .city: closeUps ? 70 : 260
         case .point: 260
         case .none: 0
         }
@@ -1342,7 +1375,7 @@ struct WorldMapView: View {
 
     private func targetCamera(in size: CGSize) -> GlobeCamera {
         let standing = palette.card == nil ? nil : pip
-        guard covered != nil || standing != nil else { return .framing(route, mode: mode, in: size, insets: insets) }
+        guard covered != nil || standing != nil else { return .framing(route, mode: mode, in: size, insets: insets, closeUps: detail != nil) }
         // What the card writes over the map also moves it when a place of the journey would lose its name to it, or Pip
         // his spot beside the parcel, which is looked for afresh in each frame; and a route that leaves him no spot at its
         // end is framed with room for him there.
@@ -1350,7 +1383,7 @@ struct WorldMapView: View {
             MapOverlay(route: route, camera: camera, size: size, insets: insets, labels: labels, sites: sites, mode: mode, context: false,
                        atlas: atlas, locale: language.locale, countryName: { $0 }, pip: standing, covered: box).shown
         }
-        return .framing(route, mode: mode, in: size, insets: insets, covered: covered, shown: shown, pip: standing != nil)
+        return .framing(route, mode: mode, in: size, insets: insets, covered: covered, shown: shown, pip: standing != nil, closeUps: detail != nil)
     }
 
     /// The tiles a camera shows, whether every one of them has come, and their towns; nothing on a map without close-ups.

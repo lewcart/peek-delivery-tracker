@@ -23,7 +23,16 @@ export interface PipPlacing {
 export type Size = { width: number; height: number };
 export type Shape = 'rect' | 'circle';
 
-const MIN_SPAN: Record<Scale, number> = { world: 400, region: 300, local: 120, city: 24, point: 260, none: 0 };
+/**
+ * How close the camera may come, across the frame's shorter side, by how far the journey's places spread. Places a
+ * town or two apart are framed as one place is: closer, a map of land alone is an empty field, and its places would
+ * still crowd one another.
+ */
+const MIN_SPAN: Record<Scale, number> = { world: 400, region: 300, local: 120, city: 260, point: 260, none: 0 };
+/** A map that draws close-ups has rivers, roads and towns to show around them, and comes this close to set them apart. */
+const CLOSE_UP_SPAN = 70;
+/** The room two dots need between their rings to read as two places: closer, they are one mark. */
+const MARK_AIR = 3;
 // A town is named once, however many of its sites the parcel passed through.
 const SAME_TOWN_KM = 30;
 /** How much more of the frame's side a route leaves to what is written there, at each try. */
@@ -44,30 +53,32 @@ export function circleOf(size: Size, insets: Insets) {
  * the box when it is given one. A route that would pass under the box, or that loses a name or Pip's spot to it, is
  * framed below it or beside it: where it shows most, then where it is drawn larger. `pip` says Pip looks for a spot
  * beside the parcel's dot, which a route that ends at the frame's edge can leave him none of: it is framed again with
- * room for him there. Every other route keeps its usual frame.
+ * room for him there. Every other route keeps its usual frame. `closeUps` says the map draws rivers, roads and towns up
+ * close, which lets it come closer to a short journey.
  */
 export function targetCamera(route: Route, mode: MapMode, size: Size, insets: Insets, shape: Shape, covered?: Rect,
-  shown?: (camera: Camera, covered?: Rect) => number, pip = false): Camera {
-  const usual = framedCamera(route, mode, size, insets, shape);
+  shown?: (camera: Camera, covered?: Rect) => number, pip = false, closeUps = false): Camera {
+  const framed = (room: Insets) => framedCamera(route, mode, size, room, shape, closeUps);
+  const usual = framed(insets);
   if (shape === 'circle') return usual;
-  const clear = covered ? clearOf(route, mode, size, insets, shape, usual, covered, shown) : usual;
-  return clear === usual && pip && shown ? roomForPip(route, mode, size, insets, shape, usual, (camera) => shown(camera, covered)) : clear;
+  const clear = covered ? clearOf(route, insets, framed, usual, covered, shown) : usual;
+  return clear === usual && pip && shown ? roomForPip(route, size, insets, framed, usual, (camera) => shown(camera, covered)) : clear;
 }
 
 /** The frame of a route the card writes over, below the box or beside it when the usual one loses something to it. */
-function clearOf(route: Route, mode: MapMode, size: Size, insets: Insets, shape: Shape, usual: Camera, covered: Rect,
+function clearOf(route: Route, insets: Insets, framed: (room: Insets) => Camera, usual: Camera, covered: Rect,
   shown?: (camera: Camera, covered?: Rect) => number): Camera {
   const under = passesUnder(route, usual, covered);
   const names = (camera: Camera) => shown?.(camera, covered) ?? 0;
   const kept = names(usual);
   if (!under && kept >= (shown?.(usual) ?? 0)) return usual;
   const left = Math.max(insets.left, covered.x + covered.width);
-  const beside = framedCamera(route, mode, size, { ...insets, left }, shape);
-  const below = framedCamera(route, mode, size, { ...insets, top: Math.max(insets.top, covered.y + covered.height) }, shape);
+  const beside = framed({ ...insets, left });
+  const below = framed({ ...insets, top: Math.max(insets.top, covered.y + covered.height) });
   const frames = [{ camera: below, scale: below.scale }, { camera: beside, scale: beside.scale }];
   // Further from the box for as long as the route is drawn as large: a name may need the room between them.
   for (let further = FURTHER; further <= FURTHER * 6; further += FURTHER) {
-    const camera = framedCamera(route, mode, size, { ...insets, left: left + further }, shape);
+    const camera = framed({ ...insets, left: left + further });
     if (camera.scale < beside.scale * .999) break;
     frames.push({ camera, scale: beside.scale });
   }
@@ -82,7 +93,7 @@ function clearOf(route: Route, mode: MapMode, size: Size, insets: Insets, shape:
  * framed again with more room on the dot's side, across and along, a step at a time, and takes the largest frame where
  * he stands and every place keeps its name. A route he already stands beside keeps its frame.
  */
-function roomForPip(route: Route, mode: MapMode, size: Size, insets: Insets, shape: Shape, usual: Camera,
+function roomForPip(route: Route, size: Size, insets: Insets, framed: (room: Insets) => Camera, usual: Camera,
   shown: (camera: Camera) => number): Camera {
   const kept = shown(usual);
   const current = route.current?.place.coordinate;
@@ -97,7 +108,7 @@ function roomForPip(route: Route, mode: MapMode, size: Size, insets: Insets, sha
     for (const sides of [[across], [along], [across, along]]) {
       const room = { ...insets };
       for (const side of sides) room[side] += further;
-      frames.push(framedCamera(route, mode, size, room, shape));
+      frames.push(framed(room));
     }
   }
   // The largest frame first, and of two as large, the one with less room added.
@@ -108,7 +119,7 @@ function roomForPip(route: Route, mode: MapMode, size: Size, insets: Insets, sha
 /** How much of the journey a map shows: a point for each place it names, and half of one for Pip when he has a spot. */
 export const shownOf = (overlay: Overlay) => overlay.labels.length + (overlay.pip ? .5 : 0);
 
-function framedCamera(route: Route, mode: MapMode, size: Size, insets: Insets, shape: Shape): Camera {
+function framedCamera(route: Route, mode: MapMode, size: Size, insets: Insets, shape: Shape, closeUps: boolean): Camera {
   let box: Box;
   if (shape === 'circle') {
     const { x, y, radius } = circleOf(size, insets);
@@ -141,7 +152,8 @@ function framedCamera(route: Route, mode: MapMode, size: Size, insets: Insets, s
     .flatMap(([from, to]) => [.25, .5, .75].map(t => geoInterpolate(from, to)(t) as Coordinate));
   // A route of countries only frames the countries, not a town-sized window on their label points.
   const countriesOnly = route.stops.length > 0 && route.stops.every((stop) => stop.place.precision === 'country');
-  const minSpanKm = countriesOnly ? Math.max(MIN_SPAN[route.scale], 1500) : MIN_SPAN[route.scale];
+  const closest = closeUps && route.scale === 'city' ? CLOSE_UP_SPAN : MIN_SPAN[route.scale];
+  const minSpanKm = countriesOnly ? Math.max(closest, 1500) : closest;
   const camera = ends.length
     ? fitCamera([...ends, ...arcs], box, { shape, minSpanKm, tilt: route.scale === 'world' })
     : fitCamera([RESTING_CENTER], box, { shape, minSpanKm: 1e5, globeAbove: -1 });
@@ -187,6 +199,22 @@ export interface Overlay {
   pointers: { id: string; x: number; y: number; angle: number; text: string; detail: string }[];
   /** Where Pip's frame starts, on the map and from the parcel's dot, how wide it is, and which side of him the dot is on. */
   pip: (PipSpot & { x: number; y: number; mood: PipMood }) | null;
+}
+
+type DotKind = Overlay['dots'][number]['kind'];
+
+/** How a stop is marked: the parcel's place, or its last known one, the first place, a place on the way, or a country. */
+function dotKind(route: Route, index: number): DotKind {
+  const stop = route.stops[index];
+  const area = stop.place.precision === 'country';
+  if (index === route.stops.length - 1) return route.latestLocated ? 'current' : area ? 'area' : 'last-known';
+  return area ? 'area' : index === 0 ? 'origin' : 'stop';
+}
+
+/** How large a place is marked: the parcel's own place largest, a stop on the way smallest. A quiet route marks them all smaller. */
+export function dotRadius(kind: DotKind, quiet = false): number {
+  const radius = kind === 'current' ? 5 : kind === 'origin' ? 3.5 : kind === 'stop' ? 2.6 : 4.5;
+  return quiet ? radius * .64 : radius;
 }
 
 export type Rect = { x: number; y: number; width: number; height: number };
@@ -292,10 +320,30 @@ export function layout(route: Route, camera: Camera, size: Size, insets: Insets,
     return { d: `M${x1.toFixed(1)},${y1.toFixed(1)}Q${cx.toFixed(1)},${cy.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`, drawn: UNCUT };
   };
 
+  // Places too close to tell apart in this frame are one mark, drawn and named for all of them: the parcel's place, else
+  // the first, else the newest. The route runs to that mark, and a hop between its places, which the dot would hide, is
+  // left out. Closer up, each place has its own mark again.
+  const kinds = new Map(route.stops.map((stop, index) => [stop.id, dotKind(route, index)]));
+  const marks: { id: string; x: number; y: number; radius: number }[] = [];
+  const markOf = new Map<string, string>();
+  const last = route.stops.length - 1;
+  for (const stop of new Set([route.stops[last], route.stops[0], ...route.stops.slice(1, last).reverse()])) {
+    if (!stop || !visible(stop.place.coordinate)) continue;
+    const [x, y] = at(stop.place.coordinate);
+    const radius = dotRadius(kinds.get(stop.id)!);
+    const under = marks.find(mark => Math.hypot(mark.x - x, mark.y - y) < mark.radius + radius + MARK_AIR);
+    if (under) markOf.set(stop.id, under.id);
+    else marks.push({ id: stop.id, x, y, radius });
+  }
+  const shows = (stop: Route['stops'][number]) => !markOf.has(stop.id);
+  const stopOf = new Map(route.stops.map(stop => [stop.id, stop]));
+  const marked = (stop: Route['stops'][number]) => stopOf.get(markOf.get(stop.id) ?? stop.id) ?? stop;
+  const drawnLegs = route.legs.filter(leg => marked(leg.from) !== marked(leg.to));
+
   // The stroke spends its time where it can be seen: a leg's turn lasts as long as its run through the frame, and starts
   // where it enters the frame, so a close-up never waits for a line that is still far outside it.
-  const runs = route.legs.map((leg) => {
-    const { d, drawn } = legPath(leg.from.place.coordinate, leg.to.place.coordinate, leg.km);
+  const runs = drawnLegs.map((leg) => {
+    const { d, drawn } = legPath(marked(leg.from).place.coordinate, marked(leg.to).place.coordinate, leg.km);
     const track = tracks[tracks.length - 1];
     const line = runThrough(track, drawn);
     const seen = runThrough(track, frame);
@@ -307,7 +355,7 @@ export function layout(route: Route, camera: Camera, size: Size, insets: Insets,
   const turns = runs.map(run => Math.max(run.seen, Math.max(stroke, 1) * .005));
   const whole = turns.reduce((sum, turn) => sum + turn, 0);
   let from = 0;
-  const legs: Overlay['legs'] = route.legs.map((leg, index) => {
+  const legs: Overlay['legs'] = drawnLegs.map((leg, index) => {
     const pen = { from, share: turns[index] / whole, reach: runs[index].reach };
     from += pen.share;
     return {
@@ -327,15 +375,11 @@ export function layout(route: Route, camera: Camera, size: Size, insets: Insets,
     && y > box.y - 1 && y < box.y + box.height + 1));
 
   const dots: Overlay['dots'] = [];
-  route.stops.forEach((stop, index) => {
+  route.stops.forEach((stop) => {
     const point = stop.place.coordinate;
-    if (!visible(point)) return;
+    if (!visible(point) || !shows(stop)) return;
     const [x, y] = at(point);
-    const last = index === route.stops.length - 1;
-    const kind = last ? (route.latestLocated ? 'current' : 'last-known')
-      : stop.place.precision === 'country' ? 'area'
-        : index === 0 ? 'origin' : 'stop';
-    dots.push({ id: stop.id, x, y, kind: last && stop.place.precision === 'country' && !route.latestLocated ? 'area' : kind });
+    dots.push({ id: stop.id, x, y, kind: kinds.get(stop.id)! });
   });
   if (route.destination && visible(route.destination.coordinate)) {
     const [x, y] = at(route.destination.coordinate);
@@ -351,8 +395,9 @@ export function layout(route: Route, camera: Camera, size: Size, insets: Insets,
   const candidates = [
     ...(route.current ? [{ id: route.current.id, place: route.current.place, kind: 'current' as const, priority: 0 }] : []),
     ...(route.destination ? [{ id: 'destination', place: route.destination, kind: 'end' as const, priority: 1 }] : []),
-    ...(route.origin && route.origin !== route.current ? [{ id: route.origin.id, place: route.origin.place, kind: 'end' as const, priority: 2 }] : []),
-    ...route.stops.slice(1, -1).map(stop => ({ id: stop.id, place: stop.place, kind: 'stop' as const, priority: 3 })),
+    ...(route.origin && route.origin !== route.current && shows(route.origin)
+      ? [{ id: route.origin.id, place: route.origin.place, kind: 'end' as const, priority: 2 }] : []),
+    ...route.stops.slice(1, -1).filter(shows).map(stop => ({ id: stop.id, place: stop.place, kind: 'stop' as const, priority: 3 })),
   ].filter(candidate => labels === 'all' || (labels === 'ends' && candidate.priority < 3));
   const neighbours = new Map<string, Coordinate[]>(route.stops.map((stop, index) => [stop.id,
     [route.stops[index - 1], route.stops[index + 1]].flatMap(other => other ? [other.place.coordinate] : [])]));
