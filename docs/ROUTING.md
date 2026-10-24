@@ -247,6 +247,14 @@ carrier's facts it lacks, such as the estimate. The carrier is still asked first
 check. While no provider holds more, the providers are asked again every 15 min by day and
 hourly overnight.
 
+The same holds for the filed carrier's own answer with the parcel's label alone, nothing past
+registration, once its earliest scan, else the day the parcel was added, is two days old: a
+carrier that takes the parcel over after a border may scan it only on its own leg, while
+providers follow the legs before. Only a provider's progress replaces that answer. While none
+has any, the providers are asked again every 6 h, each within its own backoff, so a number they
+do not know is still asked once a day. A younger label stands alone, and progress the parcel
+has shown stays (Older or regressing result, under Scenarios).
+
 **Rate limits (429).** If the last successful retrieval is recent (under 1 h by day, 3 h
 overnight), the parcel keeps its progress and skips fallback until that window or the
 retry time runs out. Otherwise the router tries another provider. It never retries the
@@ -731,7 +739,7 @@ a fresh provider lookup or change any scan's clock. Parcel checks keep their exi
 The link shown in the app follows `tracking_provider` of the result on screen: a 17TRACK,
 ParcelsApp or Ship24 result links to that provider with the lookup number. Direct recovery
 restores the carrier link. When the carrier's own lookup answered the same check and only its
-missing clock or partial answer sent the result elsewhere, the result is marked
+missing clock, partial answer or label alone sent the result elsewhere, the result is marked
 `carrier_answered` and the link stays with the carrier. Postal Ninja and UPU link to their public forms. No deep links are
 guessed.
 

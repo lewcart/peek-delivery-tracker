@@ -1348,6 +1348,35 @@ describe('TrackingSyncService', () => {
       expect.objectContaining({ step: 'fetch', details: expect.objectContaining({ source_carrier: 'unknown', carrier_answered: true }) })]));
   });
 
+  it('shows a provider’s progress beside a carrier’s label that is days old, the carrier answering too', async () => {
+    const client = { ...fakeClient(),
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-09-10T12:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined) };
+    // UPS's public example number; the clocks and wording are invented.
+    const number = '1Z999AA10123456784';
+    const adapter = {
+      fetch: vi.fn(async (carrier: string): Promise<CarrierResult> => {
+        // What the tracker's recorder reports of the carrier's lookup.
+        healthStepRecorder.lookup({ carrier, finalStep: 'direct', durationMs: 1, attempts: 1, outcome: 'ok', errorType: null });
+        return { status: 'pending', current_stage: 'registered', last_update: '2026-09-07T10:00:00Z',
+          events: [{ time: '2026-09-07T10:00:00Z', description: 'Shipping label created', stage: 'registered' }] };
+      }),
+      fetchUniversal: vi.fn().mockResolvedValue({ status: 'in_transit', current_stage: 'customs', discovered_carrier: 'ups', events: [
+        { time: '2026-09-10T09:00:00Z', description: 'Customs clearance started', stage: 'customs' },
+        { time: '2026-09-07T10:00:00Z', description: 'Shipping label created', stage: 'registered' }] }),
+    };
+    await new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date('2026-09-10T12:00:00Z'))
+      .syncPackage({ id: 'label-days-old', carrier: 'ups', tracking_number: number, current_stage: 'registered' }, { trigger: 'scheduled' });
+    expect(adapter.fetch).toHaveBeenCalledExactlyOnceWith('ups', number, null, null);
+    expect(adapter.fetchUniversal).toHaveBeenCalledOnce();
+    const saved = client.updatePackage.mock.calls.at(-1)![1];
+    expect(saved).toMatchObject({ current_stage: 'customs', carrier_data: { carrier_answered: true, routing: { confirmed_carrier: 'ups' } } });
+    expect(client.insertEvents.mock.calls.flatMap(([rows]) => rows.map((row: JsonObject) => row.description)))
+      .toContain('Customs clearance started');
+    expect(client.completeSyncAttempt).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.arrayContaining([
+      expect.objectContaining({ step: 'fetch', details: expect.objectContaining({ source_carrier: 'unknown', carrier_answered: true, direct_outcome: 'ok' }) })]));
+  });
+
   it('files an unknown parcel under the carrier only recognition found once a provider naming none dates its local-clock answer', async () => {
     const report = vi.spyOn(observability, 'reportRoutingEvent').mockImplementation(() => undefined);
     vi.spyOn(scraper, 'universalPlan').mockReturnValue({ sources: ['Postal Ninja'], carrier: null, tier: () => 'unknown', rank: () => 0 });

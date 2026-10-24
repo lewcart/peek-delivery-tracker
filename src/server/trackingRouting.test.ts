@@ -1655,6 +1655,126 @@ describe('persistent tracking routing', () => {
       expect(universal).not.toHaveBeenCalled();
     });
   });
+  describe('a filed carrier\'s label alone', () => {
+    // UPS's public example number; the clocks, wording and estimate are invented.
+    const ups = (overrides: JsonObject = {}) => parcel({ carrier: 'ups', tracking_number: '1Z999AA10123456784', ...overrides });
+    const label = (at = '2026-09-07T10:00:00Z', carrier = 'ups'): RoutedResult => ({ sourceCarrierId: carrier, swissPostReady: null, handoffFallbackErrorType: null,
+      result: { status: 'pending', current_stage: 'registered', last_update: at, expected_delivery: '2026-09-15',
+        events: [{ time: at, description: 'Shipping label created', stage: 'registered' }] } });
+    // A provider following the legs before the carrier's own, its label included.
+    const journey = (newest = '2026-09-10T09:00:00Z'): CarrierResult => ({ status: 'in_transit', current_stage: 'customs', discovered_carrier: 'ups', events: [
+      { time: newest, description: 'Customs clearance started', stage: 'customs' },
+      { time: '2026-09-07T10:00:00Z', description: 'Shipping label created', stage: 'registered' },
+    ] });
+    const routingOf = (result: RoutedResult) => result.result.routing as JsonObject;
+
+    it('asks the providers once the label is two days old, and serves their progress with the carrier\'s facts', async () => {
+      fixedPlan('ParcelsApp', 'Ship24');
+      const { router, direct, universal } = setup();
+      direct.mockResolvedValue(label());
+      universal.mockResolvedValue(journey());
+      const result = await router.fetch(ups({ created_at: '2026-09-10T11:00:00Z' }), false);
+      expect(result.sourceCarrierId).toBe('unknown');
+      expect(result.result).toMatchObject({ tracking_provider: 'ParcelsApp', carrier_answered: true, current_stage: 'customs', expected_delivery: '2026-09-15' });
+      expect(routingOf(result)).toMatchObject({ preferred_provider: 'ParcelsApp', confirmed_carrier: 'ups' });
+      expect(routingOf(result).partial_checked_at).toBeUndefined();
+      // The carrier stays first on every check, its label beside the provider's progress.
+      expect(routingOf(result).direct_retry_at).toBeUndefined();
+      expect(universal).toHaveBeenCalledOnce();
+      const next = setup(new Date('2026-09-10T12:15:00Z'));
+      next.direct.mockResolvedValue(label());
+      next.universal.mockResolvedValue(journey('2026-09-10T12:05:00Z'));
+      const again = await next.router.fetch(ups({ current_stage: 'customs', carrier_data: { routing: routingOf(result) } }), false);
+      expect(next.direct).toHaveBeenCalledOnce();
+      expect(again.result).toMatchObject({ tracking_provider: 'ParcelsApp', carrier_answered: true });
+    });
+
+    it.each([
+      // A label is usually scanned within a day or two: the carrier's own first scan comes next.
+      ['a label younger than two days', () => label('2026-09-09T13:00:00Z'), {}],
+      // Nothing dates the label but the parcel's own age.
+      ['an undated label on a parcel added a day ago', () => ({ ...label(), result: { status: 'pending', current_stage: 'registered', events: [
+        { description: 'Shipping label created', stage: 'registered' }] } }), { created_at: '2026-09-09T12:00:00Z' }],
+      // A carrier answering without scans it showed before keeps the saved progress at its own cadence (scans_withdrawn).
+      ['a fresh label on a parcel that has shown progress', () => label('2026-09-10T11:00:00Z'), { current_stage: 'in_transit' }],
+      // Real progress is the carrier's own answer, whatever the label's age.
+      ['a carrier that shows progress', () => ({ ...label(), result: { ...label().result, status: 'in_transit', current_stage: 'accepted', events: [
+        { time: '2026-09-10T08:00:00Z', description: 'Picked up', stage: 'accepted' }, ...label().result.events!] } }), {}],
+    ] as const)('leaves %s to the carrier alone', async (_case, answer, extra) => {
+      fixedPlan('ParcelsApp', 'Ship24');
+      const { router, direct, universal } = setup();
+      direct.mockResolvedValue(answer());
+      universal.mockResolvedValue(journey());
+      const result = await router.fetch(ups(extra), false);
+      expect(result.sourceCarrierId).toBe('ups');
+      expect(result.result).not.toHaveProperty('tracking_provider');
+      expect(routingOf(result).partial_checked_at).toBeUndefined();
+      expect(universal).not.toHaveBeenCalled();
+    });
+
+    it('dates an undated label by the day the parcel was added', async () => {
+      fixedPlan('ParcelsApp');
+      const { router, direct, universal } = setup();
+      direct.mockResolvedValue({ ...label(), result: { status: 'pending', current_stage: 'registered' } });
+      universal.mockResolvedValue(journey());
+      const result = await router.fetch(ups({ created_at: '2026-09-08T09:00:00Z' }), false);
+      expect(result.result).toMatchObject({ tracking_provider: 'ParcelsApp', carrier_answered: true });
+    });
+
+    it('keeps the label while no provider shows progress, and asks again six hours later', async () => {
+      fixedPlan('ParcelsApp', 'Ship24');
+      const { router, direct, universal } = setup();
+      direct.mockResolvedValue(label());
+      // One provider holds the label alone, the other does not know the number.
+      universal.mockImplementation(async (source: string) => {
+        if (source === 'Ship24') throw new NotFoundError('Ship24');
+        return { ...label().result, events: [...label().result.events!, { time: '2026-09-08T10:00:00Z', description: 'Label printed', stage: 'registered' }] };
+      });
+      const result = await router.fetch(ups(), false);
+      expect(result).toMatchObject({ sourceCarrierId: 'ups', result: { current_stage: 'registered' } });
+      expect(result.result).not.toHaveProperty('tracking_provider');
+      expect(routingOf(result)).toMatchObject({ partial_checked_at: time.toISOString(), failures: { Ship24: { kind: 'not_found' } } });
+      expect(routingOf(result).preferred_provider).toBeUndefined();
+      expect(universal.mock.calls.map(([source]) => source)).toEqual(['ParcelsApp', 'Ship24']);
+      for (const [at, asked] of [['2026-09-10T17:59:00Z', []], ['2026-09-10T18:00:00Z', ['ParcelsApp']]] as const) {
+        const later = setup(new Date(at));
+        later.direct.mockResolvedValue(label());
+        later.universal.mockResolvedValue(label().result);
+        await later.router.fetch(ups({ carrier_data: { routing: routingOf(result) } }), false);
+        expect(later.direct).toHaveBeenCalledOnce();
+        // A provider's "not found" still holds for a day.
+        expect(later.universal.mock.calls.map(([source]) => source)).toEqual(asked);
+      }
+    });
+
+    it.each([
+      ['is behind the label', { ...journey(), events: [{ time: '2026-09-05T09:00:00Z', description: 'Departed facility', stage: 'in_transit' },
+        { time: '2026-09-04T09:00:00Z', description: 'Picked up', stage: 'accepted' }] }],
+      ['names another carrier', { ...journey(), discovered_carrier: 'fedex' }],
+    ] as const)('keeps the label beside a provider\'s progress that %s', async (_case, answer) => {
+      fixedPlan('ParcelsApp');
+      const { router, direct, universal } = setup();
+      direct.mockResolvedValue(label());
+      universal.mockResolvedValue(answer);
+      const result = await router.fetch(ups(), false);
+      expect(result).toMatchObject({ sourceCarrierId: 'ups', result: { routing: { partial_checked_at: time.toISOString() } } });
+      expect(result.result).not.toHaveProperty('tracking_provider');
+    });
+
+    it.each([
+      ['a delivery partner\'s own number', { carrier_data: { original_carrier: 'ups', original_tracking_number: '1Z999AA10123456784',
+        active_tracking_carrier: 'dhl', active_tracking_number: 'PARTNER1234' } }, 'dhl'],
+      ['a delivery partner under the same number', {}, 'dhl'],
+    ] as const)('leaves a label alone from %s to the delivery partner', async (_case, extra, partner) => {
+      fixedPlan('ParcelsApp');
+      const { router, direct, universal } = setup();
+      direct.mockResolvedValue(label(undefined, partner));
+      universal.mockResolvedValue(journey());
+      const result = await router.fetch(ups(extra), false);
+      expect(result.sourceCarrierId).toBe(partner);
+      expect(universal).not.toHaveBeenCalled();
+    });
+  });
   describe('China Post partial history backfills', () => {
     const input = (extra: JsonObject = {}) => parcel({ carrier: 'china-post', tracking_number: 'ZA00000000001', current_stage: 'in_transit', ...extra });
     const preview = (local = false): RoutedResult => ({ ...directValue('china-post'), result: {

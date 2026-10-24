@@ -18,7 +18,7 @@ import { recordChecksumRejection, recordProviderInput } from './metrics';
 import { CarrierError, carrierErrorKind, CARRIER_DEFINITIONS, deliveryHandoff, IndeterminateError, NoHistoryError, retryAfterMsOf } from 'universal-parcel-scraper';
 import { captureDirectLocalHistory, directHistoryNumber, directLocalHistory, hasUnresolvedDirectCurrent, hasUnresolvedDirectHistory } from './directLocalHistory';
 import { withoutDisputedDelivery } from './disputedDelivery';
-import { eventTimestamp, latestResultTime } from 'universal-parcel-scraper/app';
+import { eventTimestamp, latestResultTime, resultTimezone } from 'universal-parcel-scraper/app';
 import type { Recognition, TrackingContext } from 'universal-parcel-scraper/node';
 import { MAX_RECOGNITIONS, recognitionCandidates, recognizeAll, settleRecognition } from 'universal-parcel-scraper';
 import { BROWSER_RECOGNITION_BUDGET_MS, MAX_BROWSER_RECOGNITIONS } from './browserRecognition';
@@ -88,7 +88,10 @@ export interface RoutingState extends JsonObject {
   /** A carrier the number of a parcel filed under no carrier points to, which needs the user's input before it can be asked (suggestedInput). */
   input_suggested?: { carrier: string; field: 'dpdPostcode' };
   provider_input_needed?: { provider: string; field: 'dpdPostcode' };
-  /** When providers last held no fuller history than the filed carrier's partial answer. */
+  /**
+   * When providers last held no fuller history than the filed carrier's partial answer, or no
+   * progress beside its label alone (LABEL_WAIT).
+   */
   partial_checked_at?: string;
   /** The China Post preview whose fuller provider history was last fetched. The digest binds the lookup inputs and scraper rules too. */
   partial_history?: { fingerprint: string; provider: string; checked_at: string };
@@ -209,6 +212,22 @@ function universalSpacing(now: Date): number {
 }
 const millis = (value: unknown): number => typeof value === 'string' && Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0;
 const iso = (value: number): string => new Date(value).toISOString();
+/**
+ * A filed carrier still answering with the parcel's label alone this long after it first listed
+ * it may only scan the parcel once it reaches its own leg, while providers follow the legs before
+ * it: they are asked too, as for a partial answer, every LABEL_SPACING while none shows progress.
+ * A carrier that delivers at home scans most labels within a day; one that takes a parcel over
+ * after a border, within days.
+ */
+const LABEL_WAIT = 2 * DAY;
+const LABEL_SPACING = 6 * HOUR;
+/** When an answer first listed the parcel: its earliest dated scan or update, else when the parcel was added. 0 when nothing dates it. */
+function listedSince(value: RoutedResult, addedAt: unknown): number {
+  const zone = resultTimezone(value.sourceCarrierId, value.result);
+  const times = [value.result.last_update, ...(value.result.events ?? []).map((event) => event.time)]
+    .map((time) => Date.parse(eventTimestamp(time, zone) ?? '')).filter((time) => time > 0);
+  return times.length ? Math.min(...times) : millis(addedAt);
+}
 /**
  * Whether a scan is as new as the parcel's newest. A scan dated to the minute (Sameday's) is as
  * new as anything within that minute: the parcel's newest may be the same scan read to the
@@ -624,8 +643,9 @@ export class TrackingRouter {
     else delete state.input_suggested;
     let localDirectFallback: { value: RoutedResult; carrier: string } | undefined;
     let localHistory: JsonObject | undefined;
-    // The filed carrier's status alone, or part of its history, while providers are asked for the rest.
-    let partialDirect: { value: RoutedResult; carrier: string } | undefined;
+    // The filed carrier's status alone, part of its history, or its label alone after LABEL_WAIT, while
+    // providers are asked for the rest.
+    let partialDirect: { value: RoutedResult; carrier: string; label?: true } | undefined;
     const partialHistoryKey = (value: RoutedResult): string | undefined => declared === 'china-post'
       && value.sourceCarrierId === declared && !metadata.original_carrier && isPartialAnswer(value.result)
       && hasRoutingProgress(value.result)
@@ -1036,11 +1056,17 @@ export class TrackingRouter {
     if (released && !opensBrowser(primary)) delete state.direct_retry_at;
     if (!state.preferred_provider || changed || millis(state.direct_retry_at) <= now().getTime()) {
       const value = await tryDirect(primary, primary !== declared);
+      const filed = value && primary === declared && universalNumber === number ? value : null;
+      const sinceChecked = now().getTime() - millis(state.partial_checked_at);
+      // The carrier's own label alone, no handoff's, LABEL_WAIT after it first listed the parcel.
+      const since = filed ? listedSince(filed, parcel.created_at) : 0;
+      const label = filed && filed.sourceCarrierId === declared && !filed.earlierResult && !hasRoutingProgress(filed.result)
+        && since > 0 && now().getTime() - since >= LABEL_WAIT;
       // Providers are asked for the rest at their own cadence, and on the next check after one held it.
-      if (value && primary === declared && universalNumber === number && isPartialAnswer(value.result)
-        && now().getTime() - millis(state.partial_checked_at) >= universalSpacing(now())) {
-        partialDirect = { value, carrier: primary };
-      } else if (value) return persistResult(value, primary);
+      if (filed && isPartialAnswer(filed.result)) {
+        if (sinceChecked >= universalSpacing(now())) partialDirect = { value: filed, carrier: primary };
+      } else if (filed && label && sinceChecked >= LABEL_SPACING) partialDirect = { value: filed, carrier: primary, label: true };
+      if (value && !partialDirect) return persistResult(value, primary);
     }
     // The filed carrier's answer, kept although its clocks are local: it
     // creates no scan instants, and a provider's history already shown stays.
@@ -1360,7 +1386,8 @@ export class TrackingRouter {
         if (!filled) continue;
         value.result = filled;
       }
-      if (needsProgress && !hasRoutingProgress(value.result)) {
+      // Beside the carrier's label, only progress serves the parcel.
+      if ((needsProgress || partialDirect?.label) && !hasRoutingProgress(value.result)) {
         if (!partialDirect) thinAnswer ??= { value, source };
         continue;
       }
@@ -1497,7 +1524,7 @@ export class TrackingRouter {
       delete state.partial_checked_at;
       state.last_probe_at ??= now().toISOString();
       state.discovery_cursor = 0;
-      // The carrier answered too: only its clock or a partial answer sent the result elsewhere, so links stay with it.
+      // The carrier answered too: only its clock, a partial answer or its label alone sent the result elsewhere, so links stay with it.
       if (localDirectFallback || partialDirect) value.result = { ...value.result, carrier_answered: true };
       // A delivery only the provider shows, which the carrier's own answer disputes, goes (disputedDelivery.ts).
       const undisputed = localDirectFallback && universalNumber === number ? withoutDisputedDelivery(

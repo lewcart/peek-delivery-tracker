@@ -104,7 +104,7 @@ All tables and views here are service-role only.
   input it lacks or refuses, ends `refused`: the carrier answered, so its error counts
   (`error_percent`, `metrics.health`, `carrier_refresh_total`) leave it out. A successful
   `fetch` names the source that served the parcel (`source_carrier`, `unknown` for a universal provider) and has `carrier_answered`
-  when the carrier answered too, on local clocks or in part. When another source served a
+  when the carrier answered too, on local clocks, in part or with the label alone. When another source served a
   parcel filed under a carrier, `direct_outcome` says how that carrier's own lookup went in the
   check: `ok`, the category of its failure (such as `transport`, `schema` or `not_found`), or
   `not_asked` when the check ran none, as while it waits out an earlier failure, reuses an
