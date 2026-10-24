@@ -169,6 +169,16 @@ describe('shipment details', () => {
     expect(screen.queryByText(/didn’t accept postcode/)).not.toBeInTheDocument();
   });
 
+  it('says when the parcel’s own carrier found no parcel with its postcode, and opens the editor to change it', async () => {
+    const view = show({ carrier: 'spring-gds', trackingNumber: '3SABCD826405193', dpdPostcode: '1234 AB', postcodeRefused: true });
+    expect(screen.getByText(/PostNL didn’t find this parcel with postcode 1234 AB\./)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit postcode' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    view.unmount();
+    show({ carrier: 'spring-gds', trackingNumber: '3SABCD826405193', dpdPostcode: '1234 AB' });
+    expect(screen.queryByText(/didn’t find this parcel/)).not.toBeInTheDocument();
+  });
+
   it('offers the carrier that recognized the number and needs a postcode', async () => {
     const view = show({ carrier: 'unknown', trackingNumber: '12345678901', inputNeeded: { carrier: 'gls-ch', field: 'dpdPostcode' } });
     const prompt = screen.getByText('GLS Switzerland has this parcel. Add the delivery postcode to track it.');

@@ -1,15 +1,15 @@
 import 'server-only';
 
-import { carrierErrorKind, retryAfterMsOf } from 'universal-parcel-scraper';
+import { CarrierError, carrierErrorKind, retryAfterMsOf } from 'universal-parcel-scraper';
 import { trackCarrier, UniversalTracker, type AdapterRegistry } from 'universal-parcel-scraper/node';
 import { createAdapterRegistry } from './adapterRegistry';
 import { hostStepRecorder } from './stepRecorder';
 
 /**
- * The delivery postcode the owner of a lookup adds for another carrier that
- * holds the parcel (`routing.input_needed`). The carrier is asked before
- * anything is filed, so a postcode it refuses shows nothing, and each refusal
- * counts against the link.
+ * The delivery postcode the owner of a lookup adds for the carrier that asks
+ * for it (`routing.input_needed`): another carrier holding the parcel, or its
+ * own. The carrier is asked before anything is filed, so a postcode it refuses
+ * shows nothing, and each refusal counts against the link.
  */
 
 /** Postcodes a carrier may refuse per link and day. */
@@ -26,11 +26,22 @@ export type PostcodeCheck =
   | { outcome: 'refused'; retryAfterMs?: number }
   | { outcome: 'unavailable' };
 
+/** The stable detail of the first carrier error in the chain, such as `portal_not_found`. */
+function reasonOf(error: unknown): string | undefined {
+  let current = error;
+  for (let i = 0; i < 8 && current instanceof Error; i++, current = current.cause) {
+    if (current instanceof CarrierError) return current.reason;
+  }
+  return undefined;
+}
+
 /**
  * Asks the carrier's own tracking, never a provider, for the parcel with the
  * postcode. The answer is not kept: the sync asks again for the filed parcel.
  * A carrier that asks for the input again, finds it invalid or no longer finds
- * the parcel refused the postcode; any other failure says nothing about it.
+ * the parcel refused the postcode, and so does a portal that finds nothing
+ * with it (PostNL's domestic tracker answers a wrong postcode as an unknown
+ * barcode); any other failure says nothing about it.
  */
 export async function checkLinkPostcode(
   carrier: string,
@@ -53,7 +64,8 @@ export async function checkLinkPostcode(
   } catch (error) {
     signal?.throwIfAborted();
     const kind = carrierErrorKind(error);
-    if (kind !== 'input_required' && kind !== 'invalid_input' && kind !== 'not_found') return { outcome: 'unavailable' };
+    if (kind !== 'input_required' && kind !== 'invalid_input' && kind !== 'not_found'
+      && !(kind === 'indeterminate' && reasonOf(error) === 'portal_not_found')) return { outcome: 'unavailable' };
     const retryAfterMs = retryAfterMsOf(error);
     return retryAfterMs ? { outcome: 'refused', retryAfterMs } : { outcome: 'refused' };
   }

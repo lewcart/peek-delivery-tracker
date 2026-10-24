@@ -1078,6 +1078,32 @@ describe('persistent tracking routing', () => {
       const unlisted = await other.router.fetch(parcel({ carrier: 'spring-gds', tracking_number: '3SABCD82640519' }), false);
       expect(unlisted.result.routing).not.toHaveProperty('input_needed');
     });
+    it('tells the owner when the filed carrier refuses the postcode stored for it, until it answers', async () => {
+      const moving = parcel({ carrier: 'spring-gds', tracking_number: '3SABCD826405193', dpd_postcode: '1234 AB', current_stage: 'in_transit' });
+      // PostNL's domestic tracker answers a wrong postcode as an unknown barcode.
+      const unknown = () => new IndeterminateError('PostNL', 'PostNL found no parcel for that barcode and postcode', { reason: 'portal_not_found' });
+      const refused = setup();
+      refused.direct.mockRejectedValue(unknown());
+      const flagged = await refused.router.fetch(moving, false);
+      expect(flagged.result.routing).toMatchObject({ postcode_refused: { carrier: 'spring-gds' } });
+      expect(flagged.result.routing).not.toHaveProperty('input_needed');
+      // Before the parcel moves, its barcode may not be known yet; a postcode it does not take is refused all the same.
+      const early = setup();
+      early.direct.mockRejectedValue(unknown());
+      expect((await early.router.fetch({ ...moving, current_stage: 'registered' }, false)).result.routing).not.toHaveProperty('postcode_refused');
+      const foreign = setup();
+      foreign.direct.mockRejectedValue(new InputRequiredError('PostNL', 'postcode', 'PostNL\'s domestic tracker takes a Dutch delivery postcode', { reason: 'postcode_mismatch' }));
+      expect((await foreign.router.fetch({ ...moving, current_stage: 'registered' }, false)).result.routing)
+        .toMatchObject({ postcode_refused: { carrier: 'spring-gds' } });
+      // The carrier answering ends it, and so does a parcel left without a postcode.
+      const next = setup(new Date('2026-09-10T15:10:00Z'));
+      next.direct.mockResolvedValue(directValue('spring-gds'));
+      expect((await next.router.fetch({ ...moving, carrier_data: flagged.result }, false)).result.routing).not.toHaveProperty('postcode_refused');
+      const cleared = setup(new Date('2026-09-10T15:10:00Z'));
+      cleared.direct.mockRejectedValue(unknown());
+      expect((await cleared.router.fetch({ ...moving, dpd_postcode: null, carrier_data: flagged.result }, false)).result.routing)
+        .not.toHaveProperty('postcode_refused');
+    });
     it('suggests a carrier that cannot be asked about the number without the postcode', async () => {
       // An 8-digit shipment fits Mondial Relay, which needs the recipient's postcode for it, so
       // recognition cannot ask it; a parcel looked up from France is offered it.

@@ -2628,6 +2628,7 @@ enum CarrierDetectionInputSuggestedField: String, Codable, CaseIterable, Hashabl
 
 struct CarrierDataRouting: Codable, Equatable, Hashable, Sendable {
     var inputNeeded: CarrierInputNeeded? = nil
+    var postcodeRefused: CarrierPostcodeRefused? = nil
     var inputSuggested: CarrierInputSuggested? = nil
     var providerInputNeeded: ProviderInputNeeded? = nil
     var nextCheckAt: String? = nil
@@ -2642,6 +2643,10 @@ enum ParcelLinkInputNeededField: String, Codable, CaseIterable, Hashable, Sendab
 struct CarrierInputNeeded: Codable, Equatable, Hashable, Sendable {
     var carrier: CarrierID
     var field: CarrierInputNeededField
+}
+
+struct CarrierPostcodeRefused: Codable, Equatable, Hashable, Sendable {
+    var carrier: CarrierID
 }
 
 struct CarrierInputSuggested: Codable, Equatable, Hashable, Sendable {

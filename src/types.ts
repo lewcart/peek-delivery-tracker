@@ -50,6 +50,8 @@ export interface Parcel {
   dpdPostcode?: string;
   /** False when DPD rejected the stored postcode and tracked without it. */
   dpdPostcodeVerified?: boolean;
+  /** The parcel's own carrier refused the stored postcode on its last answer (PostNL finding no parcel with it). */
+  postcodeRefused?: boolean;
   /** Carrier currently supplying automatic updates for a multi-carrier journey. */
   trackingSource?: CarrierId;
   trackingProvider?: string;

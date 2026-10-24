@@ -388,10 +388,11 @@ struct ParcelDetailView: View {
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 }
-                if parcel.carrier == .dpd, let postcode = parcel.dpdPostcode?.nonEmpty,
-                   parcel.carrierData?.dpdPostcodeVerified == false {
+                if let postcode = parcel.refusedPostcode ?? (parcel.carrier == .dpd
+                    && parcel.carrierData?.dpdPostcodeVerified == false ? parcel.dpdPostcode?.nonEmpty : nil) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(localizer.text("detail.postcodeNotVerified", ["carrier": carrier.displayName, "postcode": postcode]))
+                        Text(localizer.text(parcel.refusedPostcode == nil ? "detail.postcodeNotVerified" : "detail.postcodeRefused",
+                                            ["carrier": carrier.displayName, "postcode": postcode]))
                             .font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         if parcel.archivedAt == nil, editable {

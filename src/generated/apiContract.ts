@@ -32312,6 +32312,9 @@ export interface ApiPackageRow {
   "carrier": ApiCarrierId;
   "field": "dpdPostcode" | "trackingUrl";
 };
+  "postcode_refused"?: {
+  "carrier": ApiCarrierId;
+};
   "input_suggested"?: {
   "carrier": ApiCarrierId;
   "field": "dpdPostcode";

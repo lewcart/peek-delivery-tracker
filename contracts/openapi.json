@@ -35381,6 +35381,19 @@
                       }
                     }
                   },
+                  "postcode_refused": {
+                    "description": "The parcel's own carrier refused the delivery postcode stored for it on its last answer: it asked for it again, or found no parcel with it while the parcel was moving. Gone once that carrier answers.",
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "carrier"
+                    ],
+                    "properties": {
+                      "carrier": {
+                        "$ref": "#/components/schemas/CarrierId"
+                      }
+                    }
+                  },
                   "input_suggested": {
                     "description": "For a parcel filed under no carrier, a carrier its number's shape and lookup country point to that needs the listed input before it can be asked about the number. Nothing says that carrier has the parcel.",
                     "type": "object",

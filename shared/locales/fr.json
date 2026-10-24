@@ -876,6 +876,7 @@
   "add.forgetPostcode": "Oublier ce code postal",
   "add.usePostcode": "Utiliser {{postcode}}",
   "detail.postcodeNotVerified": "{{carrier}} n’a pas accepté le code postal {{postcode}} et affiche donc moins de détails.",
+  "detail.postcodeRefused": "{{carrier}} n’a pas trouvé ce colis avec le code postal {{postcode}}.",
   "detail.editPostcode": "Modifier le code postal",
   "add.recognized": "{{carrier}} a ce colis.",
   "add.line.chosen": "Choisi par toi",

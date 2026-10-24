@@ -482,14 +482,16 @@ the carriers checked. A failed request does not manufacture a queried-carrier li
   its adapter needs a postcode it lists for the number and the parcel has none (PostNL's for a
   3S barcode sent within the Netherlands): the providers keep serving the parcel at its usual
   pace, a check the carrier answers drops the request, and with no source serving the parcel
-  the sync error asks instead. A lookup without an account shows the request
+  the sync error asks instead. A postcode stored for it that it refuses, asking for it again or
+  finding no parcel with it while the parcel is past its label, is flagged to the owner as DPD's
+  own refusal is, until the carrier answers (`routing.postcode_refused`). A lookup without an account shows the request
   to whoever holds the link's owner key, and to no viewer
   ([`postcode/route.ts`](../app/api/public/parcels/[linkId]/postcode/route.ts)). The server
   asks that carrier's own tracking with the postcode before anything is saved or shown. A
   postcode it accepts moves the link to the one-off parcel with that number, carrier and
   postcode (a new one, or one another link already follows), queues its check at once and
-  forgets the previous parcel once no link points to it. One it refuses shows nothing of
-  the parcel and counts against the link: five a day, in `parcel_link_postcode_attempts`.
+  forgets the previous parcel once no link points to it. One it refuses, or finds no parcel
+  with, shows nothing of the parcel and counts against the link: five a day, in `parcel_link_postcode_attempts`.
   A check that could not ask the carrier is not counted, and a carrier that blocks after
   wrong postcodes answers with its wait. The iPhone app does not show the request yet.
   A parcel filed under no carrier that no carrier or provider has answered for yet is offered

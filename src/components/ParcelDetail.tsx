@@ -571,9 +571,9 @@ export function ParcelDetail({
         )}
         {parcel.senderName?.trim() && <p className="detail__sender">{t('parcel.sender', { sender: parcel.senderName.trim() })}</p>}
         {deliveryLabel && <p className="detail__sender detail__delivery">{deliveryLabel}</p>}
-        {parcel.carrier === 'dpd' && parcel.dpdPostcode && parcel.dpdPostcodeVerified === false && (
+        {parcel.dpdPostcode && (parcel.postcodeRefused || (parcel.carrier === 'dpd' && parcel.dpdPostcodeVerified === false)) && (
           <p className="detail__postcode-note">
-            {t('detail.postcodeNotVerified', { carrier: carrier.name, postcode: parcel.dpdPostcode })}{' '}
+            {t(parcel.postcodeRefused ? 'detail.postcodeRefused' : 'detail.postcodeNotVerified', { carrier: carrier.name, postcode: parcel.dpdPostcode })}{' '}
             {!parcel.archivedAt && (
               <button type="button" className="detail__postcode-edit" onClick={() => setEditingCarrier(true)}>
                 {t('detail.editPostcode')}

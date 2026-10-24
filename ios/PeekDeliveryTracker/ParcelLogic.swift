@@ -123,6 +123,13 @@ extension Parcel {
         return inputNeeded
     }
 
+    /// The stored postcode the parcel's own carrier refused on its last answer (PostNL finding no
+    /// parcel with it), which its owner is asked to check.
+    var refusedPostcode: String? {
+        guard carrierData?.routing?.postcodeRefused?.carrier == carrier else { return nil }
+        return dpdPostcode?.nonEmpty
+    }
+
     /// Nobody has answered for the number yet, and its shape points to a carrier that needs
     /// the delivery postcode before it can be asked about it.
     var inputSuggestedPrompt: CarrierInputSuggested? {

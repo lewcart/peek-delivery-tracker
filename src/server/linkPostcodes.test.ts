@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ChallengeError, InputRequiredError, InvalidInputError, NotFoundError } from 'universal-parcel-scraper';
+import { ChallengeError, IndeterminateError, InputRequiredError, InvalidInputError, NotFoundError } from 'universal-parcel-scraper';
 import * as scraper from 'universal-parcel-scraper/node';
 import { checkLinkPostcode } from './linkPostcodes';
 
@@ -30,6 +30,8 @@ describe('asking a carrier about the postcode a lookup adds', () => {
       new InputRequiredError('DHL', 'the delivery postcode', 'not for this postcode', { reason: 'postcode_mismatch' }),
       new InvalidInputError('DHL', 'DHL delivery postcode is invalid'),
       new Error('wrapped', { cause: new NotFoundError('DHL') }),
+      // A portal that finds nothing with the postcode, as PostNL's domestic tracker answers a wrong one.
+      new Error('wrapped', { cause: new IndeterminateError('DHL', 'No parcel for that number and postcode', { reason: 'portal_not_found' }) }),
     ]) {
       tracked.mockRejectedValueOnce(error);
       expect(await checkLinkPostcode('dhl', number, '99999')).toEqual({ outcome: 'refused' });
@@ -45,9 +47,11 @@ describe('asking a carrier about the postcode a lookup adds', () => {
     expect(await checkLinkPostcode('dhl', number, '99999')).toEqual({ outcome: 'unavailable' });
     tracked.mockRejectedValueOnce(new TypeError('fetch failed'));
     expect(await checkLinkPostcode('dhl', number, '99999')).toEqual({ outcome: 'unavailable' });
+    tracked.mockRejectedValueOnce(new IndeterminateError('DHL', 'DHL could not complete the tracking query'));
+    expect(await checkLinkPostcode('dhl', number, '99999')).toEqual({ outcome: 'unavailable' });
     // A carrier tracked only through providers cannot accept a postcode itself.
     expect(await checkLinkPostcode('gls-ch', number, '9999')).toEqual({ outcome: 'unavailable' });
-    expect(tracked).toHaveBeenCalledTimes(2);
+    expect(tracked).toHaveBeenCalledTimes(3);
   });
 
   it('passes on the caller\'s cancellation', async () => {

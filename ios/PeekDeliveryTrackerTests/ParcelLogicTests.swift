@@ -438,6 +438,13 @@ final class ParcelLogicTests: XCTestCase {
         var errorAsks = sameCarrier
         errorAsks.syncError = "carrier:input_required"
         XCTAssertNil(errorAsks.inputNeededPrompt)
+        // The postcode its own carrier refused is the owner's to check; another carrier's refusal is not.
+        XCTAssertNil(withPostcode.refusedPostcode)
+        var refused = withPostcode
+        refused.carrierData?.routing?.postcodeRefused = CarrierPostcodeRefused(carrier: .glsCh)
+        XCTAssertEqual(refused.refusedPostcode, "8000")
+        refused.carrier = .dpd
+        XCTAssertNil(refused.refusedPostcode)
         var archived = parcel
         archived.archivedAt = "2026-08-10T10:00:00Z"
         XCTAssertNil(archived.inputNeededPrompt)

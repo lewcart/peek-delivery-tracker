@@ -83,6 +83,8 @@ export interface RoutingState extends JsonObject {
   candidate_probes?: Record<string, { count: number; retry_at: string }>;
   /** A carrier that knows the number but cannot track it without the user's input. */
   input_needed?: { carrier: string; field: string };
+  /** The filed carrier refused the delivery postcode stored for it, until it answers. */
+  postcode_refused?: { carrier: string };
   /** A carrier the number of a parcel filed under no carrier points to, which needs the user's input before it can be asked (suggestedInput). */
   input_suggested?: { carrier: string; field: 'dpdPostcode' };
   provider_input_needed?: { provider: string; field: 'dpdPostcode' };
@@ -611,6 +613,8 @@ export class TrackingRouter {
     const previousFailures = state.consecutive_failures;
     const declared = String(parcel.carrier);
     const number = String(parcel.tracking_number ?? '');
+    const postcode = String(parcel.dpd_postcode ?? '').trim();
+    if (state.postcode_refused?.carrier !== declared || !postcode) delete state.postcode_refused;
     if (declared === 'unknown' || declared === 'intl-post') state.recognizers = recognizers(number);
     else delete state.recognizers;
     const metadata = isRecord(parcel.carrier_data) ? parcel.carrier_data : {};
@@ -735,6 +739,15 @@ export class TrackingRouter {
         if (state.input_needed?.carrier !== provider) report('carrier_input_needed', provider);
         state.input_needed = { carrier: provider, field: 'dpdPostcode' };
       }
+      // It refuses the postcode stored for it: it asks for it again, finds it invalid, or finds no parcel
+      // with it while the parcel is moving (PostNL's domestic tracker answers a wrong postcode as an unknown
+      // barcode). The owner is told, as DPD's own flag tells them.
+      if (!universalSource && provider === declared && postcode
+        && activeRequirements(provider, number).some(({ field }) => field === 'postcode')
+        && (kind === 'input_required' || kind === 'invalid_input'
+          || ((kind === 'not_found' || kind === 'no_history') && !['pending', 'registered'].includes(String(parcel.current_stage ?? 'pending'))))) {
+        state.postcode_refused = { carrier: provider };
+      }
       // Called before another provider is attempted, including recovered failures.
       report(kind === 'input_required' ? 'carrier_input_required' : 'provider_failed', provider, kind, error);
       return failure;
@@ -752,6 +765,7 @@ export class TrackingRouter {
       delete state.failures[provider];
       // A carrier tracks the parcel directly: nothing is left to ask the user.
       if (directCarrier(provider)) delete state.input_needed;
+      if (provider === declared) delete state.postcode_refused;
       if (!withoutProgress) delete state.provider_input_needed;
       if (!withoutProgress) state.last_success_at = now().toISOString();
       // A thin answer cannot reset a universal-only parcel's missed-check

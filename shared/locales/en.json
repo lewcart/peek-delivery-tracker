@@ -876,6 +876,7 @@
   "add.forgetPostcode": "Forget this postcode",
   "add.usePostcode": "Use {{postcode}}",
   "detail.postcodeNotVerified": "{{carrier}} didn’t accept postcode {{postcode}}, so it shows fewer details.",
+  "detail.postcodeRefused": "{{carrier}} didn’t find this parcel with postcode {{postcode}}.",
   "detail.editPostcode": "Edit postcode",
   "add.recognized": "{{carrier}} has this parcel.",
   "add.line.chosen": "Chosen by you",
