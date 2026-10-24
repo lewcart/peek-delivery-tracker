@@ -478,7 +478,11 @@ the carriers checked. A failed request does not manufacture a queried-carrier li
   the parcel behind an input it lists as optional (DHL's postcode, when several shipments
   share a twelve-digit number); a lookup that fails on the way leaves the request.
   The owner adding the postcode files the parcel under that carrier. Until then the providers
-  serve the parcel and are asked daily by day. A lookup without an account shows the request
+  serve the parcel and are asked daily by day. The parcel's own carrier asks the same way when
+  its adapter needs a postcode it lists for the number and the parcel has none (PostNL's for a
+  3S barcode sent within the Netherlands): the providers keep serving the parcel at its usual
+  pace, a check the carrier answers drops the request, and with no source serving the parcel
+  the sync error asks instead. Links don't show this one. A lookup without an account shows the request
   to whoever holds the link's owner key, and to no viewer
   ([`postcode/route.ts`](../app/api/public/parcels/[linkId]/postcode/route.ts)). The server
   asks that carrier's own tracking with the postcode before anything is saved or shown. A
@@ -768,7 +772,7 @@ detection or the adapters could act on: each check saves them for the hourly rev
 | `detected_carrier_confirmed` | The carrier detection names or lists first for the number and lookup country tracks a parcel filed as unknown or under another carrier, such as one added before a detection rule existed |
 | `candidate_probe_confirmed` | Carrier recognition found the carrier and it tracks the parcel |
 | `foreign_history_rejected` | A source returned an older parcel for the number (`provider` is the universal, or the carrier whose own adapter answered): one never delivered or returned, or, from a universal, another carrier's |
-| `carrier_input_needed` | A recognized carrier needs the user's input (the GLS postcode, or DHL's for a parcel it holds behind one); the parcel asks for it |
+| `carrier_input_needed` | A recognized carrier needs the user's input (the GLS postcode, DHL's for a parcel it holds behind one, or the filed PostNL's for a 3S barcode sent within the Netherlands); the parcel asks for it |
 | `direct_support_opportunity` | Signal: a carrier without an adapter of its own is tracked through a provider, a candidate for an adapter. Reported once per number |
 | `carrier_coverage_discovered` | Signal: a provider named a carrier the catalog doesn't know |
 | `fresher_provider_found` | A shadow check found newer history at another provider and the parcel moved to it. Evidence to revisit the default order |

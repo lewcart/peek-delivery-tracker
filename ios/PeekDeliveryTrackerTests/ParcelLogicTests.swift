@@ -428,9 +428,16 @@ final class ParcelLogicTests: XCTestCase {
         XCTAssertEqual(parcel.inputNeeded, CarrierInputNeeded(carrier: .glsCh, field: .dpdPostcode))
         XCTAssertEqual(parcel.inputNeededPrompt?.carrier, .glsCh)
 
+        // Its own carrier asks only while the parcel has no postcode and the sync error isn't already asking.
         var sameCarrier = parcel
         sameCarrier.carrier = .glsCh
-        XCTAssertNil(sameCarrier.inputNeededPrompt)
+        XCTAssertEqual(sameCarrier.inputNeededPrompt?.carrier, .glsCh)
+        var withPostcode = sameCarrier
+        withPostcode.dpdPostcode = "8000"
+        XCTAssertNil(withPostcode.inputNeededPrompt)
+        var errorAsks = sameCarrier
+        errorAsks.syncError = "carrier:input_required"
+        XCTAssertNil(errorAsks.inputNeededPrompt)
         var archived = parcel
         archived.archivedAt = "2026-08-10T10:00:00Z"
         XCTAssertNil(archived.inputNeededPrompt)

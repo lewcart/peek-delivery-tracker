@@ -187,6 +187,24 @@ describe('shipment details', () => {
     expect(screen.queryByText(/has this parcel/)).not.toBeInTheDocument();
   });
 
+  it('asks for the postcode the parcel’s own carrier needs to find it', async () => {
+    const asked = { carrier: 'spring-gds', trackingNumber: '3SABCD826405193', inputNeeded: { carrier: 'spring-gds', field: 'dpdPostcode' } } as const;
+    const view = show(asked);
+    expect(screen.getByText('PostNL needs the delivery postcode to find this parcel.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Add postcode' }));
+    expect(screen.getByRole('button', { name: 'Carrier PostNL' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^Delivery postcode/ })).toHaveAttribute('placeholder', '1234 AB');
+    view.unmount();
+    // Not once it has one, while the error already asks, or once it is delivered.
+    const others: Partial<ParcelWithEvents>[] = [{ dpdPostcode: '1234 AB' }, { syncStatus: 'error', syncError: 'carrier:input_required' },
+      { events: [{ id: 'event', parcelId: 'parcel', stage: 'delivered', description: 'Delivered', occurredAt: '2026-09-10T10:00:00Z' }] }];
+    for (const values of others) {
+      const other = show({ ...asked, ...values });
+      expect(screen.queryByText(/needs the delivery postcode/)).not.toBeInTheDocument();
+      other.unmount();
+    }
+  });
+
   it('offers the carrier a number points to when it needs a postcode to be asked', async () => {
     const view = show({ carrier: 'unknown', trackingNumber: '12345678', inputSuggested: { carrier: 'mondial-relay', field: 'dpdPostcode' } });
     // Nothing says the carrier has it.

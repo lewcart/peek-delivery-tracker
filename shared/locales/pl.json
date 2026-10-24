@@ -914,6 +914,7 @@
   "picker.tag.found": "Ma tę przesyłkę",
   "picker.tag.knows": "Zna ten numer",
   "picker.jump": "Przejdź do litery",
+  "detail.carrierInputNeeded": "{{carrier}} potrzebuje kodu pocztowego odbiorcy, aby znaleźć tę przesyłkę.",
   "detail.inputNeeded": "{{carrier}} ma tę przesyłkę. Dodaj kod pocztowy odbiorcy, aby ją śledzić.",
   "detail.inputNeededAction": "Dodaj kod pocztowy",
   "detail.inputSuggested": "Tę przesyłkę może mieć {{carrier}}. Dodaj kod pocztowy odbiorcy, aby ją śledzić.",

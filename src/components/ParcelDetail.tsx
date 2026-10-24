@@ -131,8 +131,11 @@ export function ParcelDetail({
   const handoverNote = !parcel.archivedAt && awaitingHandover(parcel.events) ? t('parcel.awaitingHandover', { carrier: displayedCarrier.name }) : null;
   const { placed, route } = useParcelRoute(parcel, languageTag);
   const [mapOpen, setMapOpen] = useState(false);
-  // Recognition found the carrier, but it needs the postcode before it can track.
-  const inputNeeded = parcel.inputNeeded?.field === 'dpdPostcode' && parcel.inputNeeded.carrier !== parcel.carrier
+  // Recognition found the carrier, but it needs the postcode before it can track. Or the parcel's own carrier
+  // needs it to find the parcel, which other sources track meanwhile; with nothing tracking it, the error asks.
+  const ownCarrierAsks = parcel.inputNeeded?.carrier === parcel.carrier;
+  const inputNeeded = parcel.inputNeeded?.field === 'dpdPostcode'
+    && (!ownCarrierAsks || (!parcel.dpdPostcode && parcel.syncError !== 'carrier:input_required'))
     && !parcel.archivedAt && !['delivered', 'returned'].includes(current?.stage ?? '') ? parcel.inputNeeded : undefined;
   // Or nobody has answered for the number yet, and its shape points to a carrier that cannot be asked without the postcode.
   const inputSuggested = !inputNeeded && parcel.inputSuggested?.field === 'dpdPostcode' && parcel.carrier === 'unknown'
@@ -516,7 +519,8 @@ export function ParcelDetail({
         </div>}
         {postcodePrompt && (
           <div className="detail__input-needed" role="status">
-            <p>{t(inputNeeded ? 'detail.inputNeeded' : 'detail.inputSuggested', { carrier: carrierInfo(postcodePrompt.carrier, locale).name })}</p>
+            <p>{t(!inputNeeded ? 'detail.inputSuggested' : ownCarrierAsks ? 'detail.carrierInputNeeded' : 'detail.inputNeeded',
+              { carrier: carrierInfo(postcodePrompt.carrier, locale).name })}</p>
             <button type="button" className="text-button" onClick={() => {
               setCarrierSheetInitial(postcodePrompt.carrier);
               setEditingCarrier(true);

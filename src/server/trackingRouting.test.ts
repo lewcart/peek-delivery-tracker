@@ -1048,6 +1048,36 @@ describe('persistent tracking routing', () => {
       expect(later.direct).toHaveBeenCalledOnce();
       expect(answered.result.routing).not.toHaveProperty('input_needed');
     });
+    it.each(['3SABCD826405193', '3SABCD8264051'])('offers the owner the postcode the filed carrier asks for (%s)', async (number) => {
+      // PostNL shows a 3S parcel sent within the Netherlands only with its delivery postcode.
+      const needs = () => new InputRequiredError('PostNL', 'postcode', 'PostNL shows a parcel sent within the Netherlands only with its delivery postcode');
+      const { router, direct, universal } = setup();
+      direct.mockRejectedValue(needs());
+      const result = await router.fetch(parcel({ carrier: 'spring-gds', tracking_number: number }), false);
+      expect(direct).toHaveBeenCalledWith(expect.objectContaining({ tracking_number: number }), 'spring-gds');
+      // A provider still tracks the parcel, which stays filed under the carrier.
+      expect(universal).toHaveBeenCalled();
+      expect(result.correction).toBeUndefined();
+      expect(result.result.routing).toMatchObject({ input_needed: { carrier: 'spring-gds', field: 'dpdPostcode' } });
+      expect(monitoring.reportRoutingEvent).toHaveBeenCalledWith('carrier_input_needed', expect.objectContaining({ provider: 'spring-gds' }));
+      // Once the owner adds it and the carrier tracks the parcel, nothing is left to ask.
+      const next = setup(new Date('2026-09-10T15:10:00Z'));
+      next.direct.mockResolvedValue(directValue('spring-gds'));
+      const tracked = await next.router.fetch(parcel({ carrier: 'spring-gds', tracking_number: number, dpd_postcode: '1234 AB',
+        carrier_data: result.result }), false);
+      expect(tracked.result.routing).not.toHaveProperty('input_needed');
+    });
+    it('does not ask for a postcode the parcel already has, nor for one the carrier does not list', async () => {
+      const refused = setup();
+      refused.direct.mockRejectedValue(new InputRequiredError('PostNL', 'postcode', 'PostNL\'s domestic tracker takes a Dutch delivery postcode'));
+      const kept = await refused.router.fetch(parcel({ carrier: 'spring-gds', tracking_number: '3SABCD826405193', dpd_postcode: '1234 AB' }), false);
+      expect(kept.result.routing).not.toHaveProperty('input_needed');
+      // A 14-character barcode isn't one the domestic tracker holds.
+      const other = setup();
+      other.direct.mockRejectedValue(new InputRequiredError('PostNL', 'postcode'));
+      const unlisted = await other.router.fetch(parcel({ carrier: 'spring-gds', tracking_number: '3SABCD82640519' }), false);
+      expect(unlisted.result.routing).not.toHaveProperty('input_needed');
+    });
     it('suggests a carrier that cannot be asked about the number without the postcode', async () => {
       // An 8-digit shipment fits Mondial Relay, which needs the recipient's postcode for it, so
       // recognition cannot ask it; a parcel looked up from France is offered it.

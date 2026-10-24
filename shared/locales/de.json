@@ -914,6 +914,7 @@
   "picker.tag.found": "Hat dieses Paket",
   "picker.tag.knows": "Kennt diese Nummer",
   "picker.jump": "Zu einem Buchstaben springen",
+  "detail.carrierInputNeeded": "{{carrier}} braucht die Postleitzahl der Lieferadresse, um dieses Paket zu finden.",
   "detail.inputNeeded": "{{carrier}} hat dieses Paket. Gib die Postleitzahl der Lieferadresse ein, um es zu verfolgen.",
   "detail.inputNeededAction": "Postleitzahl eingeben",
   "detail.inputSuggested": "{{carrier}} hat dieses Paket vielleicht. Gib die Postleitzahl der Lieferadresse ein, um es zu verfolgen.",

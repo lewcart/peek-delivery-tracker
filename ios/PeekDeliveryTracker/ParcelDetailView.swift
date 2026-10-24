@@ -353,7 +353,8 @@ struct ParcelDetailView: View {
                 }
                 if editable {
                     if let needed = parcel.inputNeededPrompt {
-                        inputNeededPrompt(needed.carrier, text: "detail.inputNeeded", tint: branding.ink)
+                        inputNeededPrompt(needed.carrier, text: needed.carrier == parcel.carrier
+                            ? "detail.carrierInputNeeded" : "detail.inputNeeded", tint: branding.ink)
                     } else if let suggested = parcel.inputSuggestedPrompt {
                         inputNeededPrompt(suggested.carrier, text: "detail.inputSuggested", tint: branding.ink)
                     }
@@ -494,7 +495,7 @@ struct ParcelDetailView: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// Recognition found the carrier, or the number points to one, but it needs the postcode before it can track.
+    /// Recognition found the carrier, the number points to one, or the parcel's own carrier needs the postcode to find it.
     private func inputNeededPrompt(_ carrier: CarrierID, text key: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(localizer.text(key, [

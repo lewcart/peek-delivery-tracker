@@ -113,11 +113,13 @@ extension Parcel {
     /// A carrier that knows the number but needs this input before it can track the parcel.
     var inputNeeded: CarrierInputNeeded? { carrierData?.routing?.inputNeeded }
 
-    /// Recognition found another carrier that needs the delivery postcode, while
-    /// the parcel is still on its way.
+    /// Recognition found another carrier that needs the delivery postcode, or the parcel's own
+    /// carrier needs it to find the parcel, which other sources track meanwhile, while it is
+    /// still on its way. With nothing tracking it, the sync error asks instead.
     var inputNeededPrompt: CarrierInputNeeded? {
-        guard let inputNeeded, inputNeeded.field == .dpdPostcode, inputNeeded.carrier != carrier,
-              isActive else { return nil }
+        guard let inputNeeded, inputNeeded.field == .dpdPostcode, isActive,
+              inputNeeded.carrier != carrier
+                || (dpdPostcode?.nonEmpty == nil && syncError != "carrier:input_required") else { return nil }
         return inputNeeded
     }
 

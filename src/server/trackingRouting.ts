@@ -728,6 +728,13 @@ export class TrackingRouter {
         if (!state.provider_input_needed && !providerInput) recordProviderInput(provider, 'asked');
         state.provider_input_needed = { provider, field: 'dpdPostcode' };
       }
+      // The filed carrier asks for the delivery postcode it lists for the number (PostNL's for a 3S
+      // parcel sent within the Netherlands): its owner is offered it while other sources track the parcel.
+      if (!universalSource && kind === 'input_required' && provider === declared && !parcel.dpd_postcode
+        && activeRequirements(provider, number).some(({ field }) => field === 'postcode')) {
+        if (state.input_needed?.carrier !== provider) report('carrier_input_needed', provider);
+        state.input_needed = { carrier: provider, field: 'dpdPostcode' };
+      }
       // Called before another provider is attempted, including recovered failures.
       report(kind === 'input_required' ? 'carrier_input_required' : 'provider_failed', provider, kind, error);
       return failure;

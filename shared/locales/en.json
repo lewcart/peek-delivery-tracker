@@ -914,6 +914,7 @@
   "picker.tag.found": "Has this parcel",
   "picker.tag.knows": "Knows this number",
   "picker.jump": "Jump to a letter",
+  "detail.carrierInputNeeded": "{{carrier}} needs the delivery postcode to find this parcel.",
   "detail.inputNeeded": "{{carrier}} has this parcel. Add the delivery postcode to track it.",
   "detail.inputNeededAction": "Add postcode",
   "detail.inputSuggested": "{{carrier}} may have this parcel. Add the delivery postcode to track it.",

@@ -914,6 +914,7 @@
   "picker.tag.found": "Tem esta encomenda",
   "picker.tag.knows": "Conhece este número",
   "picker.jump": "Ir para uma letra",
+  "detail.carrierInputNeeded": "{{carrier}} precisa do código postal de entrega para encontrar esta encomenda.",
   "detail.inputNeeded": "{{carrier}} tem esta encomenda. Adiciona o código postal de entrega para a seguires.",
   "detail.inputNeededAction": "Adicionar código postal",
   "detail.inputSuggested": "{{carrier}} pode ter esta encomenda. Adiciona o código postal de entrega para a seguires.",
