@@ -290,6 +290,9 @@ extension Parcel {
         return reason == .syncError && numberToCheck ? nil : reason
     }
 
+    /// Whether a card says the latest update failed: not for a number only the owner can correct.
+    var updateFailed: Bool { syncStatus == .error && !numberToCheck }
+
     func attention(now: Date = Date()) -> ParcelAttention? {
         switch currentStage {
         case .failedAttempt: return .failedAttempt

@@ -937,12 +937,14 @@ final class ParcelLogicTests: XCTestCase {
         failed.syncStatus = .error
         XCTAssertEqual(failed.attention(now: now), .syncError)
         XCTAssertEqual(failed.notice(now: now), .syncError)
+        XCTAssertTrue(failed.updateFailed)
         // A number only the owner can correct still sorts first, but its card does not say the update failed.
         for code in ["carrier:refused_number", "carrier:placeholder_number"] {
             var refused = failed
             refused.syncError = code
             XCTAssertEqual(refused.attention(now: now), .syncError)
             XCTAssertNil(refused.notice(now: now))
+            XCTAssertFalse(refused.updateFailed)
         }
 
         let announcedID = UUID()
