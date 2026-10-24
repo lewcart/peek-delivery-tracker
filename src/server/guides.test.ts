@@ -124,6 +124,8 @@ describe('what a guides page tells a search engine', () => {
   });
 
   it('sets a French page’s words as French is set, its code aside', async () => {
+    // Each file read once, as in production: rendering every page re-reads them otherwise, too slowly for a busy runner.
+    vi.stubEnv('NODE_ENV', 'production');
     for (const { slug } of guideLinks('fr')) {
       const html = renderToStaticMarkup(await GuideRoute({ locale: 'fr', slug }));
       const words = html.replace(/<script[\s\S]*?<\/script>|<code>[\s\S]*?<\/code>|<[^>]+>/g, '');
