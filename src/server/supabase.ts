@@ -745,7 +745,7 @@ export class SupabaseClient {
       ['id', `in.(${page.join(',')})`],
       ['carrier_data->routing->>confirmed_carrier', 'not.is.null'],
       ['select', 'id,confirmed_carrier:carrier_data->routing->>confirmed_carrier,direct_history:carrier_data->direct_history,'
-        + 'tracking_events(id,stage,description,occurred_at,provider_event_id,time:raw_data->>time,local_time:raw_data->>local_time,'
+        + 'tracking_events(id,stage,description,location,occurred_at,provider_event_id,time:raw_data->>time,local_time:raw_data->>local_time,'
         + 'observed:raw_data->observed_without_provider_timestamp,universal_provider:raw_data->>universal_provider)'],
     ])}`))));
     return found.flat().map(({ confirmed_carrier, direct_history, ...row }) => ({

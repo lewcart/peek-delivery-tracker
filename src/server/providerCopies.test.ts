@@ -85,6 +85,43 @@ describe('providerCopies', () => {
     expect([...providerCopies({ carrier_data: carrierData, tracking_events: [...events, near] })].sort()).toEqual(['u1']);
   });
 
+  it('leaves out a provider\'s twin of its copy, in its words, place and stage whole hours from it, and its rows of that minute', () => {
+    // ParcelsApp tells a posting at the carrier's minute, and again on the posting office's wall clock read as UTC.
+    const events = [
+      scan('c1', 'correos-chile', '2026-10-08T00:12:00Z', { description: 'Dispatched', location: 'Origin' }),
+      scan('u1', 'unknown', '2026-10-08T00:12:00Z', { ...named, stage: 'accepted', description: 'Posting', location: 'Office 1' }),
+      scan('u2', 'unknown', '2026-10-07T21:12:00Z', { ...named, stage: 'accepted', description: 'Posting', location: 'Office 1' }),
+      scan('u3', 'unknown', '2026-10-07T21:12:00Z', { ...named, stage: 'accepted', description: 'Item posted', location: 'Country' }),
+      // 90 minutes away, in other words, at another place or in another stage, a provider's row is no twin.
+      scan('u4', 'unknown', '2026-10-07T22:42:00Z', { ...named, stage: 'accepted', description: 'Posting', location: 'Office 1' }),
+      scan('u5', 'unknown', '2026-10-07T19:12:00Z', { ...named, stage: 'accepted', description: 'Posting', location: 'Office 2' }),
+      scan('u6', 'unknown', '2026-10-07T18:12:00Z', { ...named, stage: 'customs', description: 'Posting', location: 'Office 1' }),
+      // Another provider's row of the twin's minute stays.
+      scan('u7', 'unknown', '2026-10-07T21:12:00Z', { universal_provider: '17TRACK', stage: 'accepted', description: 'Posted' }),
+    ];
+    expect([...providerCopies({ carrier_data: { routing: { confirmed_carrier: 'correos-chile' } }, tracking_events: events })].sort())
+      .toEqual(['u1', 'u2', 'u3']);
+  });
+
+  it('leaves out a provider\'s row, in any stage, by the shift its copy at the same place shows from the carrier\'s scans', () => {
+    // 17TRACK tells the departure three hours early, and the export-unit scan before it on the same clock, as information received.
+    const events = [
+      scan('c1', 'correos-chile', '2026-10-08T14:18:00Z', { description: 'Ready to leave', location: 'Airport' }),
+      scan('c2', 'correos-chile', '2026-10-08T23:28:00Z', { description: 'Left the country', location: 'Airport' }),
+      scan('u1', 'unknown', '2026-10-08T20:28:00Z', { universal_provider: '17TRACK', description: 'In transfer', location: 'CL' }),
+      scan('u2', 'unknown', '2026-10-08T11:18:00Z', { universal_provider: '17TRACK', stage: 'registered', location: 'CL' }),
+      // Another shift, another place or another provider is no reading of that clock.
+      scan('u3', 'unknown', '2026-10-08T12:18:00Z', { universal_provider: '17TRACK', stage: 'registered', location: 'CL' }),
+      scan('u4', 'unknown', '2026-10-08T11:19:00Z', { universal_provider: '17TRACK', stage: 'registered', location: 'BR' }),
+      scan('u5', 'unknown', '2026-10-08T11:20:00Z', { ...named, stage: 'registered', location: 'CL' }),
+    ];
+    const row = { carrier_data: { routing: { confirmed_carrier: 'correos-chile' } }, tracking_events: events };
+    expect([...providerCopies(row)].sort()).toEqual(['u1', 'u2']);
+    // A copy also close to a carrier's scan shows no shift.
+    const near = scan('c3', 'correos-chile', '2026-10-08T20:30:00Z');
+    expect([...providerCopies({ ...row, tracking_events: [...events, near] })].sort()).toEqual(['u1']);
+  });
+
   it('leaves out a provider\'s copy of a scan the carrier dated by its day, showing the scan\'s wall clock in its words', () => {
     // YunExpress gives the scan a wall clock in no zone; the provider dates it on Shanghai's clock.
     const day = scan('c2', 'yunexpress', '2026-10-11T00:00:01Z', { local_time: '2026-10-11T18:20:00', description: 'Sorted' });

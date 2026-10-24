@@ -133,5 +133,63 @@ do $$ begin
     raise exception 'A provider row of the minute of a copy on the carrier''s clock was hidden';
   end if;
 end; $$;
+-- A provider tells some scans on two clocks: its twin of a copy, in the copy's words, place and stage whole hours
+-- from it, is the same scan, and so is its row by the shift another of its copies at the same place shows. Each
+-- hides the provider's other rows of its minute. A twin 90 minutes away, a row at another place or by another
+-- shift stays.
+insert into public.packages(id, user_id, tracking_number, label, carrier, current_stage, carrier_data)
+values ('97000000-0000-0000-0000-000000000011', '97000000-0000-0000-0000-000000000001', 'COPYTEST2', 'Clocks',
+  'posti', 'in_transit', '{"routing": {"confirmed_carrier": "posti"}}');
+insert into public.tracking_events(id, package_id, stage, description, location, provider_event_id, occurred_at, created_at, raw_data)
+values
+ ('97000000-0000-0000-0000-000000000012', '97000000-0000-0000-0000-000000000011', 'in_transit', 'Dispatched', 'Origin',
+  'posti:dispatched', '2026-10-08T00:12:00Z', '2026-10-09T00:00:00Z', '{}'),
+ ('97000000-0000-0000-0000-000000000013', '97000000-0000-0000-0000-000000000011', 'in_transit', 'Ready to leave', 'Airport',
+  'posti:ready', '2026-10-08T14:18:00Z', '2026-10-09T00:00:00Z', '{}'),
+ ('97000000-0000-0000-0000-000000000014', '97000000-0000-0000-0000-000000000011', 'in_transit', 'Left the country', 'Airport',
+  'posti:left', '2026-10-08T23:28:00Z', '2026-10-09T00:00:00Z', '{}'),
+ ('97000000-0000-0000-0000-000000000015', '97000000-0000-0000-0000-000000000011', 'accepted', 'Posting', 'Office 1',
+  'unknown:posting', '2026-10-08T00:12:00Z', '2026-10-09T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000016', '97000000-0000-0000-0000-000000000011', 'accepted', 'Posting', 'Office 1',
+  'unknown:posting-twin', '2026-10-07T21:12:00Z', '2026-10-09T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000017', '97000000-0000-0000-0000-000000000011', 'accepted', 'Item posted', 'Country',
+  'unknown:posted', '2026-10-07T21:12:00Z', '2026-10-09T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000018', '97000000-0000-0000-0000-000000000011', 'accepted', 'Posting', 'Office 1',
+  'unknown:posting-later', '2026-10-07T22:42:00Z', '2026-10-09T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000019', '97000000-0000-0000-0000-000000000011', 'in_transit', 'In transfer', 'Origin country',
+  'unknown:transfer', '2026-10-08T20:28:00Z', '2026-10-09T00:00:00Z', '{"universal_provider": "17TRACK"}'),
+ ('97000000-0000-0000-0000-000000000020', '97000000-0000-0000-0000-000000000011', 'registered', 'Received at export', 'Origin country',
+  'unknown:export', '2026-10-08T11:18:00Z', '2026-10-09T00:00:00Z', '{"universal_provider": "17TRACK"}'),
+ ('97000000-0000-0000-0000-000000000021', '97000000-0000-0000-0000-000000000011', 'registered', 'Received at export', 'Other country',
+  'unknown:export-elsewhere', '2026-10-07T21:12:00Z', '2026-10-09T00:00:00Z', '{"universal_provider": "17TRACK"}'),
+ ('97000000-0000-0000-0000-000000000022', '97000000-0000-0000-0000-000000000011', 'registered', 'Received at export', 'Origin country',
+  'unknown:export-shift', '2026-10-08T12:18:00Z', '2026-10-09T00:00:00Z', '{"universal_provider": "17TRACK"}');
+do $$ begin
+  if not public.hidden_provider_copy('97000000-0000-0000-0000-000000000015')
+    or not public.hidden_provider_copy('97000000-0000-0000-0000-000000000019') then
+    raise exception 'A provider copy of a carrier scan was not hidden';
+  end if;
+  if not public.hidden_provider_copy('97000000-0000-0000-0000-000000000016') then
+    raise exception 'A provider''s twin of its copy, whole hours away, was not hidden';
+  end if;
+  if not public.hidden_provider_copy('97000000-0000-0000-0000-000000000017') then
+    raise exception 'A provider''s row of the minute of its twin was not hidden';
+  end if;
+  if not public.hidden_provider_copy('97000000-0000-0000-0000-000000000020') then
+    raise exception 'A provider row at the shift of its copy at the same place was not hidden';
+  end if;
+  if public.hidden_provider_copy('97000000-0000-0000-0000-000000000018') then
+    raise exception 'A provider row 90 minutes from its copy was hidden as a twin';
+  end if;
+  if public.hidden_provider_copy('97000000-0000-0000-0000-000000000021') then
+    raise exception 'A provider row at another place than its shifted copy was hidden';
+  end if;
+  if public.hidden_provider_copy('97000000-0000-0000-0000-000000000022') then
+    raise exception 'A provider row at another shift than its copy at the same place was hidden';
+  end if;
+  if public.hidden_provider_copy('97000000-0000-0000-0000-000000000012') then
+    raise exception 'The carrier''s own scan counted as a provider copy';
+  end if;
+end; $$;
 reset role;
 rollback;
