@@ -230,6 +230,15 @@ export class TrackingSyncAudit {
   }
 
   /**
+   * How a carrier's lookup went in this check: `ok`, the category of its failure (such as
+   * `transport` or `not_found`), or `not_asked` when the check ran none. Kinds only, never a number.
+   */
+  lookupOutcome(carrier: string): string {
+    const sample = this.#healthSamples.get(`provider:${carrier}`);
+    return !sample ? 'not_asked' : sample.recovered ? 'ok' : String(sample.details.category ?? 'unknown').slice(0, 40);
+  }
+
+  /**
    * Whether a lookup of the check opened a browser. Null when none ran, as when the check
    * took an answer another copy of the number got in the same run.
    */

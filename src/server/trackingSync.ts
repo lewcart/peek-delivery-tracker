@@ -1651,6 +1651,8 @@ export class TrackingSyncService {
         source_carrier: sourceCarrierId,
         // The carrier answered too, when a provider serves its answer on local clocks or in part.
         carrier_answered: result.carrier_answered === true,
+        // Why another source served the parcel: how its own carrier's lookup went.
+        ...(sourceCarrierId !== carrierId && carrierId !== 'unknown' ? { direct_outcome: audit.lookupOutcome(carrierId) } : {}),
         swiss_post_ready: swissPostReady,
         handoff_fallback_error_type: handoffFallbackErrorType,
         ...sharedAnswers(checks),

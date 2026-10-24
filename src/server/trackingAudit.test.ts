@@ -206,6 +206,18 @@ describe('a check of a number its carrier does not issue', () => {
   });
 });
 
+describe('a carrier\'s lookup in a check', () => {
+  it('reads as its failure\'s category, ok once a retry answered past it, and not_asked when none ran', async () => {
+    const audit = new TrackingSyncAudit({} as SupabaseServiceClient, 'synthetic-package', 'TEST1234', 'nacex', 'pending', { trigger: 'package' });
+    expect(audit.lookupOutcome('nacex')).toBe('not_asked');
+    const lookup = { carrier: 'nacex', finalStep: 'direct', durationMs: 1, attempts: 1 };
+    await audit.observeFetch(async () => healthStepRecorder.lookup({ ...lookup, outcome: 'transport', errorType: 'TransportError' }));
+    expect(audit.lookupOutcome('nacex')).toBe('transport');
+    await audit.observeFetch(async () => healthStepRecorder.lookup({ ...lookup, outcome: 'ok', errorType: null }));
+    expect(audit.lookupOutcome('nacex')).toBe('ok');
+  });
+});
+
 describe('a check of a number that names several parcels', () => {
   it('is an answer the owner must act on, and still a failure when the carrier failed otherwise', async () => {
     const client = { completeSyncAttempt: vi.fn().mockResolvedValue(true),

@@ -102,7 +102,11 @@ All tables and views here are service-role only.
   input it lacks or refuses, ends `refused`: the carrier answered, so its error counts
   (`error_percent`, `metrics.health`, `carrier_refresh_total`) leave it out. A successful
   `fetch` names the source that served the parcel (`source_carrier`, `unknown` for a universal provider) and has `carrier_answered`
-  when the carrier answered too, on local clocks or in part. A `fetch` that reused answers another copy of
+  when the carrier answered too, on local clocks or in part. When another source served a
+  parcel filed under a carrier, `direct_outcome` says how that carrier's own lookup went in the
+  check: `ok`, the category of its failure (such as `transport`, `schema` or `not_found`), or
+  `not_asked` when the check ran none, as while it waits out an earlier failure, reuses an
+  answer of the run or has no adapter. A `fetch` that reused answers another copy of
   its number got earlier in the same scheduled run counts them in `shared_answers`, as it
   does the failure of a carrier whose own browser already failed in the run.
 
@@ -893,7 +897,15 @@ Useful questions:
   `carrier_refresh_total{served_by="provider",outcome=~"updated|unchanged"}` over all
   `updated` and `unchanged`. It should stay near zero for carriers with their own adapter.
   One direct failure benches the adapter for its cooldown, so small failure rates show up
-  amplified.
+  amplified. Why it did not serve is the `fetch` step's `direct_outcome`:
+
+  ```sql
+  select attempt.configured_carrier, step.details ->> 'direct_outcome' as direct_outcome, count(*)
+  from public.tracking_sync_attempts as attempt
+  join public.tracking_sync_steps as step on step.attempt_id = attempt.id and step.step = 'fetch'
+  where attempt.started_at >= now() - interval '1 day' and step.details ? 'direct_outcome'
+  group by 1, 2 order by 3 desc;
+  ```
 - **Does an in-adapter retry ever help?**
   `carrier_lookup_total{final_step="retry",outcome="ok",attempts=~"[2-9]"}`.
 - **New unmapped wording?** A rising `stage_source="none"` share. See

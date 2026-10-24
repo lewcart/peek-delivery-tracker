@@ -4838,6 +4838,38 @@ describe('TrackingSyncService', () => {
       expect.arrayContaining([expect.objectContaining({ kind: 'refresh', healthy: true })]));
   });
 
+  it('records how the parcel\'s own carrier did when another source served the check', async () => {
+    const client = { ...fakeClient(),
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-09-10T12:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined),
+    };
+    const failure = new SchemaError('La Poste', 'The answer changed shape');
+    const progress: CarrierResult = { status: 'in_transit', current_stage: 'in_transit', last_update: '2026-09-10T11:00:00Z',
+      events: [{ time: '2026-09-10T11:00:00Z', description: 'In transit', stage: 'in_transit' }] };
+    const adapter = { fetch: vi.fn(async (carrier: string): Promise<CarrierResult> => {
+      healthStepRecorder.lookup({ carrier, finalStep: 'direct', durationMs: 1, attempts: 1, outcome: 'schema', errorType: failure.name, error: failure });
+      throw failure;
+    }), fetchUniversal: vi.fn().mockResolvedValue(progress) };
+    let now = new Date('2026-09-10T12:00:00Z');
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => now);
+    const fetchStep = () => (client.completeSyncAttempt.mock.lastCall![2] as { step: string; details: JsonObject }[])
+      .find((step) => step.step === 'fetch')!.details;
+    const parcel = { id: 'fell-back', carrier: 'la-poste', tracking_number: 'CW123456785FR', current_stage: 'accepted' };
+    await service.syncPackage(parcel);
+    expect(fetchStep()).toMatchObject({ source_carrier: 'unknown', direct_outcome: 'schema' });
+    // A carrier waiting out its failure was not asked.
+    now = new Date('2026-09-10T12:20:00Z');
+    await service.syncPackage({ ...parcel, ...client.updatePackage.mock.calls.at(-1)![1] });
+    expect(client.completeSyncAttempt).toHaveBeenCalledTimes(2);
+    expect(adapter.fetch).toHaveBeenCalledOnce();
+    expect(fetchStep()).toMatchObject({ source_carrier: 'unknown', direct_outcome: 'not_asked' });
+    // A carrier that served its own parcel needs no reason.
+    adapter.fetch.mockImplementationOnce(async () => progress);
+    await service.syncPackage({ ...parcel, id: 'direct' });
+    expect(fetchStep()).toMatchObject({ source_carrier: 'la-poste' });
+    expect(fetchStep()).not.toHaveProperty('direct_outcome');
+  });
+
   it('says at the first check that the carrier chosen for a parcel without scans refuses its number', async () => {
     const client = { ...fakeClient(),
       acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-09-10T12:01:30Z' }),
