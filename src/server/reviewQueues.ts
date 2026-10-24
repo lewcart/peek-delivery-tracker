@@ -7,6 +7,7 @@ import { captureOperationalError, databaseUnavailable, errorType, inBackgroundSc
 import type { SupabaseServiceClient } from './supabase';
 import { trackingSupportContext } from './trackingSupport';
 import type { JsonObject } from './types';
+import { routingState } from './trackingRouting';
 import { leftScheduleUnseen } from './unseenLookup';
 
 /** Long enough for one replay; a server that dies holding it is relieved after this. */
@@ -101,6 +102,25 @@ export function unseenLookupNote(
   if (!parcels.every((parcel) => leftScheduleUnseen(parcel, now))) return null;
   return 'Every parcel with the number is a one-off lookup that left the schedule before any carrier or provider '
     + 'answered for it: no check is left to update the case.';
+}
+
+/**
+ * A case its parcel's checks opened while it was filed under no carrier, which a check then filed
+ * under a carrier its shape fits once that carrier tracked the number, such as FedEx, which
+ * recognition asks only through a browser: the number was that carrier's, so no gap is left. A
+ * one-off lookup can leave the schedule after that check, with no later one to clear the reasons.
+ */
+export function filedParcelNote(supportCase: JsonObject, parcels: readonly JsonObject[] | undefined): string | null {
+  const carriers = new Set((parcels ?? []).map((parcel) => {
+    const routing = routingState(parcel);
+    return routing.confirmed_number === parcel.tracking_number && routing.confirmed_carrier === parcel.carrier
+      ? String(parcel.carrier) : null;
+  }));
+  const [carrier] = carriers;
+  if (carriers.size !== 1 || !carrier || ['unknown', 'intl-post'].includes(carrier)) return null;
+  const number = String(supportCase.tracking_number ?? '');
+  if ((trackingSupportContext(number, carrier, carrier).reasons as string[]).length > 0) return null;
+  return `Its parcel was filed under ${carrier}, one of the carriers its shape fits, once ${carrier} tracked the number: no gap left.`;
 }
 
 /** How long before a number is saved a case on its start counts as that number being typed. */
@@ -248,13 +268,15 @@ export async function replayReviewQueues(
     const note = finishedParcelNote(supportCase, stages.get(String(supportCase.tracking_number)));
     return note ? [{ id: String(supportCase.id), note }] : [];
   });
-  // Nor are lookups nobody answered for once they leave the schedule, or once they are gone.
+  // Nor are lookups nobody answered for once they leave the schedule, or once they are gone, nor
+  // parcels a check filed under the carrier that tracked the number.
   const settled = new Set([...resolvedIds, ...pickupIds, ...finished.map(({ id }) => id)]);
   const unfiled = cases.filter((supportCase) => !settled.has(String(supportCase.id))
     && ['unknown', 'intl-post', null, undefined].includes(supportCase.configured_carrier as string | null | undefined));
   const parcels = unfiled.length ? await client.trackingNumberParcels(unfiled.map((supportCase) => String(supportCase.tracking_number))) : new Map();
   const unseen = unfiled.flatMap((supportCase) => {
-    const note = unseenLookupNote(supportCase, parcels.get(String(supportCase.tracking_number)), now);
+    const found = parcels.get(String(supportCase.tracking_number));
+    const note = filedParcelNote(supportCase, found) ?? unseenLookupNote(supportCase, found, now);
     return note ? [{ id: String(supportCase.id), note }] : [];
   });
   const closings = [...pickups, ...finished, ...unseen];

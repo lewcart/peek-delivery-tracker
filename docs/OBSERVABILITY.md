@@ -229,8 +229,12 @@ that number is delivered or returned: finished parcels are not checked again, so
 is left to confirm it. So is a case whose saved parcels are all one-off lookups that left
 the schedule before any carrier or provider answered for the number
 ([`unseenLookup.ts`](../src/server/unseenLookup.ts)), or whose parcels are all gone and
-whose last check got no answer (`waiting`): no check is left to update it. So is a case on
-a pickup code filed under no carrier, which was never a tracking number. A case only the
+whose last check got no answer (`waiting`): no check is left to update it. So is a case
+opened while its parcel was filed under no carrier, once a check filed every saved parcel
+with the number under one carrier the shape fits that tracked it, such as FedEx, which
+recognition asks only through a browser: a one-off lookup may get no later check to clear
+the reasons. So is a case on a pickup code filed under no carrier, which was never a
+tracking number. A case only the
 Add sheet's recognition saw stays open, since detection could still learn its shape.
 `tracking_review_runs` keeps one row per version, so restarts and other servers do not
 replay it again; another server takes over a replay left unfinished for ten minutes.

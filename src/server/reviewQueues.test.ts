@@ -185,6 +185,28 @@ describe('review queue replay', () => {
       note: 'Every parcel with the number is a one-off lookup that left the schedule before any carrier or provider answered for it: no check is left to update the case.' }]);
   });
 
+  it('ignores a case a check opened before it filed the parcel under the carrier that tracked the number', async () => {
+    const client = fakeClient();
+    const filed = (number: string, carrier: string, confirmed: string | null): JsonObject => ({ tracking_number: number, one_off: true,
+      carrier, current_stage: 'info_received', created_at: '2026-09-10T05:00:00Z',
+      carrier_data: { routing: { version: 1, ...(confirmed ? { confirmed_carrier: confirmed, confirmed_number: number } : {}) } } });
+    // Made-up 12-digit numbers: FedEx's check digit holds for the first two, so recognition asks FedEx only through a browser.
+    client.listOpenTrackingSupportCases.mockResolvedValue(['314159265355', '123456789012', '271828182845'].map((number) => ({
+      id: `case-${number}`, tracking_number: number, configured_carrier: 'unknown', reasons: ['ambiguous_shape'], last_outcome: 'unchanged',
+    })));
+    client.trackingNumberParcels.mockResolvedValue(new Map([
+      ['314159265355', [filed('314159265355', 'fedex', 'fedex')]],
+      // Filed under FedEx, which has not confirmed the number.
+      ['123456789012', [filed('123456789012', 'fedex', null)]],
+      // Filed under a carrier the shape does not fit.
+      ['271828182845', [filed('271828182845', 'royal-mail', 'royal-mail')]],
+    ]));
+    await expect(replayReviewQueues(client as unknown as SupabaseServiceClient, 'v1', new Date('2026-09-10T12:00:00Z')))
+      .resolves.toMatchObject({ cases_replayed: 3, cases_ignored: 1 });
+    expect(client.ignoreReplayedTrackingSupportCases).toHaveBeenCalledExactlyOnceWith('v1', [{ id: 'case-314159265355',
+      note: 'Its parcel was filed under fedex, one of the carriers its shape fits, once fedex tracked the number: no gap left.' }]);
+  });
+
   it('ignores a case whose parcels are gone once a check of one got no answer, not one only detection saw', async () => {
     const client = fakeClient();
     const unfiled = (name: string, index: number, values: JsonObject): JsonObject => ({
