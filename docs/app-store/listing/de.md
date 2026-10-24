@@ -71,9 +71,6 @@ paket,pakete,paketverfolgung,tracker,tracking,verfolgen,sendung,lieferung,post,v
 ## What's new
 
 ```text
-• Peek läuft jetzt auf dem iPad: Das geöffnete Paket steht neben der Liste, dazu gibt es Tastaturkurzbefehle und eine Menüleiste.
-• Ein geteilter Paketlink öffnet sich in Peek. Verfolge das Paket ohne Konto, und Peek schickt dir Mitteilungen, bis es zugestellt ist.
-• Halte ein Paket in der Liste gedrückt, um seine Aktionen zu sehen, oder zieh eine Sendungsnummer aus einer anderen App auf die Liste, um sie hinzuzufügen.
-• Peek passt sich auch der maximalen Textgröße an und öffnet das zuletzt angesehene Paket wieder, nachdem das System die App geschlossen hat.
-• Sechs Ziffern allein sind meist ein Abholcode, deshalb fragt Peek jetzt nach der Sendungsnummer. Auch Shein-Bestellnummern erkennt Peek.
+• Auf dem iPad zeigt der erste Bildschirm von Peek jetzt die ganze Reise eines Pakets über das volle Display, mit dem Feld für die Sendungsnummer darüber. Tippe auf die Karte, um ein Beispielpaket zu öffnen.
+• Peek erkennt Sendungsnummern von Correos de Cuba.
 ```

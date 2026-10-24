@@ -73,9 +73,6 @@ livraison,suivre,paquet,commande,poste,courrier,envoi,tracking,tracker,relais,le
 ## What's new
 
 ```text
-• Peek fonctionne désormais sur iPad : le colis ouvert s’affiche à côté de la liste, avec des raccourcis clavier et une barre des menus.
-• Un lien de colis partagé s’ouvre dans Peek. Suis le colis sans compte : Peek t’envoie des notifications jusqu’à sa livraison.
-• Maintiens le doigt sur un colis de la liste pour voir ses actions, ou fais glisser un numéro de suivi d’une autre app vers la liste pour l’ajouter.
-• Peek s’adapte aux plus grandes tailles de texte et, si le système a fermé l’app, rouvre le colis que tu regardais.
-• Un numéro à six chiffres est généralement un code de retrait : Peek demande désormais le numéro de suivi. Il reconnaît aussi les numéros de commande Shein.
+• Sur iPad, le premier écran de Peek déploie désormais tout le trajet d’un colis sur l’écran, avec le champ du numéro de suivi au-dessus. Touche la carte pour ouvrir un colis d’exemple.
+• Peek reconnaît les numéros de suivi de Correos de Cuba.
 ```

@@ -73,9 +73,6 @@ delivery,tracking,shipment,order,courier,post,mail,shipping,track,deliveries,map
 ## What's new
 
 ```text
-• Peek now runs on iPad: the package you open shows beside the list, with keyboard shortcuts and a menu bar.
-• A shared package link opens in Peek. Follow it without an account, and Peek notifies you until it’s delivered.
-• Touch and hold a package in the list for its actions, or drop a tracking number from another app onto the list to add it.
-• Peek fits the largest text sizes, and reopens the package you were looking at after the system closes it.
-• Six digits alone are usually a pickup code, so Peek now asks for the tracking number. It also spots Shein order numbers.
+• On iPad, Peek’s first screen now spreads a package’s whole journey across the display, with the tracking number field above it. Tap the map to open a sample package.
+• Peek recognizes Correos de Cuba tracking numbers.
 ```

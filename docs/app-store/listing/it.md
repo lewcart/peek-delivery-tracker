@@ -71,9 +71,6 @@ pacco,spedizione,spedizioni,tracking,traccia,tracciare,consegna,segui,ordine,pos
 ## What's new
 
 ```text
-• Peek ora funziona su iPad: il pacco aperto compare accanto all’elenco, con abbreviazioni da tastiera e barra dei menu.
-• Un link a un pacco condiviso si apre in Peek. Seguilo senza account: Peek ti invia notifiche finché non viene consegnato.
-• Tieni premuto un pacco nell’elenco per vederne le azioni, oppure trascina sull’elenco un numero di tracciamento da un’altra app per aggiungerlo.
-• Peek si adatta alle dimensioni del testo più grandi e riapre il pacco che stavi guardando dopo che il sistema ha chiuso l’app.
-• Sei cifre da sole di solito sono un codice di ritiro, quindi ora Peek chiede il numero di tracciamento. Riconosce anche i numeri d’ordine Shein.
+• Su iPad, la prima schermata di Peek ora mostra l’intero viaggio di un pacco su tutto lo schermo, con il campo del numero di tracciamento sopra. Tocca la mappa per aprire un pacco di esempio.
+• Peek riconosce i numeri di tracciamento di Correos de Cuba.
 ```
