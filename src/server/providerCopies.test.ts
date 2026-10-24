@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { directHistory, providerCopies } from './providerCopies';
+import { directHistory, providerCopies, providerCopyScans } from './providerCopies';
 
 const scan = (id: string, source: string, occurredAt: string, extra: Record<string, unknown> = {}) => ({
   id, stage: 'in_transit', description: `Scan ${id}`, location: null, occurred_at: occurredAt,
@@ -99,8 +99,10 @@ describe('providerCopies', () => {
       // Another provider's row of the twin's minute stays.
       scan('u7', 'unknown', '2026-10-07T21:12:00Z', { universal_provider: '17TRACK', stage: 'accepted', description: 'Posted' }),
     ];
-    expect([...providerCopies({ carrier_data: { routing: { confirmed_carrier: 'correos-chile' } }, tracking_events: events })].sort())
-      .toEqual(['u1', 'u2', 'u3']);
+    const row = { carrier_data: { routing: { confirmed_carrier: 'correos-chile' } }, tracking_events: events };
+    expect([...providerCopies(row)].sort()).toEqual(['u1', 'u2', 'u3']);
+    // Each repeats the carrier's scan its copy repeats.
+    expect(providerCopyScans(row)).toEqual(new Map([['u1', new Set(['c1'])], ['u2', new Set(['c1'])], ['u3', new Set(['c1'])]]));
   });
 
   it('leaves out a provider\'s row, in any stage, by the shift its copy at the same place shows from the carrier\'s scans', () => {

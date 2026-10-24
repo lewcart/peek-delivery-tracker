@@ -228,6 +228,35 @@ describe('withEventPlaces', () => {
     expect(exported.carrier_data).not.toHaveProperty('direct_history');
   });
 
+  it('places a carrier\'s scan that names only its office where the best left-out copy of it says, and no other scan', () => {
+    const scan = (id: string, source: string, occurredAt: string, location: string, extra: Record<string, unknown> = {}) => ({
+      ...event(id, location, occurredAt), provider_event_id: `${source}:${id}`, ...extra,
+    });
+    const row = {
+      id: 'parcel', carrier: 'correos-chile', carrier_data: { destination_country: 'BR', routing: { confirmed_carrier: 'correos-chile' } },
+      tracking_events: [
+        scan('posted', 'correos-chile', '2026-09-11T13:43:00+00:00', 'SANTIAGO'),
+        scan('arrived', 'correos-chile', '2026-09-29T11:05:00+00:00', 'OFICINA INTERNACIONAL'),
+        // 17TRACK at the scan's minute, ParcelsApp three hours early: the copy at the minute places it.
+        scan('arrived-copy', 'unknown', '2026-09-29T11:05:14+00:00', 'Curitiba', { universal_provider: '17TRACK' }),
+        scan('arrived-early', 'unknown', '2026-09-29T08:05:00+00:00', 'Sao Paulo, Brazil', { universal_provider: 'ParcelsApp' }),
+        // A copy never moves a scan the carrier placed itself.
+        scan('posted-copy', 'unknown', '2026-09-11T13:43:00+00:00', 'Valparaiso', { universal_provider: 'ParcelsApp', stage: 'accepted' }),
+      ],
+    };
+    const located = (parcel: typeof row) => Object.fromEntries((withEventPlaces(parcel) as { tracking_events: Record<string, unknown>[] })
+      .tracking_events.map(({ id, location, place }) => [id, [location, (place as places.EventPlace | null)?.name ?? null]]));
+    expect(located(row)).toEqual({ posted: ['SANTIAGO', 'Santiago'], arrived: ['OFICINA INTERNACIONAL', 'Curitiba'] });
+    // A copy that repeats two of the carrier's scans places neither; the copy of one alone still places it.
+    const customs = scan('customs', 'correos-chile', '2026-09-29T11:05:30+00:00', 'OFICINA INTERNACIONAL', { stage: 'customs' });
+    expect(located({ ...row, tracking_events: [...row.tracking_events, customs] })).toEqual({
+      posted: ['SANTIAGO', 'Santiago'], arrived: ['OFICINA INTERNACIONAL', 'Sao Paulo'], customs: ['OFICINA INTERNACIONAL', null],
+    });
+    // Nor does a copy place a scan in a country the parcel is not going to, its carrier does not deliver in and no scan shows.
+    expect(located({ ...row, carrier_data: { routing: { confirmed_carrier: 'correos-chile' } } as typeof row.carrier_data }))
+      .toEqual({ posted: ['SANTIAGO', 'Santiago'], arrived: ['OFICINA INTERNACIONAL', null] });
+  });
+
   it('keeps a provider row the new carrier\'s answer took over, with the earlier carrier\'s scan of it as its relay', () => {
     // CTT tells Royal Mail's scans to the minute; its answer took over the provider's copies of them, which it holds.
     const scan = (id: string, source: string, stage: string, occurredAt: string) => ({

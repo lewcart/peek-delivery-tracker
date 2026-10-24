@@ -58,6 +58,11 @@ Key server modules:
   It also passes each scan's stage and time, so paperwork filed where the parcel is not,
   such as a customs clearance at the destination's office while the parcel is still
   abroad, gets no place. The timeline keeps the scan's text, and the map skips it.
+  A carrier's scan whose text names no place the resolver finds, such as its own office,
+  and that has no point, is placed where a provider's copy of it the timeline leaves out
+  says ([providerCopies.ts](../src/server/providerCopies.ts)): a copy of that scan alone,
+  at its minute first, then the nearest, in a country the parcel is going to, its carriers
+  deliver in or its other scans show. The scan keeps its own text and every other scan its place.
   Lines between recorded stops are solid; approximate areas have dotted markers.
   On the web the route is drawn as one stroke, from its first place to the parcel's, and
   the way still to go shows once the stroke has arrived.

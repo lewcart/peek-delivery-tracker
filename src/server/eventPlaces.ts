@@ -1,9 +1,10 @@
 import 'server-only';
 
 import { captureOperationalError } from './observability';
+import { CARRIER_DEFINITIONS, type CarrierId } from 'universal-parcel-scraper';
 import { placesForEvents, type EventPoint } from 'universal-parcel-scraper/places';
 import { clockDay, scanDay, UNWORDED_STEP } from './eventIdentity';
-import { DIRECT_HISTORY, providerCopies } from './providerCopies';
+import { DIRECT_HISTORY, providerCopies, providerCopyScans } from './providerCopies';
 import { relayCopies } from './relayCopies';
 import { PLACEHOLDER_NUMBER, placeholderNumber } from './trackingFailure';
 import { isRecord, type JsonObject } from './types';
@@ -130,14 +131,39 @@ function relayLeads(events: readonly JsonObject[], relays: Map<string, string>):
 }
 
 /**
+ * The left-out provider copies that can place each carrier scan they repeat, best first: a copy that says where it
+ * was and repeats that scan alone, at the scan's minute before one a zone or a few minutes away, then the nearest.
+ * Correos Chile names its own office ("OFICINA INTERNACIONAL") where 17TRACK and ParcelsApp name the town.
+ */
+function placeLenders(row: JsonObject): Map<string, JsonObject[]> {
+  const events = new Map((Array.isArray(row.tracking_events) ? row.tracking_events.filter(isRecord) : [])
+    .map((event) => [String(event.id), event]));
+  const time = (event: JsonObject) => Date.parse(String(event.occurred_at));
+  const minute = (event: JsonObject) => Math.floor(time(event) / 60_000);
+  const lenders = new Map<string, JsonObject[]>();
+  for (const [copy, scans] of providerCopyScans(row)) {
+    const lender = events.get(copy);
+    const [scan] = scans;
+    if (scans.size === 1 && lender && placed(lender)) lenders.set(scan, [...lenders.get(scan) ?? [], lender]);
+  }
+  for (const [scan, list] of lenders) {
+    const own = events.get(scan)!;
+    list.sort((a, b) => Number(minute(b) === minute(own)) - Number(minute(a) === minute(own))
+      || Math.abs(time(a) - time(own)) - Math.abs(time(b) - time(own)));
+  }
+  return lenders;
+}
+
+/**
  * An API package row as it is served. Every scan gets a `place`: where its
  * free text locates it, or null. Places are worked out when the package is
  * served, so improving the gazetteer improves every parcel, old ones
  * included. A universal provider's copy of a confirmed carrier's scan is left
  * out (providerCopies.ts), so is Peek's own opening row once carrier scans
  * reach back to it (see `timeline`), and a row of a relay pair names the row it
- * is shown under (`relay_of`, see `relayLeads` and relayCopies.ts). A placeholder number's parcel is served
- * without what was stored from it (`withoutPlaceholderAnswers`).
+ * is shown under (`relay_of`, see `relayLeads` and relayCopies.ts). A carrier's scan that names no place the
+ * gazetteer finds, such as an office, takes the place of a left-out copy of it (`placeLenders`). A placeholder
+ * number's parcel is served without what was stored from it (`withoutPlaceholderAnswers`).
  */
 export function withEventPlaces(row: JsonObject): JsonObject {
   const stored = row;
@@ -149,15 +175,32 @@ export function withEventPlaces(row: JsonObject): JsonObject {
   const carrierData = isRecord(row.carrier_data) ? row.carrier_data : {};
   try {
     const ordered = [...events].sort((a, b) => String(a.occurred_at).localeCompare(String(b.occurred_at)));
-    const places = placesForEvents(ordered.map((event) => typeof event.location === 'string' ? event.location : null), {
-      destinationCountry: typeof carrierData.destination_country === 'string' ? carrierData.destination_country : null,
+    const destination = typeof carrierData.destination_country === 'string' ? carrierData.destination_country : null;
+    const carriers = [carrierData.active_tracking_carrier, row.carrier].filter((carrier): carrier is string => typeof carrier === 'string');
+    const locate = (where: readonly JsonObject[]) => placesForEvents(where.map((event) => typeof event.location === 'string' ? event.location : null), {
+      destinationCountry: destination,
       // Their countries and their own hubs. The carrier delivering now says more than the one the parcel was added with.
-      carriers: [carrierData.active_tracking_carrier, row.carrier].filter((carrier): carrier is string => typeof carrier === 'string'),
-      points: ordered.map((event) => eventPoint(event.point)),
+      carriers,
+      points: where.map((event) => eventPoint(event.point)),
       // Paperwork filed where the parcel is not, such as customs at the destination's office, gets no place; the scan keeps its text.
       stages: ordered.map((event) => typeof event.stage === 'string' ? event.stage : null),
       times: ordered.map((event) => typeof event.occurred_at === 'string' ? event.occurred_at : null),
     });
+    const places = locate(ordered);
+    // A scan with no place and no point of its own is placed where the best copy of it says, at its own time and stage,
+    // in a country the parcel is going to, its carriers deliver in or its scans already show; every other scan keeps
+    // the place it had.
+    const lenders = placeLenders(stored);
+    const lent = ordered.map((event, index) => places[index] === null && eventPoint(event.point) === null
+      ? lenders.get(String(event.id))?.[0] : undefined);
+    if (lent.some(Boolean)) {
+      const borrowed = locate(ordered.map((event, index) => lent[index] ?? event));
+      const countries = new Set([destination, ...carriers.flatMap((carrier) => CARRIER_DEFINITIONS[carrier as CarrierId]?.countries ?? []),
+        ...places.map((place) => place?.country)]);
+      lent.forEach((lender, index) => {
+        if (lender && countries.has(borrowed[index]?.country)) places[index] = borrowed[index];
+      });
+    }
     const byEvent = new Map(ordered.map((event, index) => [event, places[index]]));
     return {
       ...row,

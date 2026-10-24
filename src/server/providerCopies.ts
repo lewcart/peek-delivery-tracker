@@ -157,11 +157,14 @@ function place(event: JsonObject): string {
   return String(event.location ?? '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('en-US');
 }
 
-/** The ids of the stored rows of `row` its timeline leaves out as a universal provider's copies of its carrier's scans. */
-export function providerCopies(row: JsonObject): Set<string> {
+/**
+ * The stored rows of `row` its timeline leaves out as a universal provider's copies of its carrier's scans, each with
+ * the ids of the carrier's scans it repeats.
+ */
+export function providerCopyScans(row: JsonObject): Map<string, Set<string>> {
   const data = isRecord(row.carrier_data) ? row.carrier_data : {};
   const routing = isRecord(data.routing) ? data.routing : {};
-  const copied = new Set<string>();
+  const copied = new Map<string, Set<string>>();
   if (typeof routing.confirmed_carrier !== 'string' || routing.confirmed_carrier === UNIVERSAL
     || !Array.isArray(row.tracking_events)) return copied;
   const history = storedHistory(data[DIRECT_HISTORY]);
@@ -171,6 +174,7 @@ export function providerCopies(row: JsonObject): Set<string> {
   const providerOnly = (event: JsonObject) => universal(event)
     && (named(event) || (history !== null && history.from <= instant(event) && instant(event) <= history.to));
   const minute = (event: JsonObject) => `${providerName(event)}@${Math.floor(instant(event) / MINUTE_MS)}`;
+  const ids = (list: readonly JsonObject[]) => new Set(list.map((scan) => String(scan.id)));
   const repeats = scans.filter((event) => providerOnly(event) && own.some((scan) => copies(event, scan)));
   // A copy that only repeats scans whole hours away shows its provider read them a zone away.
   const zoned = repeats.filter((event) => own.every((scan) => !copies(event, scan) || hoursAway(event, scan)));
@@ -181,21 +185,32 @@ export function providerCopies(row: JsonObject): Set<string> {
     .flatMap((event) => own.filter((scan) => hoursAway(event, scan)).map((scan) => clock(event, minutesApart(event, scan)))));
   const twin = (event: JsonObject, copy: JsonObject) => providerName(event) === providerName(copy) && wording(event) === wording(copy)
     && place(event) === place(copy) && event.stage === copy.stage && wholeHours(minutesApart(event, copy));
-  for (const event of repeats) copied.add(String(event.id));
+  for (const event of repeats) copied.set(String(event.id), ids(own.filter((scan) => copies(event, scan))));
   for (const event of scans) {
     if (!providerOnly(event) || copied.has(String(event.id))) continue;
     // The provider's twin of a copy, in its words, place and stage whole hours away, is the same scan on another clock.
-    if (repeats.some((copy) => twin(event, copy)) || (place(event) !== '' && own.some((scan) => !Number.isFinite(wallClock(scan))
-      && shifts.has(clock(event, minutesApart(event, scan)))))) {
-      copied.add(String(event.id));
+    const twins = repeats.filter((copy) => twin(event, copy));
+    const shifted = place(event) === '' ? [] : own.filter((scan) => !Number.isFinite(wallClock(scan))
+      && shifts.has(clock(event, minutesApart(event, scan))));
+    if (twins.length || shifted.length) {
+      copied.set(String(event.id), new Set([...twins.flatMap((copy) => [...copied.get(String(copy.id))!]), ...ids(shifted)]));
       zoned.push(event);
     }
   }
   // A provider that reads the carrier's scans a zone away tells every scan of that minute on the same clock: its
   // rows at the minute of a copy that only repeats scans whole hours away repeat that scan too, whatever their stage.
-  const shifted = new Set(zoned.map(minute));
+  const shifted = new Map<string, Set<string>>();
+  for (const event of zoned) {
+    shifted.set(minute(event), new Set([...shifted.get(minute(event)) ?? [], ...copied.get(String(event.id))!]));
+  }
   for (const event of scans) {
-    if (providerOnly(event) && shifted.has(minute(event))) copied.add(String(event.id));
+    const repeated = shifted.get(minute(event));
+    if (providerOnly(event) && repeated && !copied.has(String(event.id))) copied.set(String(event.id), repeated);
   }
   return copied;
+}
+
+/** The ids of the stored rows of `row` its timeline leaves out as a universal provider's copies of its carrier's scans. */
+export function providerCopies(row: JsonObject): Set<string> {
+  return new Set(providerCopyScans(row).keys());
 }
