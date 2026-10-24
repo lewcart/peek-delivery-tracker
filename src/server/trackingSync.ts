@@ -901,6 +901,11 @@ function partnerStartsLeg(parcel: JsonObject, carrierData: JsonObject, sourceCar
       && stageRank(String(row.stage ?? '')) >= stageRank(keptStage));
 }
 
+/** The sources whose first answer without scans they had was signalled, with when (`scans_withdrawn`). */
+function withdrawals(carrierData: unknown): JsonObject {
+  return isRecord(carrierData) && isRecord(carrierData.scans_withdrawn) ? carrierData.scans_withdrawn : {};
+}
+
 export function detectSyncAnomalies(
   parcel: JsonObject,
   result: CarrierResult,
@@ -1596,8 +1601,7 @@ export class TrackingSyncService {
           if (error instanceof RoutingDeferred) error.routing.consecutive_failures = 0;
           // A parcel that showed its label first answering without it is a review signal, as when
           // its carrier lists fewer of its scans (`scans_withdrawn`, below).
-          const withdrawn = previousStage === 'registered'
-            && !(isRecord(parcel.carrier_data) && parcel.carrier_data.scans_withdrawn_at != null);
+          const withdrawn = previousStage === 'registered' && withdrawals(parcel.carrier_data)[carrierId] == null;
           audit.record('fetch', 'succeeded', performance.now() - fetchStartedAt, {
             disposition: 'unannounced', ...sharedAnswers(checks),
           });
@@ -1612,7 +1616,7 @@ export class TrackingSyncService {
               ...(error instanceof RoutingDeferred || withdrawn ? { carrier_data: {
                 ...(isRecord(parcel.carrier_data) ? parcel.carrier_data : {}),
                 ...(error instanceof RoutingDeferred ? { routing: error.routing } : {}),
-                ...(withdrawn ? { scans_withdrawn_at: now.toISOString() } : {}),
+                ...(withdrawn ? { scans_withdrawn: { ...withdrawals(parcel.carrier_data), [carrierId]: now.toISOString() } } : {}),
               } } : {}),
             });
           });
@@ -1734,16 +1738,25 @@ export class TrackingSyncService {
       // scan read in an earlier stage, still makes progress disappear.
       const storedIds = new Set(stored.map((event) => String(event.provider_event_id)));
       const storedStages = new Map(stored.map((row) => [String(row.provider_event_id), row.stage]));
-      const progressAt = Math.max(...stored
-        .filter((row) => stageRank(String(row.stage ?? '')) > stageRank(selectedStage ?? 'pending'))
-        .map((row) => Date.parse(String(row.occurred_at ?? ''))).filter(Number.isFinite));
+      const shown = new Set([...events.map((event) => String(event.provider_event_id)), ...matches.reused.values(), ...matches.skipped.values()]);
+      const past = (rows: readonly JsonObject[]) => rows.filter((row) => stageRank(String(row.stage ?? '')) > stageRank(selectedStage ?? 'pending'));
+      const latest = (rows: readonly JsonObject[]) => Math.max(...rows.map((row) => Date.parse(String(row.occurred_at ?? ''))).filter(Number.isFinite));
+      const listsFewer = (answered: readonly JsonObject[], progressAt: number) => answered.length > 0 && answered.every((event) => {
+        const id = String(event.provider_event_id);
+        const row = matches.reused.get(id) ?? matches.skipped.get(id) ?? (storedIds.has(id) ? id : undefined);
+        return row === undefined ? Date.parse(String(event.occurred_at ?? '')) < progressAt : storedStages.get(row) === event.stage;
+      });
+      const progressAt = latest(past(stored));
       const fewerStoredScans = anomalies.includes('progress_disappeared') && sourceCarrierId === carrierId
-        && typeof result.tracking_provider !== 'string' && events.length > 0 && events.every((event) => {
-          const id = String(event.provider_event_id);
-          const row = matches.reused.get(id) ?? matches.skipped.get(id) ?? (storedIds.has(id) ? id : undefined);
-          return row === undefined ? Date.parse(String(event.occurred_at ?? '')) < progressAt : storedStages.get(row) === event.stage;
-        });
+        && typeof result.tracking_provider !== 'string' && listsFewer(events, progressAt);
       if (fewerStoredScans) anomalies = anomalies.filter((code) => code !== 'progress_disappeared');
+      // A delivery partner that falls behind rows of its own and no longer lists them withdraws scans the
+      // same way (Posti back at its posting scan without its own scan in transit, or a summary back at
+      // the drop-off after one in transit). The parcel holds its stage anyway: this only signals it.
+      const partnerRows = past(stored.filter((row) => String(row.provider_event_id).startsWith(`${sourceCarrierId}:`)));
+      const partnerWithdrew = sourceCarrierId !== carrierId && typeof result.tracking_provider !== 'string'
+        && partnerRows.some((row) => !shown.has(String(row.provider_event_id)))
+        && listsFewer(events.filter((event) => String(event.provider_event_id).startsWith(`${sourceCarrierId}:`)), latest(partnerRows));
       const progressDisappeared = anomalies.includes('progress_disappeared');
       // A fallback that knows less is no error: what is saved stays, as with an older snapshot.
       const fallbackWithoutProgress = anomalies.includes('fallback_without_progress');
@@ -1764,7 +1777,6 @@ export class TrackingSyncService {
       // no longer shows, are no scans: a notice the provider dated at the lookup, which a scraper
       // fix now leaves out. Over a summary without movement, an answer that moved is then not
       // older. A reused number's older history is: a row past it is another source's, or shown.
-      const shown = new Set([...events.map((event) => String(event.provider_event_id)), ...matches.reused.values(), ...matches.skipped.values()]);
       const ahead = stored.filter((row) => !String(row.provider_event_id).startsWith('app:')
         && row.observed_without_provider_timestamp !== true && Date.parse(String(row.occurred_at)) > returnedEventTime);
       const answeredBy = result.tracking_provider;
@@ -1847,7 +1859,7 @@ export class TrackingSyncService {
       // Linked journey identity, the postcode the owner gave a provider, and the delivery partner's probe belong to the
       // parcel, not an individual carrier response: a provider answering while the origin is down keeps the probe's gap.
       if (isRecord(parcel.carrier_data)) {
-        for (const key of ['lookup_country_hint', 'universal_input', 'original_carrier', 'original_tracking_number', 'original_tracking_url', 'original_package_id', 'active_tracking_carrier', 'active_tracking_number', 'original_canonical_tracking_number', 'auto_changed_from', 'auto_changed_to', 'auto_changed_at', 'handed_over_at', 'earlier_checked_at', 'delivery_probe', 'scans_withdrawn_at', DIRECT_HISTORY]) {
+        for (const key of ['lookup_country_hint', 'universal_input', 'original_carrier', 'original_tracking_number', 'original_tracking_url', 'original_package_id', 'active_tracking_carrier', 'active_tracking_number', 'original_canonical_tracking_number', 'auto_changed_from', 'auto_changed_to', 'auto_changed_at', 'handed_over_at', 'earlier_checked_at', 'delivery_probe', 'scans_withdrawn', DIRECT_HISTORY]) {
           if (parcel.carrier_data[key] != null && carrierData[key] == null) carrierData[key] = parcel.carrier_data[key];
         }
       }
@@ -1974,11 +1986,14 @@ export class TrackingSyncService {
         const kept = isRecord(values.carrier_data) ? values.carrier_data : previousData;
         if (kept.destination_country == null) values.carrier_data = { ...kept, destination_country: result.destination_country };
       }
-      // The first answer of the parcel's own carrier with fewer of its stored scans is a review signal
-      // (`scans_withdrawn`), not an error: a scraper that drops scans across many parcels still shows.
-      if (fewerStoredScans && previousData.scans_withdrawn_at == null) {
+      // The first answer of each source with fewer of its stored scans, the parcel's own carrier or a
+      // delivery partner, is a review signal (`scans_withdrawn`), not an error: a scraper that drops
+      // scans across many parcels still shows.
+      const withdrawn = withdrawals(previousData);
+      if ((fewerStoredScans || partnerWithdrew) && withdrawn[sourceCarrierId] == null) {
         anomalies = [...anomalies, 'scans_withdrawn'];
-        values.carrier_data = { ...(isRecord(values.carrier_data) ? values.carrier_data : previousData), scans_withdrawn_at: now.toISOString() };
+        values.carrier_data = { ...(isRecord(values.carrier_data) ? values.carrier_data : previousData),
+          scans_withdrawn: { ...withdrawn, [sourceCarrierId]: now.toISOString() } };
       }
       // A provider naming an unknown parcel's carrier identifies the number, however old its
       // copy of the history looks: the parcel is filed under it and keeps the newer summary.

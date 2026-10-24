@@ -3153,11 +3153,12 @@ describe('TrackingSyncService', () => {
     now = new Date('2026-01-12T12:30:00Z');
     parcel = { ...parcel, [STORED_EVENT_IDENTITIES]: [row('la-poste', moved), row('posti', posted)] };
     expect(await sync()).toEqual({ stage: 'in_transit', anomalies: [] });
-    // A partner listing its acceptance without its later scan in transit brings nothing after it.
+    // A partner listing its acceptance without its later scan in transit brings nothing after it:
+    // no step back, only the scan it withdrew (next test).
     const sorted = { time: '2026-01-12T11:00:00Z', description: 'Sorted', stage: 'in_transit' };
     now = new Date('2026-01-12T13:30:00Z');
     parcel = { ...parcel, [STORED_EVENT_IDENTITIES]: [row('la-poste', moved), row('posti', posted), row('posti', sorted)] };
-    expect(await sync()).toEqual({ stage: 'in_transit', anomalies: [] });
+    expect(await sync()).toEqual({ stage: 'in_transit', anomalies: ['scans_withdrawn'] });
     // A partner back at acceptance after a scan of its own in transit has stepped back, at the check
     // that brings the scan, and not again while its answers repeat it.
     const reposted = { time: '2026-01-12T12:00:00Z', description: 'Item posted again', stage: 'accepted' };
@@ -3167,6 +3168,42 @@ describe('TrackingSyncService', () => {
     expect(await sync()).toEqual({ stage: 'in_transit', anomalies: ['early_stage_regression'] });
     now = new Date('2026-01-12T15:30:00Z');
     parcel = { ...parcel, [STORED_EVENT_IDENTITIES]: [row('la-poste', moved), row('posti', posted), row('posti', sorted), row('posti', reposted)] };
+    expect(await sync()).toEqual({ stage: 'in_transit', anomalies: [] });
+  });
+
+  it.each([
+    ['a scan of its own in transit', {}],
+    ['the stage its summary showed', { observed_without_provider_timestamp: true }],
+  ])('signals a delivery partner’s first answer without %s, once for that partner', async (_case, observed) => {
+    const client = { ...fakeClient(), acquireTrackingProvider: vi.fn(), finishTrackingProvider: vi.fn() };
+    let now = new Date('2026-01-12T10:30:00Z');
+    const moved = { time: '2026-01-11T10:00:00Z', description: 'In transport', stage: 'in_transit' };
+    const origin: CarrierResult = { status: 'in_transit', destination_country: 'FI', delivery_carrier: 'posti',
+      last_update: moved.time, events: [moved] };
+    const posted = { time: '2026-01-12T10:00:00Z', description: 'Item posted', stage: 'accepted' };
+    const sorted = { time: '2026-01-12T11:00:00Z', description: 'Sorted', stage: 'in_transit' };
+    const delivery: CarrierResult = { status: 'in_transit', current_stage: 'accepted', last_update: posted.time, events: [posted] };
+    const adapter = { fetch: vi.fn(async (carrier: string) => carrier === 'posti' ? delivery : origin), fetchUniversal: vi.fn() };
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => now);
+    const row = (carrier: string, scan: typeof moved) => ({ stage: scan.stage,
+      description: scan.description, occurred_at: scan.time, provider_event_id: providerEventId(carrier, scan.time, '', scan.description) });
+    let parcel: JsonObject = { id: 'partner-withdrew', carrier: 'la-poste', tracking_number: 'CW123456785FR', current_stage: 'in_transit',
+      [STORED_EVENT_IDENTITIES]: [row('la-poste', moved)] };
+    const sync = async () => {
+      await service.syncPackage(parcel);
+      parcel = { ...parcel, ...client.updatePackage.mock.calls.at(-1)![1] };
+      return { stage: parcel.current_stage, anomalies: (client.completeSyncAttempt.mock.calls.at(-1)![1] as JsonObject).anomaly_codes };
+    };
+
+    expect(await sync()).toEqual({ stage: 'in_transit', anomalies: [] });
+    // The parcel's own carrier was signalled before; the partner still is, at its first such answer.
+    parcel = { ...parcel, carrier_data: { ...parcel.carrier_data as JsonObject, scans_withdrawn: { 'la-poste': '2026-01-10T08:00:00.000Z' } },
+      [STORED_EVENT_IDENTITIES]: [row('la-poste', moved), row('posti', posted), { ...row('posti', sorted), ...observed }] };
+    now = new Date('2026-01-12T12:30:00Z');
+    expect(await sync()).toEqual({ stage: 'in_transit', anomalies: ['scans_withdrawn'] });
+    expect(parcel).toMatchObject({ sync_status: 'ok', sync_error: null,
+      carrier_data: { scans_withdrawn: { 'la-poste': '2026-01-10T08:00:00.000Z', posti: '2026-01-12T12:30:00.000Z' } } });
+    now = new Date('2026-01-12T13:30:00Z');
     expect(await sync()).toEqual({ stage: 'in_transit', anomalies: [] });
   });
 
@@ -4115,7 +4152,7 @@ describe('TrackingSyncService', () => {
       // The first such answer is a review signal, never an error.
       expect(checked.attempt).toMatchObject({ outcome: 'unchanged', anomaly_codes: ['scans_withdrawn'], error_type: null });
       expect(checked.parcel).toMatchObject({ current_stage: 'in_transit', last_status_text: departed.description,
-        sync_status: 'ok', sync_error: null, carrier_data: { scans_withdrawn_at: '2026-10-21T14:00:00.000Z' } });
+        sync_status: 'ok', sync_error: null, carrier_data: { scans_withdrawn: { dhl: '2026-10-21T14:00:00.000Z' } } });
       expect(checked.refresh).toMatchObject({ healthy: true });
       expect([...store.rows.values()]).toEqual(rows);
     });
@@ -4125,7 +4162,7 @@ describe('TrackingSyncService', () => {
       await check(answer(relabel, label));
       expect((await check(answer(relabel, label))).attempt).toMatchObject({ outcome: 'unchanged', anomaly_codes: [] });
       const full = await check(answer(departed, accepted, relabel, label));
-      expect(full.parcel).toMatchObject({ carrier_data: { scans_withdrawn_at: '2026-10-21T14:00:00.000Z' } });
+      expect(full.parcel).toMatchObject({ carrier_data: { scans_withdrawn: { dhl: '2026-10-21T14:00:00.000Z' } } });
       const again = await check(answer(relabel, label));
       expect(again.attempt).toMatchObject({ outcome: 'unchanged', anomaly_codes: [] });
       expect(again.refresh).toMatchObject({ healthy: true });
@@ -4647,11 +4684,11 @@ describe('TrackingSyncService', () => {
     const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => now);
     await expect(service.syncPackage(parcel, { trigger: 'scheduled' })).resolves.toMatchObject({ waiting: 1, errors: 0 });
     expect(client.completeSyncAttempt.mock.lastCall![1]).toMatchObject({ outcome: 'waiting', anomaly_codes: ['scans_withdrawn'] });
-    expect(parcel).toMatchObject({ sync_status: 'waiting', carrier_data: { scans_withdrawn_at: '2026-09-10T12:00:00.000Z' } });
+    expect(parcel).toMatchObject({ sync_status: 'waiting', carrier_data: { scans_withdrawn: { unknown: '2026-09-10T12:00:00.000Z' } } });
     now = new Date('2026-09-10T18:00:00Z');
     await expect(service.syncPackage(parcel, { trigger: 'scheduled' })).resolves.toMatchObject({ waiting: 1, errors: 0 });
     expect(client.completeSyncAttempt.mock.lastCall![1]).toMatchObject({ outcome: 'waiting', anomaly_codes: [] });
-    expect(parcel).toMatchObject({ carrier_data: { scans_withdrawn_at: '2026-09-10T12:00:00.000Z' } });
+    expect(parcel).toMatchObject({ carrier_data: { scans_withdrawn: { unknown: '2026-09-10T12:00:00.000Z' } } });
   });
 
   it('keeps a number nobody has seen waiting while one provider rests on a rate limit', async () => {
