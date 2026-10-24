@@ -1235,7 +1235,7 @@ describe('App', () => {
     ).toBeDisabled();
     await user.type(within(sheet).getByLabelText(/tracking number/i), 'hello there');
     expect(within(sheet).queryByText(/couldn’t find a tracking number/i)).not.toBeInTheDocument();
-    expect(await within(sheet).findByText(/couldn’t find a tracking number/i, undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(await within(sheet).findByText(/couldn’t find a tracking number/i)).toBeInTheDocument();
     expect(within(sheet).getByRole('button', { name: /add parcel/i })).toBeDisabled();
   });
 
@@ -1801,7 +1801,7 @@ describe('App', () => {
       await screen.findByText('Coffee beans ☕');
       expect(scrollTo).toHaveBeenCalledWith({ top: 480, behavior: 'instant' });
       expect(document.documentElement.dataset.resumed).toBe('');
-      await waitFor(() => expect(document.documentElement.dataset.resumed).toBeUndefined(), { timeout: 2_000 });
+      await waitFor(() => expect(document.documentElement.dataset.resumed).toBeUndefined());
       expect(sessionStorage.getItem('sdt.update-resume.v1')).toBeNull();
     } finally {
       scrollTo.mockRestore();

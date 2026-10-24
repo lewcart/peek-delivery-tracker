@@ -68,7 +68,7 @@ describe('a parcel delivered since the list was last shown', () => {
     await waitFor(() => expect(throwConfetti).toHaveBeenCalledWith(document.querySelector('.deliveries-page'), ['tea'], expect.anything()));
     expect(tea(active())).toBeInTheDocument();
 
-    await waitFor(() => expect(tea(past())).toHaveAccessibleName(/^Tea — Delivered/), { timeout: 2500 });
+    await waitFor(() => expect(tea(past())).toHaveAccessibleName(/^Tea — Delivered/));
     expect(throwConfetti).toHaveBeenCalledTimes(1);
     expect(tea(active())).toBeNull();
     expect(tea(past())!.closest('.parcel-card-swipe')).not.toHaveAttribute('data-arrived');

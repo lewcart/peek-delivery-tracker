@@ -115,7 +115,7 @@ describe('WorldMap', () => {
     await screen.findByText('Kyoto');
     rerender(<WorldMap route={route} mode="now" time={time} />);
     // The edge pointer waits for the camera to land.
-    await waitFor(() => expect(screen.getByText('Kyoto').parentElement?.textContent).toContain('km'), { timeout: 4000 });
+    await waitFor(() => expect(screen.getByText('Kyoto').parentElement?.textContent).toContain('km'));
   });
 
   it('keeps a close-up of a country wider than a town', () => {
@@ -753,7 +753,7 @@ describe('WorldMap', () => {
       rerender(map('now'));
       // In flight the map shows the route alone.
       await waitFor(() => expect(container.querySelector('[data-pip]')).toBeNull());
-      await waitFor(() => expect(container.querySelector('[data-pip]')).not.toBeNull(), { timeout: 4000 });
+      await waitFor(() => expect(container.querySelector('[data-pip]')).not.toBeNull());
     });
   });
 

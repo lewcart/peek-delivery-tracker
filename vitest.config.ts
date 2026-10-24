@@ -19,7 +19,8 @@ export default defineConfig({
     },
     setupFiles: ['src/test/setup.ts'],
     css: false,
-    testTimeout: 10_000,
+    // Several of Testing Library's waits (see src/test/setup.ts) fit in one test.
+    testTimeout: 20_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],

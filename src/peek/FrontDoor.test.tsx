@@ -800,7 +800,7 @@ describe('FrontDoor: on this device', () => {
       expect(within(deviceLinks()[0]).getByText('Delivered').tagName).toBe('STRONG');
 
       // Then the parcel still on its way leads, and the one that arrived rests among the others.
-      await waitFor(() => expect(deviceLinks()[0]).toHaveAttribute('href', `/p/${LINK_ID}`), { timeout: 2500 });
+      await waitFor(() => expect(deviceLinks()[0]).toHaveAttribute('href', `/p/${LINK_ID}`));
       expect(deviceLinks()[1]).toHaveClass('door-parcel');
       expect(deviceLinks()[1]).toHaveTextContent('Delivered');
       expect(document.querySelector('[data-arrived]')).toBeNull();

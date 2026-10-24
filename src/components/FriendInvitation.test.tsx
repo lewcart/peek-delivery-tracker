@@ -89,7 +89,7 @@ it('lands a friendship stamp on the same opened parcel before leaving for Friend
   expect(container.querySelector('.arrival__parcel')).toBe(parcel);
   expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
   expect(sessionStorage.getItem('sdt.pendingFriendInvitation.v1')).toBeNull();
-  expect(await screen.findByText('Invitation closed', {}, { timeout: 1800 })).toBeVisible();
+  expect(await screen.findByText('Invitation closed')).toBeVisible();
   expect(client.action).toHaveBeenCalledOnce();
   expect(location.search).toBe('?view=friends');
 });

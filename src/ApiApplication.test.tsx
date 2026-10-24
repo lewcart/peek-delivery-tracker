@@ -189,7 +189,7 @@ describe('ApiApplication', () => {
     render(<ApiApplication />);
     await waitFor(() => expect(mocks.followPushNotificationLocale).toHaveBeenCalledExactlyOnceWith(
       'en', expect.objectContaining({ userId: USER.id }),
-    ), { timeout: 3_000 });
+    ));
   });
 
   it('greets a visitor with the front door, opens sign-in from it and comes back', async () => {

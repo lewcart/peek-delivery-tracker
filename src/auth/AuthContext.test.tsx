@@ -93,7 +93,7 @@ describe('AuthProvider', () => {
     );
 
     expect(await screen.findByText('authenticated')).toBeInTheDocument();
-    await waitFor(() => expect(auth.updateUser).toHaveBeenCalledWith({ data: { locale: 'en' } }), { timeout: 2_000 });
+    await waitFor(() => expect(auth.updateUser).toHaveBeenCalledWith({ data: { locale: 'en' } }));
     expect(auth.updateUser).toHaveBeenCalledOnce();
   });
 
