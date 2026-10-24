@@ -6101,8 +6101,12 @@ describe('scans a carrier and a universal provider both report', () => {
       fetchUniversal: vi.fn().mockResolvedValue(result([reworded])),
     };
     const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, now);
+    // The parcel keeps the offsets it showed; its routing starts afresh at each check.
+    let shown: unknown;
     const sync = async (stage: string) => {
-      await service.syncPackage({ ...parcel, current_stage: stage, [STORED_EVENT_IDENTITIES]: store.identities() });
+      await service.syncPackage({ ...parcel, current_stage: stage, carrier_data: { clock_offsets: shown },
+        [STORED_EVENT_IDENTITIES]: store.identities() });
+      shown = ((client.updatePackage.mock.calls.at(-1)![1] as JsonObject).carrier_data as JsonObject | undefined)?.clock_offsets ?? shown;
       const values = client.completeSyncAttempt.mock.calls.at(-1)![1] as JsonObject;
       return { batch: ids(store.batch()), anomalies: values.anomaly_codes };
     };
@@ -6115,11 +6119,11 @@ describe('scans a carrier and a universal provider both report', () => {
     expect(await sync('pending')).toEqual({ batch: [copyId, own(label)], anomalies: ['provider_clock_offset'] });
     expect(store.rows.get(copyId)).toMatchObject({ id: copyRow, occurred_at: '2026-01-03T13:15:42Z', stage: 'in_transit',
       description: hub.description });
-    // Down again: the copy stores nothing and still shows the offset.
-    expect(await sync('in_transit')).toEqual({ batch: [], anomalies: expect.arrayContaining(['provider_clock_offset']) });
+    // Down again: the copy stores nothing, and the offset the row showed is not shown again.
+    expect(await sync('in_transit')).toEqual({ batch: [], anomalies: [] });
     expect(store.rows.size).toBe(2);
-    // Each line names the row both readings share.
-    expect(offsets().map((line) => (line as JsonObject).scan_id)).toEqual([copyId, copyId]);
+    // The line names the row both readings share.
+    expect(offsets().map((line) => (line as JsonObject).scan_id)).toEqual([copyId]);
   });
 
   it('does not take the carrier reply after a fallback for older history', async () => {

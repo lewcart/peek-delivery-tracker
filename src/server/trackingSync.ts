@@ -1864,7 +1864,7 @@ export class TrackingSyncService {
       // Linked journey identity, the postcode the owner gave a provider, and the delivery partner's probe belong to the
       // parcel, not an individual carrier response: a provider answering while the origin is down keeps the probe's gap.
       if (isRecord(parcel.carrier_data)) {
-        for (const key of ['lookup_country_hint', 'universal_input', 'original_carrier', 'original_tracking_number', 'original_tracking_url', 'original_package_id', 'active_tracking_carrier', 'active_tracking_number', 'original_canonical_tracking_number', 'auto_changed_from', 'auto_changed_to', 'auto_changed_at', 'handed_over_at', 'earlier_checked_at', 'delivery_probe', 'scans_withdrawn', 'scans_withdrawn_at', DIRECT_HISTORY]) {
+        for (const key of ['lookup_country_hint', 'universal_input', 'original_carrier', 'original_tracking_number', 'original_tracking_url', 'original_package_id', 'active_tracking_carrier', 'active_tracking_number', 'original_canonical_tracking_number', 'auto_changed_from', 'auto_changed_to', 'auto_changed_at', 'handed_over_at', 'earlier_checked_at', 'delivery_probe', 'scans_withdrawn', 'scans_withdrawn_at', 'clock_offsets', DIRECT_HISTORY]) {
           if (parcel.carrier_data[key] != null && carrierData[key] == null) carrierData[key] = parcel.carrier_data[key];
         }
       }
@@ -2029,6 +2029,22 @@ export class TrackingSyncService {
         || (values.current_stage !== undefined && values.current_stage !== previousStage);
       const outcome = progressDisappeared ? 'error'
         : !knownUpdate || fallbackWithoutProgress ? 'waiting' : news ? 'updated' : 'unchanged';
+      // One scan from two sources on clocks a zone apart: a provider's clock the scraper should fix. So is
+      // a provider's scan stored whole hours after the carrier's copy of it, or dated past the check.
+      // Each stored row shows it once, at the check that first meets it, not at every check after
+      // that repeats the copy. The log line names the row: the one a copy repeats, or the copy's own.
+      const offsetRows = [...new Set([...[...shared.shifted].filter((id) => persistedIds.has(id)),
+        ...eventsToPersist.filter((event) => {
+          const at = misdated.get(String(event.provider_event_id));
+          return at !== undefined && !(Date.parse(String(event.occurred_at)) - at < 60 * 60 * 1_000);
+        }).map((event) => String(event.provider_event_id))]
+        .map((id) => matches.reused.get(id) ?? matches.skipped.get(id) ?? dated.reused.get(id) ?? id))];
+      const offsetsShown = Array.isArray(previousData.clock_offsets) ? previousData.clock_offsets.map(String) : [];
+      const offsetScan = offsetRows.find((row) => !offsetsShown.includes(row));
+      if (offsetScan !== undefined) {
+        values.carrier_data = { ...(isRecord(values.carrier_data) ? values.carrier_data : previousData),
+          clock_offsets: [...offsetsShown, ...offsetRows.filter((row) => !offsetsShown.includes(row))] };
+      }
       operation = 'persist_package';
       await audit.step('persist_package', async () => {
         await persist(values, persistedEvents, keepSaved ? [] : deleteDescriptions, removed);
@@ -2051,19 +2067,10 @@ export class TrackingSyncService {
         atomic_with_package: true,
         ...reannounced,
       });
-      // One scan from two sources on clocks a zone apart: a provider's clock the scraper should fix. So is
-      // a provider's scan stored whole hours after the carrier's copy of it, or dated past the check.
-      const misread = eventsToPersist.find((event) => {
-        const at = misdated.get(String(event.provider_event_id));
-        return at !== undefined && !(Date.parse(String(event.occurred_at)) - at < 60 * 60 * 1_000);
-      });
-      // The log line names the stored row of the scan: the row a copy repeats, or the copy's own.
-      const offsetScan = [...shared.shifted].find((id) => persistedIds.has(id)) ?? misread?.provider_event_id;
       const anomalyScans: Partial<Record<SyncAnomalyCode, string>> = {};
       if (offsetScan !== undefined) {
         anomalies = [...anomalies, 'provider_clock_offset'];
-        const id = String(offsetScan);
-        anomalyScans.provider_clock_offset = matches.reused.get(id) ?? matches.skipped.get(id) ?? dated.reused.get(id) ?? id;
+        anomalyScans.provider_clock_offset = offsetScan;
       }
       await this.recordStatusObservations(eventsToPersist, sourceCarrierId, context, new Map([...matches.reused, ...matches.skipped]), [
         ...(fetched.earlierResult && fetched.earlierCarrierId
