@@ -2078,7 +2078,8 @@ export class TrackingSyncService {
       // A correction to the carrier detection names or asks first is expected: it is logged and is no signal.
       if (values.carrier) audit.reportRouting('carrier_auto_swapped', {
         carrier: carrierId, provider: String(values.carrier), trackingNumber: String(parcel.tracking_number ?? ''),
-        ...(detectionExpects(String(parcel.tracking_number ?? ''), String(values.carrier)) ? { category: 'detected' } : {}),
+        ...(detectionExpects(String(parcel.tracking_number ?? ''), String(values.carrier),
+          normalizedLookupCountry(previousData.lookup_country_hint)) ? { category: 'detected' } : {}),
       });
       const reannounced = await this.reopenAnnouncements(parcel, restaged, context, audit);
       audit.record('persist_events', 'succeeded', 0, {

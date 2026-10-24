@@ -752,9 +752,9 @@ detection or the adapters could act on: each check saves them for the hourly rev
 | `provider_failed` | A provider failed for a parcel: `category` `rate_limited` needs less traffic, `schema` parser work, `invalid_input` a number the source refuses |
 | `all_providers_unavailable` | Uncovered parcel or broad outage |
 | `health_store_unavailable` | Migration or database coordination problem (Sentry issue) |
-| `carrier_auto_swapped` | A carrier correction was committed. A signal, unless detection already names the new carrier for the number or lists it first among the carriers to ask: then the line has `category` `detected` |
+| `carrier_auto_swapped` | A carrier correction was committed. A signal, unless detection already names the new carrier for the number or lists it first among the carriers recognition asks for the parcel's lookup country: then the line has `category` `detected` |
 | `carrier_mismatch_confirmed` | Signal: a carrier that detection neither names nor lists first for the number tracks the parcel, so detection rules could be improved |
-| `detected_carrier_confirmed` | The carrier detection names or lists first for the number tracks a parcel filed as unknown or under another carrier, such as one added before a detection rule existed |
+| `detected_carrier_confirmed` | The carrier detection names or lists first for the number and lookup country tracks a parcel filed as unknown or under another carrier, such as one added before a detection rule existed |
 | `candidate_probe_confirmed` | Carrier recognition found the carrier and it tracks the parcel |
 | `foreign_history_rejected` | A source returned an older parcel for the number (`provider` is the universal, or the carrier whose own adapter answered): one never delivered or returned, or, from a universal, another carrier's |
 | `carrier_input_needed` | A recognized carrier needs the user's input (the GLS postcode, or DHL's for a parcel it holds behind one); the parcel asks for it |

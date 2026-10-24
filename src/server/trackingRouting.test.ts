@@ -361,6 +361,22 @@ describe('persistent tracking routing', () => {
     expect(monitoring.reportRoutingEvent).toHaveBeenCalledWith('detected_carrier_confirmed', expect.objectContaining({ carrier: 'unknown', provider: 'nova-poshta' }));
     expect(monitoring.reportRoutingEvent).not.toHaveBeenCalledWith('carrier_mismatch_confirmed', expect.anything());
   });
+  it('logs the carrier recognition asks first for the lookup country without a detection warning', async () => {
+    // A made-up number in a shape only DHLink's low rule takes: recognition asks DHLink first.
+    const yf = setup();
+    yf.universal.mockResolvedValue({ ...history(), discovered_carrier: 'dhlink' });
+    await yf.router.fetch(parcel({ tracking_number: 'YF2468013579CN' }), false);
+    expect(monitoring.reportRoutingEvent).toHaveBeenCalledWith('detected_carrier_confirmed', expect.objectContaining({ carrier: 'unknown', provider: 'dhlink' }));
+    expect(monitoring.reportRoutingEvent).not.toHaveBeenCalledWith('carrier_mismatch_confirmed', expect.anything());
+    // Eleven digits: recognition asks GLS Poland first only for a parcel looked up from Poland.
+    for (const [carrier_data, signal] of [[{ lookup_country_hint: 'PL' }, 'detected_carrier_confirmed'], [{}, 'carrier_mismatch_confirmed']] as const) {
+      vi.mocked(monitoring.reportRoutingEvent).mockClear();
+      const gls = setup();
+      gls.universal.mockResolvedValue({ ...history(), discovered_carrier: 'gls-pl' });
+      await gls.router.fetch(parcel({ tracking_number: '12345678901', carrier_data }), false);
+      expect(monitoring.reportRoutingEvent).toHaveBeenCalledWith(signal, expect.objectContaining({ carrier: 'unknown', provider: 'gls-pl' }));
+    }
+  });
   it('files a parcel filed as unknown under the carrier that answers and hands it on in the same lookup', async () => {
     const { router, direct, universal } = setup();
     universal.mockResolvedValue({ ...history(), discovered_carrier: 'nova-poshta' });

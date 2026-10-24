@@ -1252,6 +1252,10 @@ describe('TrackingSyncService', () => {
     await sync('314159265355', 'fedex');
     expect(report).toHaveBeenCalledWith('carrier_auto_swapped',
       expect.objectContaining({ carrier: 'unknown', provider: 'fedex', trackingNumber: '314159265355', category: 'detected' }));
+    // A made-up number in a shape only DHLink's low rule takes: recognition asks DHLink first.
+    await sync('YF2468013579CN', 'dhlink');
+    expect(report).toHaveBeenCalledWith('carrier_auto_swapped',
+      expect.objectContaining({ carrier: 'unknown', provider: 'dhlink', trackingNumber: 'YF2468013579CN', category: 'detected' }));
     expect(report).not.toHaveBeenCalledWith('carrier_mismatch_confirmed', expect.anything());
     // A provider had to name the carrier: detection has a rule to gain.
     expect((await sync('TEST1234')).fetchUniversal).toHaveBeenCalledOnce();
