@@ -658,9 +658,10 @@ Key JSON events:
   `delivery_email_card_failed` (warning, with `error_type`) when the map card could not be
   drawn: the email goes out without its picture.
 
-The logger allows `tracking_number` explicitly. It drops other fields whose names look
-like parcel, user, label, location, status text, URL, token, cookie or secret data. Keep
-new fields scalar and bounded.
+The logger keeps each field that is a string (cut to 500 characters), a finite number, a
+boolean or null, and drops the others. It filters no field by name, so the caller decides
+what a line holds: keep new fields scalar and bounded, and leave out user, label, location,
+status text, URL, token, cookie and secret data.
 
 ## Sentry
 
