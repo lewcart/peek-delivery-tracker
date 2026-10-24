@@ -28,7 +28,12 @@ final class AnalyticsTests: XCTestCase {
         let payload = DeliveryAnalytics.payload(.init(screen: "parcel", name: "parcel-add", outcome: .success, mode: .account), configuration: configuration)
         XCTAssertEqual(payload["url"] as? String, "/parcel")
         XCTAssertEqual(payload["name"] as? String, "parcel-add")
-        XCTAssertEqual((payload["data"] as? [String: String])?["platform"], "ios")
+        XCTAssertEqual((payload["data"] as? [String: String])?["platform"], DeliveryAnalytics.Platform.current.rawValue)
+        for (platform, device) in [(DeliveryAnalytics.Platform.iphone, "mobile"), (.ipad, "tablet"), (.mac, "desktop")] {
+            let payload = DeliveryAnalytics.payload(.init(screen: "parcel", name: nil, outcome: nil, mode: .demo), configuration: configuration, platform: platform)
+            XCTAssertEqual((payload["data"] as? [String: String])?["platform"], platform.rawValue)
+            XCTAssertEqual(payload["device"] as? String, device)
+        }
         for key in ["id", "referrer", "userID", "email", "trackingNumber", "token"] { XCTAssertNil(payload[key]) }
         XCTAssertTrue(configuration.valid(for: URL(string: "https://delivery.example")!))
         XCTAssertFalse(configuration.valid(for: URL(string: "https://another.example")!))

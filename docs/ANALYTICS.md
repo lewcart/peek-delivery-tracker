@@ -1,9 +1,10 @@
 # Usage analytics
 
 Optional, self-hosted [Umami](https://umami.is). Web and PWA share one property (tagged
-`platform=web` or `platform=pwa`); the iPhone app uses a second one (`platform=ios`).
-`mode` separates anonymous, demo and account screens. Neither client sends a persistent
-identifier or account identity, so visitor counts are Umami's own estimates.
+`platform=web` or `platform=pwa`); the iOS app uses a second one (`platform=iphone`,
+`ipad`, or `mac` for the iPad app on a Mac). `mode` separates anonymous, demo and account
+screens. Neither client sends a persistent identifier or account identity, so visitor
+counts are Umami's own estimates.
 
 ## Configuration
 
@@ -102,8 +103,9 @@ path, such as `/front-door`, or an action:
 
 Umami's funnel report chains these steps within one property, by its own estimate of a
 visitor: neither client sends an identifier, so steps join per visit, never per person.
-`platform` separates `web`, `pwa` and `ios`, and `mode` the visitor (`anonymous`), the sample
-parcel (`demo`) and the account; signing in turns `anonymous` into `account` midway.
+`platform` separates `web`, `pwa`, `iphone`, `ipad` and `mac`, and `mode` the visitor
+(`anonymous`), the sample parcel (`demo`) and the account; signing in turns `anonymous`
+into `account` midway.
 
 Gaps:
 

@@ -50,6 +50,17 @@ final class DeliveryAnalytics {
     }
     enum Outcome: String { case success, error, started, accepted }
     enum Mode: String { case anonymous, demo, account }
+    /// The device the app runs on: a Mac runs the iPad app, so it asks first.
+    enum Platform: String {
+        case iphone, ipad, mac
+        @MainActor static var current: Platform {
+            if ProcessInfo.processInfo.isiOSAppOnMac { return .mac }
+            return UIDevice.current.userInterfaceIdiom == .pad ? .ipad : .iphone
+        }
+        var device: String {
+            switch self { case .iphone: "mobile"; case .ipad: "tablet"; case .mac: "desktop" }
+        }
+    }
     struct Event {
         let screen: String
         let name: String?
@@ -116,14 +127,15 @@ final class DeliveryAnalytics {
     }
 
     /// No account IDs, device IDs, tokens, query strings, referrers or user-entered text.
-    static func payload(_ event: Event, configuration: Configuration) -> [String: Any] {
-        var properties = ["platform": "ios", "mode": event.mode.rawValue]
+    static func payload(_ event: Event, configuration: Configuration, platform: Platform? = nil) -> [String: Any] {
+        let platform = platform ?? .current
+        var properties = ["platform": platform.rawValue, "mode": event.mode.rawValue]
         if let outcome = event.outcome { properties["outcome"] = outcome.rawValue }
         var result: [String: Any] = [
             "website": configuration.iosWebsite, "hostname": configuration.hostname,
             "url": "/\(event.screen)", "title": event.screen,
             "language": Locale.preferredLanguages.first ?? "en",
-            "browser": "Delivery iOS", "os": "iOS", "device": "mobile", "data": properties
+            "browser": "Delivery iOS", "os": "iOS", "device": platform.device, "data": properties
         ]
         if let name = event.name { result["name"] = name }
         return result
