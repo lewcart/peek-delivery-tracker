@@ -11,6 +11,12 @@
  * row with `relay_of` under the other (eventPlaces.ts). Of the two rows, the one
  * that reached the parcel second announces nothing (push.ts).
  *
+ * Both carriers may also tell a hand-over, each in its own stage, at the same
+ * second (4PX's "Parcel handed to dpd" and DPD's acceptance, Chronopost's
+ * departure sort and DPD's): a second the two share, from places that do not
+ * conflict, is one scan. On a minute's first second, which a carrier keeping
+ * minutes gives every scan, the places must also share a word.
+ *
  * The new carrier, in turn, may tell the steps the earlier one sent it over
  * the posts' data exchange: the posting and the departure from its country,
  * placed in that country alone and stamped when the message arrived, an hour
@@ -26,6 +32,7 @@
  */
 import { CARRIER_DEFINITIONS, type CarrierId } from 'universal-parcel-scraper';
 import { trackingPlace } from 'universal-parcel-scraper/app';
+import { placesConflict, placeWords } from './eventIdentity';
 import { isRecord, type JsonObject } from './types';
 
 /** A copy is stamped within this of the scan it repeats, either way. */
@@ -76,9 +83,17 @@ function source(event: JsonObject): string {
   return typeof event.provider_event_id === 'string' ? event.provider_event_id.split(':')[0]! : '';
 }
 
+/** Whether two scans at one second are one: places that do not conflict, sharing a word when the second is a minute's first. */
+function sameSecond(copy: { at: number; words: string[] }, scan: { at: number; words: string[] }): boolean {
+  const second = (at: number) => Math.floor(at / SECOND_MS);
+  if (second(copy.at) !== second(scan.at) || placesConflict(copy.words, scan.words)) return false;
+  return second(copy.at) % 60 !== 0 || copy.words.some((word) => scan.words.includes(word));
+}
+
 /**
  * The relay pairs of a handed-over parcel, each copy with the id of the scan it repeats. The earlier carrier's scans
- * repeat a scan of another source at the same stage within a minute, the closest pairs first. Then a row of the new
+ * repeat a scan of another source at the same stage within a minute, or in any stage at the same second, the closest
+ * pairs first. Then a row of the new
  * carrier placed only in a country the earlier carrier delivers in, and the new carrier does not, repeats the earlier
  * carrier's latest scan of its stage, when it follows every such scan by up to three hours but not by whole hours.
  * A scan is in one pair at most, so two scans of one minute that the earlier carrier tells once stay two rows.
@@ -90,11 +105,12 @@ export function relayCopies(row: JsonObject): Map<string, string> {
   const scans = row.tracking_events.filter(isRecord)
     .map((event) => ({
       id: String(event.id), stage: event.stage, source: source(event), at: Date.parse(String(event.occurred_at)),
-      country: countryOnly(event.location),
+      country: countryOnly(event.location), words: placeWords(event),
     }))
     .filter((scan) => Number.isFinite(scan.at) && scan.source !== '' && scan.source !== 'app');
   const candidates = scans.filter((copy) => copy.source === earlier).flatMap((copy) => scans
-    .filter((scan) => scan.source !== earlier && scan.stage === copy.stage && Math.abs(scan.at - copy.at) <= RELAY_WINDOW_MS)
+    .filter((scan) => scan.source !== earlier
+      && ((scan.stage === copy.stage && Math.abs(scan.at - copy.at) <= RELAY_WINDOW_MS) || sameSecond(copy, scan)))
     .map((scan) => ({ copy, scan, gap: Math.abs(scan.at - copy.at) })));
   const current = currentCarrier(row);
   const exchanged = scans.filter((copy) => copy.source === current && copy.country !== null

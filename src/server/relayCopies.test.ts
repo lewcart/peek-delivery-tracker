@@ -38,6 +38,36 @@ describe('relayCopies', () => {
     ]))).toEqual(new Map());
   });
 
+  it('pairs a hand-over both carriers tell at the same second, each in its own stage', () => {
+    const placed = (id: string, source: string, stage: string, at: string, location?: string) => ({ ...scan(id, source, stage, at), location });
+    const parcel = (tracking_events: object[]) => ({
+      carrier: 'four-px', carrier_data: { original_carrier: 'four-px', active_tracking_carrier: 'dpd' }, tracking_events,
+    });
+    expect(relayCopies(parcel([
+      // 4PX's "Parcel handed to dpd" and DPD's acceptance; a post office's posting beside a row placed in its country.
+      placed('handed', 'four-px', 'in_transit', '2026-10-20T11:08:41Z'),
+      placed('accepted', 'dpd', 'accepted', '2026-10-20T11:08:41Z'),
+      placed('received', 'four-px', 'in_transit', '2026-10-21T09:20:28Z', 'PL'),
+      placed('posted', 'dpd', 'accepted', '2026-10-21T09:20:28Z', 'Post office Lublin'),
+      // On a minute's first second, the places share a word.
+      placed('office', 'four-px', 'in_transit', '2026-10-22T09:56:00Z', 'Covington, KY, US'),
+      placed('office-scan', 'dpd', 'ready_for_pickup', '2026-10-22T09:56:00Z', 'COVINGTON, KY 41011'),
+    ]))).toEqual(new Map([['handed', 'accepted'], ['received', 'posted'], ['office', 'office-scan']]));
+    // Seconds apart, at places that share no word, or on a minute's first second with no word in common (a carrier
+    // keeping minutes gives every scan that second), the two are scans of their own: an arrival measured a minute
+    // before the next post registers the data, an order created three seconds after a sort elsewhere.
+    expect(relayCopies(parcel([
+      placed('measured', 'four-px', 'in_transit', '2026-10-19T12:20:14Z', 'Nancheng'),
+      placed('registered', 'dpd', 'registered', '2026-10-19T12:19:15Z'),
+      placed('sorted', 'four-px', 'in_transit', '2026-10-16T14:58:49Z'),
+      placed('created', 'dpd', 'registered', '2026-10-16T14:58:52Z'),
+      placed('depot', 'four-px', 'in_transit', '2026-10-17T02:59:28Z', 'Krostitz'),
+      placed('elsewhere', 'dpd', 'exception', '2026-10-17T02:59:28Z', 'Leipzig'),
+      placed('minute', 'four-px', 'in_transit', '2026-10-18T08:20:00Z'),
+      placed('minute-scan', 'dpd', 'accepted', '2026-10-18T08:20:00Z', 'Lublin'),
+    ]))).toEqual(new Map());
+  });
+
   it('makes the closest pairs first, and one scan pairs once', () => {
     // Two Swiss Post scans of one minute that DHL tells once stay two rows.
     expect(relayCopies(handedOver([

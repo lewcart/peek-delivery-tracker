@@ -481,7 +481,7 @@ function zoneShift(copy: number, scan: number): number {
  * and "PARIS CDG" share paris), umlauts spelt out (ZUERICH is Zürich). A word
  * with letters beyond a to z (Cyrillic, Chinese, ł) is left out.
  */
-function placeWords(row: JsonObject): string[] {
+export function placeWords(row: JsonObject): string[] {
   return trackingPlace(String(row.location ?? '')).place.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => /^[a-z0-9]+$/.test(word) && trackingPlace(word.toUpperCase()).country === null)
@@ -489,7 +489,7 @@ function placeWords(row: JsonObject): string[] {
 }
 
 /** Two places named with no word in common. A place that names no more than a country conflicts with none. */
-function placesConflict(left: readonly string[], right: readonly string[]): boolean {
+export function placesConflict(left: readonly string[], right: readonly string[]): boolean {
   return left.length > 0 && right.length > 0 && !left.some((word) => right.includes(word));
 }
 

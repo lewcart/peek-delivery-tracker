@@ -622,10 +622,14 @@ A parcel often changes carrier at the border. The origin history is always kept.
 - After the handoff the origin often goes on telling the partner's scans in its own
   words, within a minute of them. Both rows are stored, since the same rule now and then
   pairs two scans of their own. A row of the earlier carrier at the same stage as another
-  source's, within 60 s either way, is served with `relay_of`, that row's id (closest pairs
-  first, one pair per row); when only the earlier carrier's row says where the scan was, the
-  other row is served with `relay_of` instead. The new carrier may also tell the steps the
-  earlier one sent it over the posts' data exchange, placed only in the earlier carrier's
+  source's, within 60 s either way, or in any stage at the same second, is served with
+  `relay_of`, that row's id (closest pairs first, one pair per row): both carriers tell a
+  hand-over at one second, each in its own stage (4PX's "Parcel handed to dpd" and DPD's
+  acceptance). At that second the places must not conflict, and on a minute's first second,
+  which a carrier keeping minutes gives every scan, they must share a word; a few seconds
+  apart in other stages the rows stay two. When only the earlier carrier's row says where the
+  scan was, the other row is served with `relay_of` instead. The new carrier may also tell
+  the steps the earlier one sent it over the posts' data exchange, placed only in the earlier carrier's
   country and stamped when the message arrived (Slovenská pošta tells Poczta Polska's posting
   and departure an hour or two late). A row of the new carrier placed in nothing but a country
   the earlier carrier delivers in, and the new carrier does not, is served with `relay_of` the
