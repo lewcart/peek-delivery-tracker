@@ -326,3 +326,15 @@ psql "$database_url" -X -v ON_ERROR_STOP=1 \
 
 # The hourly review reads every queue: it must still run on the schema.
 psql "$database_url" -X -v hours=24 -f "$repo_root/ops/review/signals.sql" > /dev/null
+
+# Closing a reader's answer marks it reviewed once.
+feedback_id=$(psql "$database_url" -X -Atq -v ON_ERROR_STOP=1 -c "
+  insert into public.parcel_feedback (id, tracking_number, carrier, answer, reasons, asked, via, app, locale, shown)
+  values (gen_random_uuid(), 'TEST000000001', 'unknown', 'wrong', '{status}', 'page', 'link', 'web', 'en', '{}')
+  returning id")
+closed=$(psql "$database_url" -X -At -v id="$feedback_id" -v note="Routed to the adapters lane" \
+  -f "$repo_root/ops/review/close-feedback.sql")
+[[ "$closed" == "$feedback_id|Routed to the adapters lane" ]] || { echo "close-feedback.sql did not close the answer: $closed" >&2; exit 1; }
+closed=$(psql "$database_url" -X -At -v id="$feedback_id" -v note="Again" -f "$repo_root/ops/review/close-feedback.sql")
+[[ -z "$closed" ]] || { echo "close-feedback.sql closed an answer twice: $closed" >&2; exit 1; }
+psql "$database_url" -X -q -c "delete from public.parcel_feedback where id = '$feedback_id'"

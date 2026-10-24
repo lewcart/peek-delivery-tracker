@@ -135,9 +135,10 @@ where provider is not null
 group by 1, 2, 3, 4, 5
 order by parcels desc, could_take, provider;
 
-\echo '== Reader feedback: answers other than right, given or completed with a note in the window, not reviewed'
+\echo '== Reader feedback: answers other than right not reviewed yet (new: given or completed with a note in the window)'
 \echo '   carriers: no carrier found, or the wrong one; adapters: the carrier''s status, steps, times or places;'
-\echo '   delivery-tracker: no reason given. Set reviewed_at and review_note by id (docs/OBSERVABILITY.md)'
+\echo '   delivery-tracker: no reason given. Close each one once it is routed or handled:'
+\echo '   ops/review/close-feedback.sql with its id and a review note (docs/OBSERVABILITY.md)'
 select format('%s right, %s wrong, %s found elsewhere', count(*) filter (where answer = 'right'),
          count(*) filter (where answer = 'wrong'), count(*) filter (where answer = 'found_elsewhere')) as counts
 from public.parcel_feedback
@@ -146,7 +147,8 @@ where created_at >= :since \gset feedback_
 -- A reader's words can quote a number or name a person or a shop: a note is only counted, a
 -- carrier's name shows its first three words with digits masked, and a tracking page shows its
 -- host alone.
-select f.id, to_char(f.created_at, 'YYYY-MM-DD HH24:MI') as given, f.carrier, f.answer,
+select f.id, f.updated_at >= :since as new, to_char(f.created_at, 'YYYY-MM-DD HH24:MI') as given,
+       f.carrier, f.answer,
        coalesce(nullif(array_to_string(f.reasons, ','), ''), '-') as reasons,
        case when f.note is null then 'no' else 'yes' end as note,
        coalesce(left(substring(regexp_replace(f.carrier_name, '[0-9]+', '#', 'g') from '^\s*([^[:space:]]+(?:\s+[^[:space:]]+){0,2})'), 40),
@@ -159,6 +161,7 @@ select f.id, to_char(f.created_at, 'YYYY-MM-DD HH24:MI') as given, f.carrier, f.
             when f.reasons && array['arrived', 'status', 'steps', 'time_place'] then 'adapters'
             else 'delivery-tracker' end as lane
 from public.parcel_feedback f
--- A note can follow its reason within the hour: updated_at shows it again once it has.
-where f.answer <> 'right' and f.reviewed_at is null and f.updated_at >= :since
-order by f.created_at desc;
+-- An answer stays listed until it is closed, so one that was never routed comes back every
+-- hour. A note can follow its reason within the hour: updated_at marks it new again once it has.
+where f.answer <> 'right' and f.reviewed_at is null
+order by new desc, f.created_at desc;

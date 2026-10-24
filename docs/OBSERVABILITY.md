@@ -255,16 +255,15 @@ where answer <> 'right' and reviewed_at is null
 order by created_at desc;
 ```
 
-The hourly review ([ops/review/signals.sql](../ops/review/signals.sql)) lists the answers
-other than right given in its window, or completed there with a note, with the number's
-shape and a lane, and counts the window's answers by kind. Once an answer is handled or
-routed, set `reviewed_at`, and `review_note` with the outcome. A note can hold personal
+The hourly review ([ops/review/signals.sql](../ops/review/signals.sql)) lists every answer
+other than right that is still open, with the number's shape and a lane, `new` when it was
+given or completed with a note in the window, and counts the window's answers by kind. An
+open answer comes back every hour until it is closed, so close each one as soon as it is
+routed or handled, with the outcome as its review note. A reader's note can hold personal
 details, so a review note says what was off in other words:
 
-```sql
-update public.parcel_feedback
-set reviewed_at = now(), review_note = 'WHY'
-where id = 'ID';
+```sh
+psql "$DATABASE_URL" -v id=ID -v note='Routed to the adapters lane: WHY' -f ops/review/close-feedback.sql
 ```
 
 ## DPD app sessions
