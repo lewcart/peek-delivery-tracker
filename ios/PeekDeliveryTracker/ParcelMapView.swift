@@ -99,6 +99,8 @@ struct ParcelMapScreen: View {
     var body: some View {
         GeometryReader { proxy in
             let safe = proxy.safeAreaInsets
+            // With nothing above the screen (an iPhone on its side, the Duo's cover) the close button keeps off its edge.
+            let closeTop = max(4, 14 - safe.top)
             // An iPhone Duo standing half open keeps the route on the first part of the screen and the summary on the
             // second, as Apple's own arrangements do, so neither lies across the fold.
             let fold = proxy.fold
@@ -110,11 +112,12 @@ struct ParcelMapScreen: View {
                     live: stage != .delivered && stage != .returned,
                     // Pip came along from the card. Here he keeps clear of what lies over the map: the summary and the button that closes it.
                     pip: PipMood(stage: stage).map { PipRequest(mood: $0, inset: true) },
+                    // The route keeps clear of the sides the system holds too: the Dynamic Island on an iPhone on its side, the cover's status bar.
                     insets: EdgeInsets(
-                        top: safe.top + 52, leading: 0,
+                        top: safe.top + closeTop + 48, leading: safe.leading,
                         bottom: fold.map { beside ? safe.bottom + 24 : proxy.size.height + safe.bottom - $0.minY + 24 }
                             ?? safe.bottom + barHeight + 24,
-                        trailing: fold.map { beside ? proxy.size.width + safe.trailing - $0.minX + 24 : 0 } ?? 0
+                        trailing: fold.map { beside ? proxy.size.width + safe.trailing - $0.minX + 24 : safe.trailing } ?? safe.trailing
                     ),
                     recenter: recenter, language: localizer.language,
                     detail: tiles.pack.map { MapDetail(pack: $0, tiles: tiles.tiles, need: tiles.need) },
@@ -143,7 +146,7 @@ struct ParcelMapScreen: View {
                 .buttonStyle(.plain)
                 .glassSurface(in: Circle())
                 .padding(.trailing, 14)
-                .padding(.top, 4)
+                .padding(.top, closeTop)
                 .accessibilityLabel(localizer.text("map.close"))
             }
         }
