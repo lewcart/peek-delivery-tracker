@@ -12301,10 +12301,38 @@ export const CARRIER_CAPABILITIES = {
     "timezone": "Pacific/Auckland",
     "tracking": {
       "mode": "automatic",
-      "adapter": "nz-couriers"
+      "adapter": "nz-couriers",
+      "requirements": [
+        {
+          "field": "trackingUrl",
+          "validator": "freightwaysCapabilityUrl",
+          "optional": true,
+          "label": "New Zealand Couriers tracking link",
+          "type": "url",
+          "placeholder": "https://receiver.nzcouriers.co.nz/?consignmentid=CU..…",
+          "help": "The link in the shipping email names the sender's account, which some parcels need to be found."
+        }
+      ]
     },
     "trackingUrlTemplate": "https://nzcouriers.co.nz/track?query={trackingNumber}",
     "linkRules": [
+      {
+        "domains": [
+          "receiver.nzcouriers.co.nz"
+        ],
+        "pathPattern": "^/?$",
+        "query": "(?:^|&)consignmentid=CU\\.\\.([A-Z0-9]{4,40})\\.[A-Z0-9]\\.[A-Z0-9]{3,16}\\.\\d{1,3}(?=&|$)",
+        "keepsCapabilityUrl": true
+      },
+      {
+        "domains": [
+          "receiver.nzcouriers.co.nz",
+          "nzcouriers.co.nz"
+        ],
+        "pathPattern": "^/(?:[a-z]+/servlet/ITNG_TAndTServlet/?)?$",
+        "query": "^(?=(?:.*&)?customer_(?:number|id)=[A-Z0-9]{3,16}(?:&|$))(?:.*&)?consignment_id(?:_ref)?=([A-Z0-9]{4,40})(?=&|$)",
+        "keepsCapabilityUrl": true
+      },
       {
         "domains": [
           "nzcouriers.co.nz"
@@ -12313,6 +12341,24 @@ export const CARRIER_CAPABILITIES = {
         "params": [
           "query"
         ]
+      },
+      {
+        "domains": [
+          "nzcouriers.co.nz"
+        ],
+        "pathPattern": "^/[a-z]+/servlet/ITNG_TAndTServlet/?$",
+        "params": [
+          "consignment_id_ref",
+          "consignment_id",
+          "label_number"
+        ]
+      },
+      {
+        "domains": [
+          "receiver.nzcouriers.co.nz"
+        ],
+        "pathPattern": "^/?$",
+        "query": "(?:^|&)(?:consignmentid|track|query|consignment_id_ref|consignment_id|label_number)=(?:CU\\.\\.)?([^&.]+)(?=[.&]|$)"
       }
     ],
     "detectionRules": [],
@@ -12671,10 +12717,38 @@ export const CARRIER_CAPABILITIES = {
     "timezone": "Pacific/Auckland",
     "tracking": {
       "mode": "automatic",
-      "adapter": "post-haste"
+      "adapter": "post-haste",
+      "requirements": [
+        {
+          "field": "trackingUrl",
+          "validator": "freightwaysCapabilityUrl",
+          "optional": true,
+          "label": "Post Haste tracking link",
+          "type": "url",
+          "placeholder": "https://receiver.posthaste.co.nz/?consignmentid=CU..…",
+          "help": "The link in the shipping email names the sender's account, which some parcels need to be found."
+        }
+      ]
     },
     "trackingUrlTemplate": "https://posthaste.co.nz/track?query={trackingNumber}",
     "linkRules": [
+      {
+        "domains": [
+          "receiver.posthaste.co.nz"
+        ],
+        "pathPattern": "^/?$",
+        "query": "(?:^|&)consignmentid=CU\\.\\.([A-Z0-9]{4,40})\\.[A-Z0-9]\\.[A-Z0-9]{3,16}\\.\\d{1,3}(?=&|$)",
+        "keepsCapabilityUrl": true
+      },
+      {
+        "domains": [
+          "receiver.posthaste.co.nz",
+          "posthaste.co.nz"
+        ],
+        "pathPattern": "^/(?:[a-z]+/servlet/ITNG_TAndTServlet/?)?$",
+        "query": "^(?=(?:.*&)?customer_(?:number|id)=[A-Z0-9]{3,16}(?:&|$))(?:.*&)?consignment_id(?:_ref)?=([A-Z0-9]{4,40})(?=&|$)",
+        "keepsCapabilityUrl": true
+      },
       {
         "domains": [
           "posthaste.co.nz",
@@ -12684,6 +12758,24 @@ export const CARRIER_CAPABILITIES = {
         "params": [
           "query"
         ]
+      },
+      {
+        "domains": [
+          "posthaste.co.nz"
+        ],
+        "pathPattern": "^/[a-z]+/servlet/ITNG_TAndTServlet/?$",
+        "params": [
+          "consignment_id_ref",
+          "consignment_id",
+          "label_number"
+        ]
+      },
+      {
+        "domains": [
+          "receiver.posthaste.co.nz"
+        ],
+        "pathPattern": "^/?$",
+        "query": "(?:^|&)(?:consignmentid|track|query|consignment_id_ref|consignment_id|label_number)=(?:CU\\.\\.)?([^&.]+)(?=[.&]|$)"
       }
     ],
     "detectionRules": [],
@@ -31102,7 +31194,7 @@ export const CARRIER_CAPABILITIES = {
     "timezone": "Asia/Shanghai",
     "tracking": {
       "mode": "automatic",
-      "adapter": "universal"
+      "adapter": "far-international"
     },
     "trackingUrlTemplate": "https://www.far800.com/logistics/result?key={trackingNumber}",
     "linkRules": [
@@ -31123,6 +31215,140 @@ export const CARRIER_CAPABILITIES = {
       }
     ],
     "trackingSearchUrl": "https://www.far800.com/"
+  },
+  "castle-parcels": {
+    "displayName": "Castle Parcels",
+    "aliases": [
+      "CastleParcels"
+    ],
+    "countries": [
+      "NZ"
+    ],
+    "color": "#154434",
+    "selectable": true,
+    "timezone": "Pacific/Auckland",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "castle-parcels",
+      "requirements": [
+        {
+          "field": "trackingUrl",
+          "validator": "freightwaysCapabilityUrl",
+          "optional": true,
+          "label": "Castle Parcels tracking link",
+          "type": "url",
+          "placeholder": "https://receiver.castleparcels.co.nz/?consignmentid=CU..…",
+          "help": "The link in the shipping email names the sender's account, which some parcels need to be found."
+        }
+      ]
+    },
+    "trackingUrlTemplate": "https://receiver.castleparcels.co.nz/?track={trackingNumber}",
+    "linkRules": [
+      {
+        "domains": [
+          "receiver.castleparcels.co.nz"
+        ],
+        "pathPattern": "^/?$",
+        "query": "(?:^|&)consignmentid=CU\\.\\.([A-Z0-9]{4,40})\\.[A-Z0-9]\\.[A-Z0-9]{3,16}\\.\\d{1,3}(?=&|$)",
+        "keepsCapabilityUrl": true
+      },
+      {
+        "domains": [
+          "receiver.castleparcels.co.nz",
+          "castleparcels.co.nz"
+        ],
+        "pathPattern": "^/(?:[a-z]+/servlet/ITNG_TAndTServlet/?)?$",
+        "query": "^(?=(?:.*&)?customer_(?:number|id)=[A-Z0-9]{3,16}(?:&|$))(?:.*&)?consignment_id(?:_ref)?=([A-Z0-9]{4,40})(?=&|$)",
+        "keepsCapabilityUrl": true
+      },
+      {
+        "domains": [
+          "castleparcels.co.nz"
+        ],
+        "pathPattern": "^/[a-z]+/servlet/ITNG_TAndTServlet/?$",
+        "params": [
+          "consignment_id_ref",
+          "consignment_id",
+          "label_number"
+        ]
+      },
+      {
+        "domains": [
+          "receiver.castleparcels.co.nz"
+        ],
+        "pathPattern": "^/?$",
+        "query": "(?:^|&)(?:consignmentid|track|query|consignment_id_ref|consignment_id|label_number)=(?:CU\\.\\.)?([^&.]+)(?=[.&]|$)"
+      }
+    ],
+    "detectionRules": [],
+    "trackingSearchUrl": "https://receiver.castleparcels.co.nz/"
+  },
+  "now-couriers": {
+    "displayName": "Now Couriers",
+    "aliases": [
+      "NowCouriers"
+    ],
+    "countries": [
+      "NZ"
+    ],
+    "color": "#facf07",
+    "selectable": true,
+    "timezone": "Pacific/Auckland",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "now-couriers",
+      "requirements": [
+        {
+          "field": "trackingUrl",
+          "validator": "freightwaysCapabilityUrl",
+          "optional": true,
+          "label": "Now Couriers tracking link",
+          "type": "url",
+          "placeholder": "https://receiver.nowcouriers.co.nz/?consignmentid=CU..…",
+          "help": "The link in the shipping email names the sender's account, which some parcels need to be found."
+        }
+      ]
+    },
+    "trackingUrlTemplate": "https://receiver.nowcouriers.co.nz/?track={trackingNumber}",
+    "linkRules": [
+      {
+        "domains": [
+          "receiver.nowcouriers.co.nz"
+        ],
+        "pathPattern": "^/?$",
+        "query": "(?:^|&)consignmentid=CU\\.\\.([A-Z0-9]{4,40})\\.[A-Z0-9]\\.[A-Z0-9]{3,16}\\.\\d{1,3}(?=&|$)",
+        "keepsCapabilityUrl": true
+      },
+      {
+        "domains": [
+          "receiver.nowcouriers.co.nz",
+          "nowcouriers.co.nz"
+        ],
+        "pathPattern": "^/(?:[a-z]+/servlet/ITNG_TAndTServlet/?)?$",
+        "query": "^(?=(?:.*&)?customer_(?:number|id)=[A-Z0-9]{3,16}(?:&|$))(?:.*&)?consignment_id(?:_ref)?=([A-Z0-9]{4,40})(?=&|$)",
+        "keepsCapabilityUrl": true
+      },
+      {
+        "domains": [
+          "nowcouriers.co.nz"
+        ],
+        "pathPattern": "^/[a-z]+/servlet/ITNG_TAndTServlet/?$",
+        "params": [
+          "consignment_id_ref",
+          "consignment_id",
+          "label_number"
+        ]
+      },
+      {
+        "domains": [
+          "receiver.nowcouriers.co.nz"
+        ],
+        "pathPattern": "^/?$",
+        "query": "(?:^|&)(?:consignmentid|track|query|consignment_id_ref|consignment_id|label_number)=(?:CU\\.\\.)?([^&.]+)(?=[.&]|$)"
+      }
+    ],
+    "detectionRules": [],
+    "trackingSearchUrl": "https://receiver.nowcouriers.co.nz/"
   }
 } as const;
 
@@ -31967,7 +32193,9 @@ export const CARRIER_IDS = [
   "meihoo-pegasus",
   "yypost",
   "ywe",
-  "far-international"
+  "far-international",
+  "castle-parcels",
+  "now-couriers"
 ] as const;
 export type ApiCarrierId = (typeof CARRIER_IDS)[number];
 
