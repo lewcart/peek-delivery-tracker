@@ -56,22 +56,24 @@ it('waits in a job a newer commit queues behind, and deploys in one that is neve
   assert.match(workflow, /\non:\n {2}workflow_dispatch:\n/);
   assert.doesNotMatch(workflow, /\n {2}(push|pull_request|workflow_run):/);
   const settle = job(workflow, 'settle');
-  // The waiting run stands down by itself once the newer commit passed, rather than being cancelled.
-  assert.match(settle, /concurrency:\n {6}group: production-deploy-wait\n {6}cancel-in-progress: false\n/);
+  // The waiting run stands down by itself once the newer commit passed, and runs queued behind it
+  // each get their turn, rather than being cancelled.
+  assert.match(settle, /concurrency:\n {6}group: production-deploy-wait\n {6}cancel-in-progress: false\n {6}queue: max\n/);
   assert.match(settle, /run: node scripts\/deploy-gate\.mjs "--commit=\$COMMIT"/);
   const minutes = Number(settle.match(/timeout-minutes: (\d+)/)[1]);
   assert.ok(minutes * 60_000 > MAX_WAIT_MS + 5 * 60_000, 'the wait ends before the job times out');
   const deploy = job(workflow, 'deploy');
   assert.match(deploy, new RegExp(`\n {4}name: ${DEPLOY_JOB}\n {4}needs: settle\n {4}if: needs\\.settle\\.outputs\\.deploy == 'true'\n`));
-  assert.match(deploy, /concurrency:\n {6}group: production-deploy\n {6}cancel-in-progress: false\n/);
+  assert.match(deploy, /concurrency:\n {6}group: production-deploy\n {6}cancel-in-progress: false\n {6}queue: max\n/);
   assert.match(deploy, /COMMIT: \$\{\{ needs\.settle\.outputs\.commit \}\}/);
   assert.match(deploy, /ref: \$\{\{ needs\.settle\.outputs\.commit \}\}/);
   assert.match(step(deploy, DEPLOY_STEP), /"\$DEPLOY_SSH_TARGET" deploy "\$COMMIT"/);
   assert.ok(deploy.indexOf("- name: Check that production has this commit's migrations") < deploy.indexOf(`- name: ${DEPLOY_STEP}`));
   assert.doesNotMatch(deploy, /GITHUB_SHA/);
-  // Re-running the job alone must not put back a commit that a newer one replaced.
-  const guard = step(deploy, 'Skip a re-run of a commit that a newer one replaced');
-  assert.match(guard, /if: github\.run_attempt != '1'/);
+  // Neither a deploy queued behind another nor a re-run of the job may put back a commit that a
+  // newer one replaced.
+  const guard = step(deploy, 'Skip a commit that a newer one replaced');
+  assert.doesNotMatch(guard, /\n {8}if:/);
   assert.match(guard, /run: node scripts\/deploy-gate\.mjs "--commit=\$COMMIT" --at-once/);
   for (const name of ["Check that production has this commit's migrations", DEPLOY_STEP, 'Check the public site', 'Record the release in Sentry']) {
     assert.match(step(deploy, name), /\n {8}if: steps\.current\.outputs\.deploy != 'false'\n/, name);
@@ -89,7 +91,7 @@ it('tells IndexNow after every deploy that started, from a job of its own, witho
   const indexNow = job(workflow, 'indexnow');
   assert.match(indexNow, /\n {4}needs: \[settle, deploy\]\n {4}if: \$\{\{ !cancelled\(\) && needs\.deploy\.result != 'skipped' \}\}\n/);
   assert.match(indexNow, /\n {4}permissions:\n {6}contents: write\n {4}steps:/);
-  assert.match(indexNow, /concurrency:\n {6}group: indexnow\n {6}cancel-in-progress: false\n/);
+  assert.match(indexNow, /concurrency:\n {6}group: indexnow\n {6}cancel-in-progress: false\n {6}queue: max\n/);
   assert.match(indexNow, /ref: \$\{\{ needs\.settle\.outputs\.commit \}\}/);
   const tell = step(indexNow, 'Tell IndexNow about new and redated pages');
   assert.match(tell, /\n {8}continue-on-error: true\n/);

@@ -168,7 +168,10 @@ over commit waits while CI tests a newer one pushed before the oldest commit sti
 was handed over ([deploy-gate.mjs](../scripts/deploy-gate.mjs)): a burst deploys once, and
 pushes after it do not hold it back. If the newer one passes, this one's run stands down at
 its next look and the newer one's deploy includes it; if it fails, this one deploys. A commit
-pushed on its own deploys as soon as it passes, and none waits more than 30 minutes. GitHub's list of CI's runs sometimes leaves a run out, so the commit's own
+pushed on its own deploys as soon as it passes, and none waits more than 30 minutes. Runs
+handed over meanwhile queue instead of replacing one another, so none shows as cancelled.
+When its turn comes, in the wait or in the Deploy job, a run stands down and says why if a
+newer commit has passed since. GitHub's list of CI's runs sometimes leaves a run out, so the commit's own
 runs are read from the repository's list too. To deploy the newest tested commit at once, run
 `gh workflow run deploy.yml`.
 

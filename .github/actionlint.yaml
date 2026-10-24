@@ -3,7 +3,7 @@ self-hosted-runner:
   labels:
     - xcode-27
 paths:
-  .github/workflows/adopt-scraper.yml:
+  .github/workflows/*.yml:
     ignore:
       # GitHub takes concurrency's `queue` key; actionlint doesn't know it yet.
       - 'unexpected key "queue" for "concurrency" section'

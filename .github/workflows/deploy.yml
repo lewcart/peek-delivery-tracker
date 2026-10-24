@@ -23,9 +23,9 @@ defaults:
     shell: bash
 
 jobs:
-  # A newer commit handed over waits until the one here stands down, which it does at its next
-  # look once the newer one passed CI, so its run says why rather than showing as cancelled.
-  # A deploy under way is never cut off.
+  # A newer commit handed over queues until the one here stands down, which it does at its next
+  # look once the newer one passed CI. Every queued run gets its turn, so one that a newer commit
+  # replaced says why rather than showing as cancelled. A deploy under way is never cut off.
   settle:
     name: Wait for newer commits
     if: vars.DEPLOY_ENABLED == 'true'
@@ -34,6 +34,7 @@ jobs:
     concurrency:
       group: production-deploy-wait
       cancel-in-progress: false
+      queue: max
     outputs:
       deploy: ${{ steps.gate.outputs.deploy }}
       commit: ${{ steps.gate.outputs.commit }}
@@ -58,17 +59,18 @@ jobs:
     concurrency:
       group: production-deploy
       cancel-in-progress: false
+      queue: max
     env:
       COMMIT: ${{ needs.settle.outputs.commit }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.settle.outputs.commit }}
-      # Deploys go in order. Only re-running this job could put an older commit back, and it
-      # stops when a newer commit has passed CI since.
-      - name: Skip a re-run of a commit that a newer one replaced
+      # Deploys queue in order, though GitHub does not promise it. One that waited behind another,
+      # or a re-run of this job, could put an older commit back: it stops when a newer commit has
+      # passed CI since, and that one's deploy includes it.
+      - name: Skip a commit that a newer one replaced
         id: current
-        if: github.run_attempt != '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/deploy-gate.mjs "--commit=$COMMIT" --at-once
@@ -148,6 +150,7 @@ jobs:
     concurrency:
       group: indexnow
       cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
     steps:
