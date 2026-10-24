@@ -113,7 +113,8 @@ struct ParcelRoute: Sendable {
 
     let stops: [Stop]
     let legs: [Leg]
-    /// False when the newest scan has no place, so the last stop is only the last known one.
+    /// False when the newest scan has no place, so the last stop is only the last known one. A delivery is where
+    /// its scan was placed: a later delivery scan with no place doesn't make it unknown.
     let latestLocated: Bool
     /// Where the parcel is headed, until it gets there.
     let destination: RoutePlace?
@@ -128,8 +129,8 @@ struct ParcelRoute: Sendable {
     var origin: Stop? { stops.first }
     var current: Stop? { stops.last }
 
-    /// Places oldest first; nil for a scan without one.
-    init(places: [RoutePlace?], destination: RoutePlace? = nil) {
+    /// Places oldest first; nil for a scan without one. `deliveries` counts the newest scans that are deliveries.
+    init(places: [RoutePlace?], deliveries: Int = 0, destination: RoutePlace? = nil) {
         var stops: [Stop] = []
         for case let place? in places {
             if let last = stops.last {
@@ -167,7 +168,7 @@ struct ParcelRoute: Sendable {
         var seen = Set<String>()
         self.stops = stops
         self.legs = legs
-        latestLocated = places.last.map { $0 != nil } ?? false
+        latestLocated = places.suffix(max(deliveries, 1)).contains { $0 != nil }
         self.destination = remaining
         if let current = stops.last, let remaining {
             remainingKilometres = current.place.point.kilometres(to: remaining.point)
@@ -195,7 +196,7 @@ struct ParcelRoute: Sendable {
             var located = RoutePlace(place)
             if located.isCountry { located.name = countryName(located.country) }
             return located
-        }, destination: destination)
+        }, deliveries: ordered.reversed().prefix { $0.stage == .delivered }.count, destination: destination)
     }
 
     /// Both views only make sense when part of the journey, travelled or still to go, lies outside the close-up.

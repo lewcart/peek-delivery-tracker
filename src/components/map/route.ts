@@ -43,7 +43,10 @@ export interface Route {
   legs: Leg[];
   origin?: Stop;
   current?: Stop;
-  /** False when the newest scan has no place, so the last stop is only the last known one. */
+  /**
+   * False when the newest scan has no place, so the last stop is only the last known one. A delivery is where its
+   * scan was placed: a later delivery scan with no place doesn't make it unknown.
+   */
   latestLocated: boolean;
   destination?: Place;
   remainingKm?: number;
@@ -79,6 +82,13 @@ export const placeName = (place: Place, sites: boolean) => (sites && place.site)
 /** A country as a destination, drawn at its label point. */
 export function countryPlace(country: string, name: string, coordinate: Coordinate): Place {
   return { id: country, name, country, coordinate, precision: 'country' };
+}
+
+/** Whether the newest scan was placed or, when the newest scans are deliveries, any of them: the parcel is at the last stop. */
+function newestPlaced(scans: readonly Scan[]): boolean {
+  let start = scans.length - 1;
+  while (start > 0 && scans[start].stage === 'delivered' && scans[start - 1].stage === 'delivered') start -= 1;
+  return scans.slice(Math.max(start, 0)).some((scan) => scan.place);
 }
 
 export function buildRoute(scans: readonly Scan[], destination?: Place): Route {
@@ -124,7 +134,7 @@ export function buildRoute(scans: readonly Scan[], destination?: Place): Route {
     legs,
     origin: stops[0],
     current,
-    latestLocated: Boolean(scans.at(-1)?.place),
+    latestLocated: newestPlaced(scans),
     destination: remaining,
     remainingKm: current && remaining ? distanceKm(current.place.coordinate, remaining.coordinate) : undefined,
     km: legs.reduce((sum, leg) => sum + leg.km, 0),

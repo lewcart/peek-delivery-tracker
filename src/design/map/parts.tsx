@@ -113,7 +113,8 @@ export function RouteSummary({ parcel }: { parcel: Snapshot }) {
   const { route, latest } = parcel;
   const origin = route.origin;
   if (!origin) return null;
-  const delivered = latest.stage === 'delivered';
+  // A delivery the map can't place didn't happen at the last stop: that stop is where the parcel was last seen.
+  const delivered = latest.stage === 'delivered' && Boolean(route.latestLocated || route.destination);
   const end = route.destination ?? route.current!.place;
   const endLabel = delivered ? 'Delivered' : route.destination ? 'To' : route.latestLocated ? 'Now' : 'Last seen';
   const endDetail = delivered ? `${dayLabel(new Date(latest.at), parcel.now)}, ${time(new Date(latest.at))}`

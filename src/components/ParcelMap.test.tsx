@@ -138,7 +138,7 @@ describe('map summary', () => {
   const city = (name: string, country: string, longitude: number, latitude: number): Place => ({
     id: name, name, country, coordinate: [longitude, latitude], precision: 'city',
   });
-  const scan = (place?: Place): Scan => ({ at: '2026-09-28T10:00:00Z', description: 'Scan', stage: 'in_transit', place });
+  const scan = (place?: Place, stage: Stage = 'in_transit'): Scan => ({ at: '2026-09-28T10:00:00Z', description: 'Scan', stage, place });
   const tokyo = city('Tokyo', 'JP', 139.69, 35.69);
   const bern = city('Bern', 'CH', 7.45, 46.95);
   const sheet = (route: ReturnType<typeof buildRoute>, stage?: Stage) =>
@@ -177,10 +177,15 @@ describe('map summary', () => {
     expect(screen.getByText('Last seen').nextElementSibling).toHaveTextContent('Bern');
     unplaced.unmount();
     // A delivery somewhere the map can't place isn't a delivery at the last stop it can.
-    const elsewhere = sheet(buildRoute([scan(tokyo), scan(bern), scan()]), 'delivered');
+    const elsewhere = sheet(buildRoute([scan(tokyo), scan(bern, 'out_for_delivery'), scan(undefined, 'delivered')]), 'delivered');
     expect(screen.queryByText('Delivered')).not.toBeInTheDocument();
+    expect(screen.queryByText('Now')).not.toBeInTheDocument();
     expect(screen.getByText('Last seen').nextElementSibling).toHaveTextContent('Bern');
     elsewhere.unmount();
+    // A delivery placed in Bern stays there when a later copy of it has no place.
+    const copied = sheet(buildRoute([scan(tokyo), scan(bern, 'delivered'), scan(undefined, 'delivered')]), 'delivered');
+    expect(screen.getByText('Delivered').nextElementSibling).toHaveTextContent('Bern');
+    copied.unmount();
     sheet(buildRoute([scan(tokyo), scan()], countryPlace('CH', 'Switzerland', [7.46, 46.72])), 'delivered');
     expect(screen.getByText('Delivered').nextElementSibling).toHaveTextContent('Switzerland');
   });

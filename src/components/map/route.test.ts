@@ -40,6 +40,15 @@ describe('buildRoute', () => {
     expect(buildRoute([scan(china), scan(countryPlace('CH', 'Switzerland', [7.46, 46.72])), scan()]).latestLocated).toBe(false);
   });
 
+  it('puts a parcel where its delivery was placed, and nowhere else', () => {
+    // A later delivery scan with no place, such as another source's copy, leaves the parcel delivered in Bern.
+    expect(buildRoute([scan(zurich), scan(bern, 'delivered'), scan(undefined, 'delivered')]).latestLocated).toBe(true);
+    // A delivery the map can't place happened somewhere after the last stop it can.
+    expect(buildRoute([scan(zurich), scan(bern, 'out_for_delivery'), scan(undefined, 'delivered')]).latestLocated).toBe(false);
+    // Once something follows the delivery, only that newest scan says where the parcel is.
+    expect(buildRoute([scan(zurich), scan(bern, 'delivered'), scan(undefined, 'returned')]).latestLocated).toBe(false);
+  });
+
   it('draws the remaining leg until the parcel reaches its destination', () => {
     const switzerland = countryPlace('CH', 'Switzerland', [7.46, 46.72]);
     const travelling = buildRoute([scan(kyoto), scan(leipzig)], switzerland);

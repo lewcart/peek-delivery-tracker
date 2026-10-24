@@ -40,6 +40,24 @@ final class ParcelRouteTests: XCTestCase {
         XCTAssertTrue(ParcelRoute(places: [china, germany]).legs[0].isApproximate)
     }
 
+    func testAParcelIsWhereItsDeliveryWasPlacedAndNowhereElse() {
+        func event(_ hour: Int, _ stage: TrackingStage, _ place: EventPlace?) -> TrackingEvent {
+            TrackingEvent(id: UUID(), packageID: UUID(), stage: stage, description: "Scan", location: nil,
+                          occurredAt: "2026-09-28T\(hour):00:00Z", place: place)
+        }
+        let zurich = EventPlace(latitude: 47.37, longitude: 8.55, precision: .city, country: "CH", name: "Zürich")
+        let bern = EventPlace(latitude: 46.95, longitude: 7.45, precision: .city, country: "CH", name: "Bern")
+        // A later delivery scan with no place, such as another source's copy, leaves the parcel delivered in Bern.
+        XCTAssertTrue(ParcelRoute(events: [event(10, .inTransit, zurich), event(12, .delivered, bern), event(13, .delivered, nil)],
+                                  countryName: { $0 }).latestLocated)
+        // A delivery the map can't place happened somewhere after the last stop it can.
+        XCTAssertFalse(ParcelRoute(events: [event(10, .inTransit, zurich), event(12, .outForDelivery, bern), event(13, .delivered, nil)],
+                                   countryName: { $0 }).latestLocated)
+        // Once something follows the delivery, only that newest scan says where the parcel is.
+        XCTAssertFalse(ParcelRoute(events: [event(10, .inTransit, zurich), event(12, .delivered, bern), event(13, .returned, nil)],
+                                   countryName: { $0 }).latestLocated)
+    }
+
     func testTheRemainingLegLastsUntilArrival() {
         let travelling = ParcelRoute(places: [kyoto, leipzig], destination: switzerland)
         XCTAssertEqual(travelling.destination, switzerland)
