@@ -603,7 +603,14 @@ A parcel often changes carrier at the border. The origin history is always kept.
   pairs two scans of their own. A row of the earlier carrier at the same stage as another
   source's, within 60 s either way, is served with `relay_of`, that row's id (closest pairs
   first, one pair per row); when only the earlier carrier's row says where the scan was, the
-  other row is served with `relay_of` instead. The apps show the words of the row with
+  other row is served with `relay_of` instead. The new carrier may also tell the steps the
+  earlier one sent it over the posts' data exchange, placed only in the earlier carrier's
+  country and stamped when the message arrived (Slovenská pošta tells Poczta Polska's posting
+  and departure an hour or two late). A row of the new carrier placed in nothing but a country
+  the earlier carrier delivers in, and the new carrier does not, is served with `relay_of` the
+  earlier carrier's latest row of its stage when it follows every such row by up to three
+  hours. A gap of whole hours, to the second when both keep seconds, is one record read on two
+  clocks, a scraper's to fix, and pairs nothing. The apps show the words of the row with
   `relay_of` as a line under the other row instead of a step of its own. Of a pair, the row
   stored second announces no push or link alert, and the delivered email quotes the row
   without `relay_of` ([`relayCopies.ts`](../src/server/relayCopies.ts),

@@ -721,7 +721,7 @@ export class SupabaseClient {
       ['id', `in.(${page.join(',')})`],
       ['carrier_data->>original_carrier', 'not.is.null'],
       ['select', 'id,carrier,original_carrier:carrier_data->>original_carrier,active_tracking_carrier:carrier_data->>active_tracking_carrier,'
-        + 'tracking_events(id,stage,occurred_at,created_at,provider_event_id)'],
+        + 'tracking_events(id,stage,location,occurred_at,created_at,provider_event_id)'],
     ])}`))));
     return found.flat().map(({ original_carrier, active_tracking_carrier, ...row }) => ({
       ...row, carrier_data: { original_carrier, active_tracking_carrier },

@@ -11,21 +11,64 @@
  * row with `relay_of` under the other (eventPlaces.ts). Of the two rows, the one
  * that reached the parcel second announces nothing (push.ts).
  *
+ * The new carrier, in turn, may tell the steps the earlier one sent it over
+ * the posts' data exchange: the posting and the departure from its country,
+ * placed in that country alone and stamped when the message arrived, an hour
+ * or two after the earlier carrier's own scan (Slovenská pošta tells Poczta
+ * Polska's). Such a row goes under the earlier carrier's latest scan of its
+ * stage, the one it follows. A gap of whole hours, to the second when both
+ * keep seconds, is one record read on two clocks, which is the scraper's to
+ * fix, and is no such pair.
+ *
  * The earlier carrier also publishes some of its own scans late, after the
  * new carrier's later ones are stored (trackingSync.ts asks it again for a day
  * after the handoff). Those announce nothing either.
  */
+import { CARRIER_DEFINITIONS, type CarrierId } from 'universal-parcel-scraper';
+import { trackingPlace } from 'universal-parcel-scraper/app';
 import { isRecord, type JsonObject } from './types';
 
 /** A copy is stamped within this of the scan it repeats, either way. */
 const RELAY_WINDOW_MS = 60_000;
+/** A step the new carrier learnt from the earlier one's message is stamped up to this long after the earlier one's scan. */
+const EXCHANGE_WINDOW_MS = 3 * 60 * 60_000;
+const SECOND_MS = 1000;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+
+/** The carrier tracking a parcel now: the one it was handed over to, or its own. */
+function currentCarrier(row: JsonObject): string {
+  const data = isRecord(row.carrier_data) ? row.carrier_data : {};
+  return typeof data.active_tracking_carrier === 'string' ? data.active_tracking_carrier : String(row.carrier ?? '');
+}
 
 /** The carrier a parcel was handed over from, while another one tracks it; null for a parcel of one carrier. */
 export function earlierCarrier(row: JsonObject): string | null {
   const data = isRecord(row.carrier_data) ? row.carrier_data : {};
   const earlier = typeof data.original_carrier === 'string' ? data.original_carrier : '';
-  const current = typeof data.active_tracking_carrier === 'string' ? data.active_tracking_carrier : String(row.carrier ?? '');
-  return earlier && earlier !== current ? earlier : null;
+  return earlier && earlier !== currentCarrier(row) ? earlier : null;
+}
+
+/**
+ * Whether two times lie whole hours apart: to the second when both keep seconds, otherwise to the minute. One record
+ * read on two clocks shows such a gap.
+ */
+function wholeHours(at: number, other: number): boolean {
+  const seconds = (time: number) => Math.floor(time / SECOND_MS) % 60 !== 0;
+  const unit = seconds(at) && seconds(other) ? SECOND_MS : MINUTE_MS;
+  return (Math.floor(at / unit) - Math.floor(other / unit)) * unit % HOUR_MS === 0;
+}
+
+/** The countries a carrier delivers in under its own name. */
+function homes(carrier: string): readonly string[] {
+  return CARRIER_DEFINITIONS[carrier as CarrierId]?.countries ?? [];
+}
+
+/** The country a scan's place names, when it names nothing else. */
+function countryOnly(location: unknown): string | null {
+  if (typeof location !== 'string' || !location.trim()) return null;
+  const { country, place } = trackingPlace(location);
+  return country && !place ? country : null;
 }
 
 /** Who stored a scan: the carrier its identity starts with (`unknown` for a universal provider, `app` for Peek's own rows). */
@@ -34,28 +77,43 @@ function source(event: JsonObject): string {
 }
 
 /**
- * The earlier carrier's scans that repeat a scan of another source, each with
- * the id of the scan it repeats: the same stage, within a minute. The closest
- * pairs are made first and a scan is in one pair at most, so two scans of one
- * minute that the earlier carrier tells once stay two rows.
+ * The relay pairs of a handed-over parcel, each copy with the id of the scan it repeats. The earlier carrier's scans
+ * repeat a scan of another source at the same stage within a minute, the closest pairs first. Then a row of the new
+ * carrier placed only in a country the earlier carrier delivers in, and the new carrier does not, repeats the earlier
+ * carrier's latest scan of its stage, when it follows every such scan by up to three hours but not by whole hours.
+ * A scan is in one pair at most, so two scans of one minute that the earlier carrier tells once stay two rows.
  */
 export function relayCopies(row: JsonObject): Map<string, string> {
   const earlier = earlierCarrier(row);
   const pairs = new Map<string, string>();
   if (!earlier || !Array.isArray(row.tracking_events)) return pairs;
   const scans = row.tracking_events.filter(isRecord)
-    .map((event) => ({ id: String(event.id), stage: event.stage, source: source(event), at: Date.parse(String(event.occurred_at)) }))
+    .map((event) => ({
+      id: String(event.id), stage: event.stage, source: source(event), at: Date.parse(String(event.occurred_at)),
+      country: countryOnly(event.location),
+    }))
     .filter((scan) => Number.isFinite(scan.at) && scan.source !== '' && scan.source !== 'app');
   const candidates = scans.filter((copy) => copy.source === earlier).flatMap((copy) => scans
     .filter((scan) => scan.source !== earlier && scan.stage === copy.stage && Math.abs(scan.at - copy.at) <= RELAY_WINDOW_MS)
     .map((scan) => ({ copy, scan, gap: Math.abs(scan.at - copy.at) })));
-  candidates.sort((a, b) => a.gap - b.gap || a.copy.at - b.copy.at
-    || a.copy.id.localeCompare(b.copy.id) || a.scan.id.localeCompare(b.scan.id));
+  const current = currentCarrier(row);
+  const exchanged = scans.filter((copy) => copy.source === current && copy.country !== null
+    && homes(earlier).includes(copy.country) && !homes(current).includes(copy.country)).flatMap((copy) => {
+    const before = scans.filter((scan) => scan.source === earlier && scan.stage === copy.stage);
+    const scan = before.reduce<(typeof before)[number] | null>((latest, other) => !latest || other.at > latest.at ? other : latest, null);
+    return scan && copy.at > scan.at && copy.at - scan.at <= EXCHANGE_WINDOW_MS && !wholeHours(copy.at, scan.at)
+      ? [{ copy, scan, gap: copy.at - scan.at }] : [];
+  });
   const paired = new Set<string>();
-  for (const { copy, scan } of candidates) {
-    if (pairs.has(copy.id) || paired.has(scan.id)) continue;
-    pairs.set(copy.id, scan.id);
-    paired.add(scan.id);
+  for (const list of [candidates, exchanged]) {
+    list.sort((a, b) => a.gap - b.gap || a.copy.at - b.copy.at
+      || a.copy.id.localeCompare(b.copy.id) || a.scan.id.localeCompare(b.scan.id));
+    for (const { copy, scan } of list) {
+      if (paired.has(copy.id) || paired.has(scan.id)) continue;
+      pairs.set(copy.id, scan.id);
+      paired.add(copy.id);
+      paired.add(scan.id);
+    }
   }
   return pairs;
 }

@@ -55,6 +55,38 @@ describe('relayCopies', () => {
     ]))).toEqual(new Map([['a', 'border'], ['b', 'arrival']]));
   });
 
+  it('pairs the new post\'s record of a step the earlier one sent it under that post\'s latest scan of the stage', () => {
+    // Slovenská pošta stamps Poczta Polska's posting and departure when their messages arrive, placed in Poland alone.
+    const placed = (id: string, source: string, stage: string, at: string, location: string) => ({ ...scan(id, source, stage, at), location });
+    const rows = [
+      placed('posted', 'poczta-polska', 'accepted', '2026-10-23T07:44:21Z', 'Post office Łódź'),
+      placed('posted-message', 'slovenska-posta', 'accepted', '2026-10-23T08:45:12Z', 'Poland'),
+      placed('transport', 'poczta-polska', 'in_transit', '2026-10-23T23:37:48Z', 'Transshipment'),
+      placed('departed', 'poczta-polska', 'in_transit', '2026-10-24T00:40:19Z', 'Sorting centre Warszawa'),
+      placed('departed-message', 'slovenska-posta', 'in_transit', '2026-10-24T02:05:01Z', 'Poland'),
+    ];
+    const parcel = (tracking_events: object[]) => ({
+      carrier: 'poczta-polska', carrier_data: { original_carrier: 'poczta-polska', active_tracking_carrier: 'slovenska-posta' }, tracking_events,
+    });
+    expect(relayCopies(parcel(rows))).toEqual(new Map([['posted-message', 'posted'], ['departed-message', 'departed']]));
+    // The new post's own scans, a town, a step before the earlier post's latest of its stage (the arrival at the office
+    // of exchange, ahead of the departure), one over three hours on or whole hours away (one record on two clocks), and
+    // a provider's row stay on their own.
+    expect(relayCopies(parcel([...rows.slice(0, 4),
+      placed('home', 'slovenska-posta', 'in_transit', '2026-10-24T02:05:01Z', 'Slovakia'),
+      placed('town', 'slovenska-posta', 'in_transit', '2026-10-24T02:06:01Z', 'Warszawa, Poland'),
+      placed('exchange', 'slovenska-posta', 'in_transit', '2026-10-24T00:05:01Z', 'Poland'),
+      placed('provider', 'unknown', 'in_transit', '2026-10-24T02:05:01Z', 'Poland'),
+    ]))).toEqual(new Map([['posted-message', 'posted']]));
+    for (const at of ['2026-10-24T03:41:00Z', '2026-10-24T01:40:19Z', '2026-10-24T02:40:00Z']) {
+      expect(relayCopies(parcel([...rows.slice(0, 4), placed('message', 'slovenska-posta', 'in_transit', at, 'Poland')])))
+        .toEqual(new Map([['posted-message', 'posted']]));
+    }
+    // A copy within a minute pairs first.
+    expect(relayCopies(parcel([...rows, placed('copy', 'slovenska-posta', 'in_transit', '2026-10-24T00:40:00Z', 'Poland')])))
+      .toEqual(new Map([['posted-message', 'posted'], ['departed', 'copy']]));
+  });
+
   it('pairs with a universal provider\'s row of the new leg, and only in a parcel that was handed over', () => {
     const rows = [
       scan('in-france', 'unknown', 'in_transit', '2026-10-06T05:18:36Z'),

@@ -998,7 +998,7 @@ describe('notification reads', () => {
     expect(page.get('id')).toBe('in.(package-1,package-2)');
     // A parcel of one carrier has nothing to pair.
     expect(page.get('carrier_data->>original_carrier')).toBe('not.is.null');
-    expect(page.get('select')).toContain('tracking_events(id,stage,occurred_at,created_at,provider_event_id)');
+    expect(page.get('select')).toContain('tracking_events(id,stage,location,occurred_at,created_at,provider_event_id)');
   });
 
   it('reads the scans of parcels with a confirmed carrier only when a universal provider wrote a new row', async () => {
