@@ -312,7 +312,12 @@ provider relays are filed under the carrier `unknown`, which has no carrier map:
 scraper's universal map, which reads them as the providers do, stands in for one. Such a
 scan is collected only when that map leaves its wording unread, or reads it as another
 stage than the scan's, short of a hand-over it reads as accepted that the sync filed in
-transit. There is one row per carrier, provider code and normalized
+transit. A universal provider's copy of a direct carrier's scan is that carrier's wording
+instead, filed under it and read by its map: a copy the sync matched to a row the carrier
+holds, with that row's code and stage, when it keeps the row's words or the map knows the
+copy's, and an unmatched copy whose words the map of a carrier of the parcel stages as the
+provider did. A third carrier's scan a provider relays stays under `unknown`.
+There is one row per carrier, provider code and normalized
 description. Wording that names a shop or a postcode is kept as one template instead
 (`PLACE_WORDINGS` in `src/server/trackingSync.ts`, such as `received at <store> local express
 <postcode>`): every place shares its row, which the review closes once, and no place is stored.

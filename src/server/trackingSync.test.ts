@@ -13,6 +13,7 @@ import { eventTimestamp } from 'universal-parcel-scraper/app';
 import {
   CarrierTrackingAdapter,
   buildEvents,
+  carrierCopies,
   classifyStage,
   collectMappedStatusKeys,
   collectStatusObservations,
@@ -619,6 +620,58 @@ describe('status observation collection', () => {
       provider_event_id: `ctt:${index}`, raw_data: { stage_source: 'none' },
     }));
     expect(collectStatusObservations(many, 'ctt')).toHaveLength(MAX_STATUS_OBSERVATIONS_PER_SYNC);
+  });
+
+  it('files a universal provider\'s copy of a direct carrier\'s scan under that carrier, read by its map', () => {
+    // The key an unmapped observation of a carrier's wording carries.
+    const carrierKey = (carrier: string, description: string) => collectStatusObservations([{ package_id: 'package-1',
+      stage: 'pending', description, provider_event_id: `${carrier}:key`, raw_data: { stage_source: 'none' } }], carrier)[0]?.observation_key;
+    const parcel = { id: 'package-1', carrier: 'pitney-bowes' };
+    const stored = [
+      { provider_event_id: 'pitney-bowes:closed', stage: 'in_transit', description: 'Container Closed' },
+      { provider_event_id: 'pitney-bowes:sorted', stage: 'in_transit', description: 'Parcel sorted at the regional hub' },
+      // Pitney Bowes took this universal row over, so it names no provider.
+      { provider_event_id: 'unknown:measured', stage: 'in_transit', description: 'First Dimension Event' },
+      { provider_event_id: 'unknown:relayed', stage: 'pending', description: 'Synthetic local note', universal_provider: 'ParcelsApp' },
+    ];
+    const copy = (id: string, description: string, stage: string, stage_source: string) => ({
+      package_id: 'package-1', provider_event_id: `unknown:${id}`, description, stage, raw_data: { stage_source, provider_code: 'InTransit_Other' },
+    });
+    const events = [
+      // A provider's copies of Pitney Bowes's scans, read at its own stage.
+      copy('closed-copy', 'Container closed', 'pending', 'none'),
+      copy('sorted-copy', 'Parcel sorted at the regional hub', 'in_transit', 'wording:language'),
+      copy('measured-copy', 'First dimension event', 'pending', 'none'),
+      // A scan Pitney Bowes has not given yet, in words its map stages as the provider did.
+      copy('customs', 'Customs Clearance', 'customs', 'wording:language'),
+      // The next carrier's scans the provider relays.
+      copy('local', 'Synthetic local carrier message', 'pending', 'none'),
+      copy('relayed-copy', 'Synthetic local note', 'pending', 'none'),
+    ];
+    const matched = new Map([['unknown:closed-copy', 'pitney-bowes:closed'], ['unknown:sorted-copy', 'pitney-bowes:sorted'],
+      ['unknown:measured-copy', 'unknown:measured'], ['unknown:relayed-copy', 'unknown:relayed']]);
+    const copies = carrierCopies(parcel, events, stored, matched);
+    expect(copies).toEqual(new Map([
+      ['unknown:closed-copy', { carrier: 'pitney-bowes', providerCode: null, stage: 'in_transit' }],
+      ['unknown:sorted-copy', { carrier: 'pitney-bowes', providerCode: null, stage: 'in_transit' }],
+      ['unknown:measured-copy', { carrier: 'pitney-bowes', providerCode: null, stage: 'in_transit' }],
+      ['unknown:customs', { carrier: 'pitney-bowes', providerCode: null, stage: 'customs' }],
+    ]));
+    // Pitney Bowes's map gives three their stage; the fourth is Pitney Bowes's own wording to review.
+    expect(collectStatusObservations(events, 'unknown', copies).map((observation) => [
+      observation.carrier, observation.provider_code, observation.description_normalized, observation.chosen_stage,
+    ])).toEqual([
+      ['pitney-bowes', null, 'parcel sorted at the regional hub', 'in_transit'],
+      ['unknown', 'InTransit_Other', 'synthetic local carrier message', 'pending'],
+      ['unknown', 'InTransit_Other', 'synthetic local note', 'pending'],
+    ]);
+    expect(collectMappedStatusKeys(events, 'unknown', copies)).toEqual(
+      ['Container Closed', 'First Dimension Event', 'Customs Clearance'].map((wording) => carrierKey('pitney-bowes', wording)));
+    // Without a carrier of its own, the parcel's copies stay the provider's.
+    expect(carrierCopies({ ...parcel, carrier: 'unknown' }, events, stored, matched)).toEqual(new Map([
+      ['unknown:closed-copy', { carrier: 'pitney-bowes', providerCode: null, stage: 'in_transit' }],
+      ['unknown:sorted-copy', { carrier: 'pitney-bowes', providerCode: null, stage: 'in_transit' }],
+    ]));
   });
 
   it('skips events whose stage came from the carrier map', () => {
@@ -6227,6 +6280,43 @@ describe('scans a carrier and a universal provider both report', () => {
     expect(await sync()).toEqual([own]);
     expect((client.applyTrackingSync.mock.calls.at(-1) as unknown[] | undefined)?.[4]).toEqual([copy]);
     expect([...store.rows.keys()]).toEqual([own]);
+  });
+
+  it('reviews a provider\'s copies of the carrier\'s scans as the carrier\'s wording', async () => {
+    vi.spyOn(observability, 'reportRoutingEvent').mockImplementation(() => undefined);
+    const store = eventStore();
+    const client = { ...store.client,
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-01-05T12:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined),
+    };
+    // Pitney Bowes's map stages the first scan; the shared rules stage the second.
+    const closed = { time: '2026-01-03T13:15:42Z', location: 'Hub City, EX', description: 'Container Closed', stage: 'in_transit', stage_source: 'carrier_map' };
+    const sorted = { time: '2026-01-03T09:00:00Z', location: 'Hub City, EX', description: 'Parcel sorted at the regional hub', stage: 'in_transit', stage_source: 'wording:language' };
+    // ParcelsApp copies both to the minute without the place and reads the first by the universal map.
+    const copied = [{ ...closed, location: undefined, stage_source: 'universal_map' }, { ...sorted, location: undefined }];
+    const answer = (events: JsonObject[], provider?: string): CarrierResult => ({ ...result(events as unknown as Scan[]),
+      ...(provider ? { tracking_provider: provider } : {}) });
+    const adapter = {
+      fetch: vi.fn().mockResolvedValueOnce(answer([closed, sorted])).mockRejectedValueOnce(new Error('Pitney Bowes tracking is unavailable')),
+      fetchUniversal: vi.fn().mockResolvedValue(answer(copied, 'ParcelsApp')),
+    };
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, now);
+    const sync = async () => {
+      await service.syncPackage({ id: 'pb-copies', user_id: 'owner', carrier: 'pitney-bowes', tracking_number: 'UPAAA000000000000001',
+        current_stage: store.rows.size ? 'in_transit' : 'pending', [STORED_EVENT_IDENTITIES]: store.identities() });
+      return client.recordTrackingStatusObservations.mock.calls.at(-1) as [JsonObject[], string[], string];
+    };
+    const own = providerEventId('pitney-bowes', sorted.time, sorted.location, sorted.description);
+
+    const [carrierObserved, carrierMapped] = await sync();
+    expect(carrierObserved).toEqual([expect.objectContaining({ carrier: 'pitney-bowes', description_normalized: 'parcel sorted at the regional hub' })]);
+    expect(adapter.fetchUniversal).not.toHaveBeenCalled();
+    // Pitney Bowes is down: the provider's copies are its scans, reviewed against its map and sampled from its rows.
+    const [copyObserved, copyMapped] = await sync();
+    expect(adapter.fetchUniversal).toHaveBeenCalledOnce();
+    expect(copyObserved).toEqual([expect.objectContaining({ observation_key: carrierObserved[0]!.observation_key,
+      carrier: 'pitney-bowes', provider_event_id: own })]);
+    expect(copyMapped).toEqual(carrierMapped);
   });
 
   it('records no offset for a provider\'s copy UPS holds in its own minute, 12 h after another scan of the place', async () => {

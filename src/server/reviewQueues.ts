@@ -178,6 +178,15 @@ export function universalMapAgrees(observation: JsonObject): boolean {
 }
 
 /**
+ * Whether the observed carrier's own map gives the observed wording the stage it was seen
+ * with: how a universal provider's copy of that carrier's scan counts as mapped (trackingSync.ts).
+ */
+export function carrierMapAgrees(observation: JsonObject): boolean {
+  const answer = observedAnswer(observation);
+  return answer.kind === 'mapped' && answer.stage === observation.chosen_stage;
+}
+
+/**
  * How the scraper this server runs closes an observed wording: as mapped when
  * its carrier's status map gives it a stage, as ignored with the map's note
  * when the map leaves it without one on purpose. Null while no map knows it.

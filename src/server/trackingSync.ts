@@ -56,11 +56,11 @@ import { directHistoryNumber, directLocalHistory, directLocalSnapshotIsOlder, ha
 import { carrierMovedAt, eventStage, showsDelivery, UNCONFIRMED_DELIVERY_MS } from './disputedDelivery';
 import { DIRECT_HISTORY, directHistory } from './providerCopies';
 import { earlierCarrier } from './relayCopies';
-import { eventTimestamp, latestResultTime, resultTimezone, SWISS_POST_GLOBAL_STATUSES } from 'universal-parcel-scraper/app';
+import { eventTimestamp, latestResultTime, resultTimezone, statusMapAnswer, SWISS_POST_GLOBAL_STATUSES } from 'universal-parcel-scraper/app';
 import { trackingSupportEvidence } from './trackingSupport';
 import { noteTypoCandidate } from './typoCandidate';
 import { confirmationLookup } from './trackingHealth';
-import { deployedVersion, statusMapClosings, universalMapAgrees } from './reviewQueues';
+import { carrierMapAgrees, deployedVersion, statusMapClosings, universalMapAgrees } from './reviewQueues';
 import { carrierLookupKey, recognitionKey, SharedLookups, universalLookupKey, type ParcelLookups } from './sharedLookups';
 
 const MAX_PACKAGES_PER_OWNER_PER_SYNC = 5;
@@ -755,47 +755,110 @@ function observedTemplate(description: string): string {
   return PLACE_WORDINGS.find(([pattern]) => pattern.test(description))?.[1] ?? description;
 }
 
+/** How a universal provider's copy of a direct carrier's scan is observed. */
+export interface CarrierCopy {
+  /** The carrier whose scan it copies, which its wording is filed under. */
+  carrier: string;
+  /** That carrier's code for the scan: the provider's own code says nothing about the carrier's wording. */
+  providerCode: string | null;
+  /** The stage the parcel shows for the scan. */
+  stage: string;
+}
+
+/**
+ * The universal provider's scans of a check that copy a direct carrier's scan, by identity,
+ * each with how it is observed (`CarrierCopy`). A copy the sync matched to a row a carrier
+ * holds (its prefix, or a universal row naming no provider, which the carrier tracking the
+ * parcel took over) copies that carrier's scan: in the row's words, or in words that carrier's
+ * map knows with the row's code, it is observed with the row's code and stage. An unmatched
+ * copy is the scan of one of the parcel's own carriers (the one tracking it, the one it is
+ * filed under, the one that handed it over) whose map gives its words the stage it was seen
+ * with. Any other scan, a third carrier's a provider relays or a provider's rewording, stays
+ * the provider's (`unknown`). `matched` maps an identity of the check to the stored row it
+ * takes over or repeats.
+ */
+export function carrierCopies(
+  parcel: JsonObject,
+  events: readonly JsonObject[],
+  stored: readonly JsonObject[],
+  matched: ReadonlyMap<string, string>,
+): Map<string, CarrierCopy> {
+  const copies = new Map<string, CarrierCopy>();
+  const data = isRecord(parcel.carrier_data) ? parcel.carrier_data : {};
+  const filed = String(parcel.carrier ?? '');
+  const tracking = typeof data.active_tracking_carrier === 'string' && data.active_tracking_carrier ? data.active_tracking_carrier : filed;
+  const own = [...new Set([tracking, filed, String(data.original_carrier ?? '')])].filter(directCarrier);
+  const rows = new Map(stored.map((row) => [String(row.provider_event_id ?? ''), row]));
+  const code = (value: unknown) => typeof value === 'string' && value ? value : null;
+  for (const event of events) {
+    const id = String(event.provider_event_id ?? '');
+    const stage = String(event.stage ?? '');
+    const description = normalizeObservedDescription(String(event.description ?? ''));
+    if (!id.startsWith('unknown:') || !stage || !description) continue;
+    const row = rows.get(matched.get(id) ?? '');
+    const source = String(row?.provider_event_id ?? '').split(':')[0]!;
+    const holder = !row || source === 'app' ? '' : source !== 'unknown' ? source : code(row.universal_provider) ? '' : tracking;
+    if (row && directCarrier(holder)) {
+      const copy = { carrier: holder, providerCode: code(row.provider_code), stage: String(row.stage ?? '') };
+      if (copy.stage && (normalizeObservedDescription(String(row.description ?? '')) === description
+        || statusMapAnswer({ carrier: holder, providerCode: copy.providerCode, description }).kind !== 'unknown')) {
+        copies.set(id, copy);
+        continue;
+      }
+    }
+    const carrier = own.find((candidate) => {
+      const answer = statusMapAnswer({ carrier: candidate, providerCode: null, description });
+      return answer.kind === 'mapped' && answer.stage === stage;
+    });
+    if (carrier) copies.set(id, { carrier, providerCode: null, stage });
+  }
+  return copies;
+}
+
 /**
  * How one event's wording is observed: its key, carrier, code, stage source
- * and whether a map gave its stage; null without wording or stage.
+ * and whether a map gave its stage; null without wording or stage. A universal
+ * provider's copy of a carrier's scan is observed as `copies` says.
  */
-function observedWording(event: JsonObject, fallbackCarrierId: string) {
+function observedWording(event: JsonObject, fallbackCarrierId: string, copies: ReadonlyMap<string, CarrierCopy>) {
   const raw = isRecord(event.raw_data) ? event.raw_data : {};
   const source = typeof raw.stage_source === 'string' ? raw.stage_source : '';
   const description = normalizeObservedDescription(String(event.description ?? ''));
-  const chosenStage = String(event.stage ?? '');
-  if (!source || !description || !chosenStage) return null;
   const eventId = String(event.provider_event_id ?? '');
+  const copy = copies.get(eventId);
+  const chosenStage = copy?.stage ?? String(event.stage ?? '');
+  if (!source || !description || !chosenStage) return null;
   // Every provider event id is prefixed with the carrier that served it, so a
   // timeline merged from two carriers keeps each wording with its own.
-  const carrier = (eventId.split(':')[0] || fallbackCarrierId).slice(0, 100);
+  const carrier = (copy?.carrier ?? (eventId.split(':')[0] || fallbackCarrierId)).slice(0, 100);
   if (!carrier) return null;
-  const providerCode = typeof raw.provider_code === 'string' && raw.provider_code
-    ? raw.provider_code.slice(0, 100)
-    : null;
+  const code = copy ? copy.providerCode : raw.provider_code;
+  const providerCode = typeof code === 'string' && code ? code.slice(0, 100) : null;
   const wording = observedTemplate(description);
   const key = createHash('sha256')
     .update(JSON.stringify([carrier, providerCode ?? '', wording]))
     .digest('hex');
-  const mapped = source === 'carrier_map' || universalMapAgrees({
-    carrier, provider_code: providerCode, description_normalized: description, chosen_stage: chosenStage,
-  });
+  const observation = { carrier, provider_code: providerCode, description_normalized: description, chosen_stage: chosenStage };
+  const mapped = source === 'carrier_map' || (copy ? carrierMapAgrees(observation) : universalMapAgrees(observation));
   return { key, carrier, providerCode, description: wording, source, chosenStage, eventId, mapped };
 }
 
 /**
  * Collects the carrier wording no map gave its stage, so an operator can map
  * it later: the carrier's map, or the universal map for a universal
- * provider's scan (reviewQueues.ts). The package and event identifiers travel
+ * provider's scan (reviewQueues.ts). A universal provider's copy of a direct
+ * carrier's scan (`carrierCopies`) is that carrier's wording, which its map
+ * reads. The package and event identifiers travel
  * with the observation only to resolve one sample event row; they are not stored.
  */
 export function collectStatusObservations(
   events: readonly JsonObject[],
   fallbackCarrierId: string,
+  copies: ReadonlyMap<string, CarrierCopy> = new Map(),
 ): StatusObservation[] {
   const observations = new Map<string, StatusObservation>();
   for (const event of events) {
-    const observed = observedWording(event, fallbackCarrierId);
+    const observed = observedWording(event, fallbackCarrierId, copies);
     if (!observed || observed.mapped || observations.has(observed.key)) continue;
     observations.set(observed.key, {
       observation_key: observed.key,
@@ -818,8 +881,12 @@ export function collectStatusObservations(
  * carried it. An open observation with one of them is covered by the scraper
  * this server runs.
  */
-export function collectMappedStatusKeys(events: readonly JsonObject[], fallbackCarrierId: string): string[] {
-  const observed = events.flatMap((event) => observedWording(event, fallbackCarrierId) ?? []);
+export function collectMappedStatusKeys(
+  events: readonly JsonObject[],
+  fallbackCarrierId: string,
+  copies: ReadonlyMap<string, CarrierCopy> = new Map(),
+): string[] {
+  const observed = events.flatMap((event) => observedWording(event, fallbackCarrierId, copies) ?? []);
   const unmapped = new Set(observed.filter(({ mapped }) => !mapped).map(({ key }) => key));
   const keys = new Set<string>();
   for (const { key, mapped } of observed) {
@@ -1362,13 +1429,17 @@ export class TrackingSyncService {
   // Unmapped carrier wording is review material, never a reason to fail a
   // refresh: a failed write is logged each time and reported to Sentry once.
   // The events keep their computed identities, whose prefix names the carrier
-  // that worded them; a reused identity only locates the sample row. Wording
+  // that worded them, but a universal provider's copy of a direct carrier's
+  // scan is that carrier's wording (`carrierCopies`); a reused identity only
+  // locates the sample row. Wording
   // the scraper mapped is sent too, so its open observation closes, and
   // wording its carrier map leaves unmapped on purpose closes as recorded.
   private async recordStatusObservations(
     events: JsonObject[],
     carrierId: string,
     context: SyncRunContext,
+    parcel: JsonObject,
+    stored: readonly JsonObject[] = [],
     reusedIdentities: ReadonlyMap<string, string> = new Map(),
     localEvents: JsonObject[] = [],
   ): Promise<void> {
@@ -1376,11 +1447,13 @@ export class TrackingSyncService {
       const raw = isRecord(event.raw_data) ? event.raw_data : {};
       if (typeof raw.stage_source === 'string') recordStatusMapping(carrierId, raw.stage_source);
     }
-    const observations = collectStatusObservations([...events, ...localEvents], carrierId).map((observation) => {
-      const stored = reusedIdentities.get(observation.provider_event_id);
-      return stored ? { ...observation, provider_event_id: stored } : observation;
+    const all = [...events, ...localEvents];
+    const copies = carrierCopies(parcel, all, stored, reusedIdentities);
+    const observations = collectStatusObservations(all, carrierId, copies).map((observation) => {
+      const row = reusedIdentities.get(observation.provider_event_id);
+      return row ? { ...observation, provider_event_id: row } : observation;
     });
-    const mapped = collectMappedStatusKeys([...events, ...localEvents], carrierId);
+    const mapped = collectMappedStatusKeys(all, carrierId, copies);
     if (observations.length === 0 && mapped.length === 0) return;
     const version = deployedVersion();
     try {
@@ -2100,7 +2173,7 @@ export class TrackingSyncService {
         anomalies = [...anomalies, 'provider_clock_offset'];
         anomalyScans.provider_clock_offset = offsetScan;
       }
-      await this.recordStatusObservations(eventsToPersist, sourceCarrierId, context, new Map([...matches.reused, ...matches.skipped]), [
+      await this.recordStatusObservations(eventsToPersist, sourceCarrierId, context, parcel, stored, new Map([...matches.reused, ...matches.skipped]), [
         ...(fetched.earlierResult && fetched.earlierCarrierId
           ? localStatusObservationEvents(parcel, fetched.earlierResult, fetched.earlierCarrierId) : []),
         ...localStatusObservationEvents(parcel, result, sourceCarrierId),
