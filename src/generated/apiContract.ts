@@ -1424,7 +1424,7 @@ export const CARRIER_CAPABILITIES = {
     ],
     "detectionRules": [
       {
-        "pattern": "^(?!YW[A-Z]{3}\\d{12}$|(?:GF|CI)[A-Z]{2}\\d{13}$|CNG\\d{14}$)[A-Z0-9]{12}(?:(?:0[1-9]|[1-8]\\d|9[0-5]|97|98)\\d{3}|[BL][1-9]\\d{3})$",
+        "pattern": "^(?!YW[A-Z]{3}\\d{12}$|YWE\\d{14}$|(?:GF|CI)[A-Z]{2}\\d{13}$|CNG\\d{14}$)[A-Z0-9]{12}(?:(?:0[1-9]|[1-8]\\d|9[0-5]|97|98)\\d{3}|[BL][1-9]\\d{3})$",
         "confidence": "low"
       },
       {
@@ -11647,6 +11647,10 @@ export const CARRIER_CAPABILITIES = {
       },
       {
         "pattern": "^IM\\d{14}$",
+        "confidence": "low"
+      },
+      {
+        "pattern": "^49\\d{12}$",
         "confidence": "low"
       },
       {
@@ -31036,6 +31040,43 @@ export const CARRIER_CAPABILITIES = {
         "checksum": "s10"
       }
     ]
+  },
+  "ywe": {
+    "displayName": "YWE",
+    "aliases": [
+      "YanwenExpress",
+      "YWE Logistics"
+    ],
+    "countries": [
+      "US"
+    ],
+    "color": "#80ca35",
+    "selectable": true,
+    "timezone": "UTC",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "universal"
+    },
+    "trackingUrlTemplate": "https://www.yanwenexpress.com/tracking.html?label={trackingNumber}",
+    "linkRules": [
+      {
+        "domains": [
+          "www.yanwenexpress.com",
+          "yanwenexpress.com"
+        ],
+        "pathPattern": "^/tracking\\.html$",
+        "params": [
+          "label"
+        ]
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^YWE\\d{14}$",
+        "confidence": "high"
+      }
+    ],
+    "trackingSearchUrl": "https://www.yanwenexpress.com/tracking.html"
   }
 } as const;
 
@@ -31878,7 +31919,8 @@ export const CARRIER_IDS = [
   "dayone",
   "shouwu",
   "meihoo-pegasus",
-  "yypost"
+  "yypost",
+  "ywe"
 ] as const;
 export type ApiCarrierId = (typeof CARRIER_IDS)[number];
 
