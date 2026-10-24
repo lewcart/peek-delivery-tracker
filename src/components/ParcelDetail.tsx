@@ -557,7 +557,10 @@ export function ParcelDetail({
           </form>
         ) : (
           <div className="detail__title-row">
-            <h1 className="detail__title">{parcel.label || t('common.parcel')}</h1>
+            {/* The name is pressed to change it, as the ••• menu's item does. */}
+            <h1 className="detail__title"><button type="button" className="detail__title-button" title={t('detail.editTitle')} onClick={beginTitleEdit}>
+              {parcel.label || t('common.parcel')}
+            </button></h1>
             <ParcelStamp parcel={parcel} />
           </div>
         )}

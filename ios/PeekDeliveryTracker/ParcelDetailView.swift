@@ -361,10 +361,20 @@ struct ParcelDetailView: View {
                     }
                 }
                 HStack(alignment: .center, spacing: 18) {
-                    Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
+                    let name = Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
                         .font(.title2.weight(.semibold))
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // The name is tapped to change it, as the ••• menu's item does.
+                    Group {
+                        if sample == nil {
+                            Button { chose(.rename, on: parcel) } label: { name.multilineTextAlignment(.leading) }
+                                .buttonStyle(.plain)
+                                .accessibilityHint(localizer.text("detail.editTitle"))
+                        } else {
+                            name
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     DeliveryPostageStamp(parcel: parcel, identity: branding, width: 50, appeared: true)
                 }
                 let sender = parcel.carrierData?.senderName?.nonEmpty

@@ -63,6 +63,7 @@
 }
 .detail--postcard .detail__title-row { align-items: center; margin-top: 16px; gap: 20px; }
 .detail--postcard .detail__title { flex: 1; min-width: 0; font-size: 28px; letter-spacing: -.8px; }
+.detail__title-button { padding: 0; background: none; letter-spacing: inherit; text-align: start; }
 .detail--postcard .detail__title-row .parcel-stamp { width: 50px; height: 64px; }
 .detail--postcard .detail__sender { margin-top: 8px; color: var(--ink-soft); font-size: 12px; overflow-wrap: anywhere; }
 /* Who delivers, as the next line of who sent it. */

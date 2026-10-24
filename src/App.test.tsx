@@ -1436,6 +1436,22 @@ describe('App', () => {
     expect(await screen.findByRole('dialog', { name: 'Coffee beans ☕' })).toBeInTheDocument();
   });
 
+  it('renames a parcel from its title', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByText('Coffee beans ☕'));
+    const dialog = screen.getByRole('dialog', { name: 'Coffee beans ☕' });
+    await user.click(within(dialog).getByRole('button', { name: 'Coffee beans ☕' }));
+    const name = within(dialog).getByRole('textbox', { name: 'Parcel name' });
+    expect(name).toHaveValue('Coffee beans ☕');
+    await user.clear(name);
+    await user.type(name, 'Espresso beans');
+    await user.click(within(dialog).getByRole('button', { name: 'Save name' }));
+
+    expect(await within(dialog).findByRole('heading', { level: 1 })).toHaveTextContent('Espresso beans');
+  });
+
   it('archives a parcel immediately and offers undo', async () => {
     const user = userEvent.setup();
     renderApp();

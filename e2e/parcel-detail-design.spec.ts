@@ -47,7 +47,7 @@ test('closes from the backdrop, but keeps inside clicks and nested dialogs open'
   await page.setViewportSize({ width: 1280, height: 900 });
   const detail = page.locator('.detail--postcard');
   await expect(detail).toBeVisible();
-  await detail.getByRole('heading', { level: 1 }).click();
+  await detail.locator('.detail__state').click();
   await expect(detail).toBeVisible();
 
   // Releasing a drag outside the card must not dismiss it.
