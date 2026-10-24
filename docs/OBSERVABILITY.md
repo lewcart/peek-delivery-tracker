@@ -427,7 +427,8 @@ anomalies and health incidents.
 
 [ops/review/signals.sql](../ops/review/signals.sql) is the hourly review of every queue. For
 a window of hours (1 by default, 24 for the daily review) it lists routing signals, sync
-anomalies, open unmapped wording seen in the window (`new` when first seen in it), new open support cases that still give a reason, health incidents notified in the
+anomalies, open unmapped wording seen in the window (`new` when first seen in it; a provider's
+own wording as relayed by it, beside the carrier of its sample's parcel), new open support cases that still give a reason, health incidents notified in the
 window or open and failing in it (`rescued` when every check that failed still answered
 through another step; an open one nothing checked, or whose checks answered, waits unlisted
 until it fails, recovers or closes), the unfinished parcels a provider tracks, grouped by type, carrier and

@@ -45,11 +45,16 @@ order by checks desc, carrier, anomaly;
 -- A carrier's wording last seen on a server version that another replaced more than 2 days ago
 -- is left out: a followed parcel is checked again within a day, so the versions since no longer
 -- produce it, and the replay expires its row after 8 days unseen (src/server/reviewQueues.ts).
--- Wording a universal provider relays (carrier `unknown`) is the provider's own and stays.
+-- Wording a universal provider relays (carrier `unknown`) is the provider's own and stays. It
+-- shows as relayed by the provider its sample scan names, beside the carrier of that scan's parcel.
 with templates as (
-  select id, carrier, provider_code, chosen_stage, count, first_seen, last_seen, last_seen_version, reviewed_at,
-         regexp_replace(description_normalized, '[0-9]+', '#', 'g') as template
-  from public.tracking_status_observations
+  select o.id, o.carrier, o.provider_code, o.chosen_stage, o.count, o.first_seen, o.last_seen, o.last_seen_version, o.reviewed_at,
+         regexp_replace(o.description_normalized, '[0-9]+', '#', 'g') as template,
+         case when o.carrier <> 'unknown' then o.carrier
+           else 'relayed by ' || coalesce(e.raw_data->>'universal_provider', 'a provider') || coalesce(' (' || p.carrier || ' parcel)', '') end as shown
+  from public.tracking_status_observations as o
+  left join public.tracking_events as e on o.carrier = 'unknown' and e.id = o.sample_event_id
+  left join public.packages as p on p.id = e.package_id
 ),
 common as (
   select word
@@ -58,7 +63,7 @@ common as (
   group by word
   having count(*) >= 5
 )
-select t.id, t.carrier, coalesce(t.provider_code, '-') as code,
+select t.id, t.shown as carrier, coalesce(t.provider_code, '-') as code,
        left(regexp_replace(string_agg(case when common.word is null and token.part[1] ~ '[[:alpha:]]' then '…' else token.part[1] end,
          '' order by token.n), '…([^[:alpha:]]*…)+', '…', 'g'), 80) as wording,
        t.chosen_stage as read_as, 'adapters' as lane, t.first_seen >= :since as new, t.count as sightings
@@ -70,7 +75,7 @@ where t.reviewed_at is null and t.last_seen >= :since
     select from public.tracking_review_runs as run
     where run.started_at > t.last_seen and run.started_at < now() - interval '2 days'
       and run.version is distinct from t.last_seen_version))
-group by t.id, t.carrier, t.provider_code, t.chosen_stage, t.first_seen, t.count
+group by t.id, t.shown, t.provider_code, t.chosen_stage, t.first_seen, t.count
 order by new desc, sightings desc, carrier, wording
 limit 50;
 
