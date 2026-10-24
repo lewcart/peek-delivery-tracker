@@ -106,6 +106,17 @@ describe('what the service held when an answer arrived', () => {
     expect(shownParcel(storedPackage({ tracking_events: [added] })).event_count).toBe(1);
   });
 
+  it('holds a placeholder number\'s parcel as it is shown, without what was stored from it', () => {
+    const added = { id: 'e0', package_id: packageId, stage: 'pending', description: 'Tracking added', location: null, occurred_at: '2026-09-20T08:00:00+00:00', provider_event_id: 'app:pending' };
+    const merged = (storedPackage().tracking_events as JsonObject[]).map((event, index) => ({ ...event, provider_event_id: `unknown:${index}` }));
+    const shown = shownParcel(storedPackage({ carrier: 'unknown', tracking_number: '1234567890', tracking_events: [added, ...merged] }));
+    expect(shown).toMatchObject({
+      status: null, expected_delivery: null, sync_status: 'error', sync_error: 'carrier:placeholder_number', provider: null, active_carrier: null,
+      event_count: 1,
+    });
+    expect(JSON.stringify(shown)).not.toMatch(/In transit|Sorted|Zürich|ParcelsApp/);
+  });
+
   it('keeps the six newest scans of a long journey, each cut to size', () => {
     const events = Array.from({ length: 9 }, (_, index) => ({
       stage: 'in_transit', description: '🙂'.repeat(300), location: 'x'.repeat(300), occurred_at: `2026-10-0${index + 1}T10:00:00+00:00`,

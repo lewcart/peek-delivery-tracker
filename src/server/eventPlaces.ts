@@ -83,7 +83,7 @@ export function shownEvents(row: JsonObject): JsonObject[] {
  * providers answered for it, its status line, estimate and carrier data included, belongs to other people's
  * shipments.
  */
-function withoutPlaceholderAnswers(row: JsonObject): JsonObject {
+export function withoutPlaceholderAnswers(row: JsonObject): JsonObject {
   return placeholderNumber(row) ? {
     ...row, sync_status: 'error', sync_error: PLACEHOLDER_NUMBER, last_status_text: null, expected_delivery: null, carrier_data: {},
   } : row;

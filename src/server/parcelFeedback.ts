@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { shownEvents } from './eventPlaces';
+import { shownEvents, withoutPlaceholderAnswers } from './eventPlaces';
 import { recordParcelFeedback } from './metrics';
 import { logOperationalEvent } from './observability';
 import { deployedVersion } from './reviewQueues';
@@ -25,12 +25,14 @@ function cut(value: unknown, limit: number): string | null {
  * What the service holds about a parcel when an answer arrives: its status,
  * its last check and its newest scans, as its timeline shows them: without
  * a provider's copies of its carrier's scans, or Peek's own "Tracking added"
- * once carrier scans reach back to it. A private
+ * once carrier scans reach back to it. A placeholder number's parcel is held as
+ * it is shown, without what was stored from it (`withoutPlaceholderAnswers`). A private
  * tracking link, a postcode and a name the reader gave the parcel are left out.
  */
 export function shownParcel(row: JsonObject): JsonObject {
   const events = shownEvents(row)
     .sort((a, b) => Date.parse(String(b.occurred_at)) - Date.parse(String(a.occurred_at)));
+  row = withoutPlaceholderAnswers(row);
   const carrierData = isRecord(row.carrier_data) ? row.carrier_data : {};
   return {
     status: cut(row.last_status_text, 300),
