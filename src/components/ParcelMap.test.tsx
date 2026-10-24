@@ -186,7 +186,13 @@ describe('map summary', () => {
     const copied = sheet(buildRoute([scan(tokyo), scan(bern, 'delivered'), scan(undefined, 'delivered')]), 'delivered');
     expect(screen.getByText('Delivered').nextElementSibling).toHaveTextContent('Bern');
     copied.unmount();
-    sheet(buildRoute([scan(tokyo), scan()], countryPlace('CH', 'Switzerland', [7.46, 46.72])), 'delivered');
+    const switzerland = countryPlace('CH', 'Switzerland', [7.46, 46.72]);
+    // A delivery with no place, in the country the parcel was going to: it happened at the last stop there.
+    const home = sheet(buildRoute([scan(tokyo), scan(bern, 'out_for_delivery'), scan(undefined, 'delivered')], switzerland), 'delivered');
+    expect(screen.getByText('Delivered').nextElementSibling).toHaveTextContent('Bern');
+    home.unmount();
+    // The last stop is in another country: the parcel was delivered in the one it was going to.
+    sheet(buildRoute([scan(tokyo), scan(undefined, 'delivered')], switzerland), 'delivered');
     expect(screen.getByText('Delivered').nextElementSibling).toHaveTextContent('Switzerland');
   });
 

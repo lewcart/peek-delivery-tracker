@@ -49,6 +49,16 @@ describe('buildRoute', () => {
     expect(buildRoute([scan(zurich), scan(bern, 'delivered'), scan(undefined, 'returned')]).latestLocated).toBe(false);
   });
 
+  it('puts a delivery with no place at the last stop when that stop is in the destination country', () => {
+    const delivered = (destination?: Place) => buildRoute([scan(zurich), scan(bern, 'out_for_delivery'), scan(undefined, 'delivered')], destination);
+    expect(delivered(countryPlace('CH', 'Switzerland', [7.46, 46.72])).latestLocated).toBe(true);
+    // Going to another country, or nowhere known: the last stop is only where the parcel was last seen.
+    expect(delivered(countryPlace('SC', 'Seychelles', [55.45, -4.62])).latestLocated).toBe(false);
+    expect(delivered().latestLocated).toBe(false);
+    // Any other scan with no place leaves the last stop the last known one, even in the destination country.
+    expect(buildRoute([scan(zurich), scan(bern), scan()], countryPlace('CH', 'Switzerland', [7.46, 46.72])).latestLocated).toBe(false);
+  });
+
   it('draws the remaining leg until the parcel reaches its destination', () => {
     const switzerland = countryPlace('CH', 'Switzerland', [7.46, 46.72]);
     const travelling = buildRoute([scan(kyoto), scan(leipzig)], switzerland);

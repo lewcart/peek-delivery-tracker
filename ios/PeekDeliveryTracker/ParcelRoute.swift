@@ -114,7 +114,8 @@ struct ParcelRoute: Sendable {
     let stops: [Stop]
     let legs: [Leg]
     /// False when the newest scan has no place, so the last stop is only the last known one. A delivery is where
-    /// its scan was placed: a later delivery scan with no place doesn't make it unknown.
+    /// its scan was placed: a later delivery scan with no place doesn't make it unknown. A delivery with no place at
+    /// all happened at the last stop when that stop is in the destination country.
     let latestLocated: Bool
     /// Where the parcel is headed, until it gets there.
     let destination: RoutePlace?
@@ -168,7 +169,9 @@ struct ParcelRoute: Sendable {
         var seen = Set<String>()
         self.stops = stops
         self.legs = legs
+        // A delivery with no place happened at the last stop when that stop is in the country the parcel was going to.
         latestLocated = places.suffix(max(deliveries, 1)).contains { $0 != nil }
+            || (deliveries > 0 && destination != nil && stops.last?.place.country == destination?.country)
         self.destination = remaining
         if let current = stops.last, let remaining {
             remainingKilometres = current.place.point.kilometres(to: remaining.point)

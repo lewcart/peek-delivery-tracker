@@ -45,7 +45,8 @@ export interface Route {
   current?: Stop;
   /**
    * False when the newest scan has no place, so the last stop is only the last known one. A delivery is where its
-   * scan was placed: a later delivery scan with no place doesn't make it unknown.
+   * scan was placed: a later delivery scan with no place doesn't make it unknown. A delivery with no place at all
+   * happened at the last stop when that stop is in the destination country.
    */
   latestLocated: boolean;
   destination?: Place;
@@ -84,11 +85,16 @@ export function countryPlace(country: string, name: string, coordinate: Coordina
   return { id: country, name, country, coordinate, precision: 'country' };
 }
 
-/** Whether the newest scan was placed or, when the newest scans are deliveries, any of them: the parcel is at the last stop. */
-function newestPlaced(scans: readonly Scan[]): boolean {
+/**
+ * Whether the parcel is at the last stop: its newest scan was placed or, when the newest scans are deliveries, any of
+ * them was. A delivery with no place happened at the last stop when that stop is in the country the parcel was going to.
+ */
+function newestPlaced(scans: readonly Scan[], last?: Stop, destination?: Place): boolean {
   let start = scans.length - 1;
   while (start > 0 && scans[start].stage === 'delivered' && scans[start - 1].stage === 'delivered') start -= 1;
-  return scans.slice(Math.max(start, 0)).some((scan) => scan.place);
+  const newest = scans.slice(Math.max(start, 0));
+  if (newest.some((scan) => scan.place)) return true;
+  return newest[0]?.stage === 'delivered' && Boolean(last && destination && last.place.country === destination.country);
 }
 
 export function buildRoute(scans: readonly Scan[], destination?: Place): Route {
@@ -134,7 +140,7 @@ export function buildRoute(scans: readonly Scan[], destination?: Place): Route {
     legs,
     origin: stops[0],
     current,
-    latestLocated: newestPlaced(scans),
+    latestLocated: newestPlaced(scans, current, destination),
     destination: remaining,
     remainingKm: current && remaining ? distanceKm(current.place.coordinate, remaining.coordinate) : undefined,
     km: legs.reduce((sum, leg) => sum + leg.km, 0),

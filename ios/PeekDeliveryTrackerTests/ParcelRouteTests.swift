@@ -58,6 +58,18 @@ final class ParcelRouteTests: XCTestCase {
                                    countryName: { $0 }).latestLocated)
     }
 
+    func testADeliveryWithNoPlaceIsAtTheLastStopInTheDestinationCountry() {
+        let seychelles = RoutePlace.country("SC", name: "Seychelles", at: GeoPoint(longitude: 55.45, latitude: -4.62))
+        let delivered = { (destination: RoutePlace?) in ParcelRoute(places: [zurich, bern, nil], deliveries: 1, destination: destination) }
+        XCTAssertTrue(delivered(switzerland).latestLocated)
+        // Going to another country, or nowhere known: the last stop is only where the parcel was last seen.
+        XCTAssertFalse(delivered(seychelles).latestLocated)
+        XCTAssertEqual(delivered(seychelles).destination, seychelles)
+        XCTAssertFalse(delivered(nil).latestLocated)
+        // Any other scan with no place leaves the last stop the last known one, even in the destination country.
+        XCTAssertFalse(ParcelRoute(places: [zurich, bern, nil], destination: switzerland).latestLocated)
+    }
+
     func testTheRemainingLegLastsUntilArrival() {
         let travelling = ParcelRoute(places: [kyoto, leipzig], destination: switzerland)
         XCTAssertEqual(travelling.destination, switzerland)

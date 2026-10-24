@@ -148,7 +148,7 @@ function RouteSummary({ route, stage }: { route: Route; stage?: Stage }) {
   // A finished journey has a length, not a distance "so far".
   const finished = delivered || stage === 'returned';
   const end = route.destination ?? current.place;
-  // A delivery scan with no place didn't happen at the last stop, so that stop is only where the parcel was last seen.
+  // A delivery scan with no place happened at the last stop only when that stop is in the destination country (`latestLocated`).
   const endLabel = delivered && (route.latestLocated || route.destination) ? t('map.delivered')
     : route.destination ? t('map.to') : route.latestLocated ? t('map.now') : t('map.lastSeen');
   const single = route.stops.length === 1 && !route.destination;
