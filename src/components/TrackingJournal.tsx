@@ -71,7 +71,7 @@ export function TrackingJournal({ events: allEvents, syncing = false, fold = fal
         {when && !when.timed ? <time dateTime={event.day} />
           : <time dateTime={when ? event.occurredAt : undefined}>{when ? new Intl.DateTimeFormat(languageTag, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(when.date) : '—'}</time>}
         <div><p>{syncing && isCurrent && event.stage === 'pending' ? t('timeline.syncing') : wording(event)}</p>
-          {event.location?.trim() && <EventPlace location={event.location} />}
+          {event.location?.trim() && <EventPlace location={event.location} placed={event.place?.country} />}
           {relayed.map(line => <p key={line} className="tracking-journal__relay">{line}</p>)}
         </div>
       </li>;
@@ -98,10 +98,19 @@ export function TrackingJournal({ events: allEvents, syncing = false, fold = fal
   </details>;
 }
 
-/** The flag leads and the country closes the place, named in the reader's language. */
-function EventPlace({ location }: { location: string }) {
+/** A final two-letter field, as in "Haiger, DE" or "Haiger (DE)". */
+const FINAL_CODE = /^(.*\S)\s*[,;|(]\s*([A-Z]{2})\)?$/;
+
+/**
+ * The flag leads and the country closes the place, named in the reader's language. A final code
+ * that is also a state or canton ("Haiger, DE", "Wilmington, DE") names a country only when the
+ * scan was placed in that country.
+ */
+function EventPlace({ location, placed }: { location: string; placed?: string }) {
   const { languageTag } = useI18n();
-  const { country, place } = trackingPlace(location);
+  const written = trackingPlace(location);
+  const code = written.country || !placed ? null : FINAL_CODE.exec(location.trim());
+  const { country, place } = code && code[2] === placed ? { country: placed, place: code[1] } : written;
   if (!country) return <span className="tracking-journal__location">{place}</span>;
   const name = countryName(country, languageTag);
   return <span className="tracking-journal__location">

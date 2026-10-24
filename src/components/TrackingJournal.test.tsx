@@ -39,6 +39,17 @@ describe('TrackingJournal', () => {
       '🇨🇭ZUERICH, Switzerland', '🇫🇷France', '🇩🇪Bielefeld, Germany', '🇨🇳Shenzhen, China', 'Zürich Briefzentrum',
     ]);
     const flag = places[0].firstElementChild!;
+    // A code that is also a state or canton names the country the scan was placed in, and only that one.
+    const placed = (country: string) => ({ latitude: 0, longitude: 0, precision: 'city' as const, country, name: 'Town' });
+    const { container: coded } = render(<TrackingJournal events={[
+      { ...event('placed', '2024-09-09T10:00:00', 'Sorted', 'Haiger, DE'), place: placed('DE') },
+      { ...event('bracket', '2024-09-09T09:00:00', 'Sorted', 'Haiger (DE)'), place: placed('DE') },
+      { ...event('state', '2024-09-09T08:00:00', 'Sorted', 'Wilmington, DE'), place: placed('US') },
+      event('unplaced', '2024-09-09T07:00:00', 'Sorted', 'Hannover, DE'),
+    ]} />);
+    expect([...coded.querySelectorAll('.tracking-journal__location')].map(place => place.textContent)).toEqual([
+      '🇩🇪Haiger, Germany', '🇩🇪Haiger, Germany', 'Wilmington, DE', 'Hannover, DE',
+    ]);
     expect(flag).toHaveClass('tracking-journal__flag');
     expect(flag).toHaveAttribute('aria-hidden', 'true');
   });

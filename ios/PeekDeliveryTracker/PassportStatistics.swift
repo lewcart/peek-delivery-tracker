@@ -278,6 +278,20 @@ enum TrackingLocation {
         return Place(country: nil, name: text)
     }
 
+    private static let finalCode = try! NSRegularExpression(pattern: "^(.*\\S)\\s*[,;|(]\\s*([A-Z]{2})\\)?$")
+
+    /// A final code that is also a state or canton ("Haiger, DE", "Wilmington, DE") names a
+    /// country only when the scan was placed in that country.
+    static func place(_ location: String, placedIn placed: String?) -> Place {
+        let written = place(location)
+        let text = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard written.country == nil, let placed,
+              let match = finalCode.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let name = Range(match.range(at: 1), in: text), let code = Range(match.range(at: 2), in: text),
+              text[code] == placed else { return written }
+        return Place(country: placed, name: String(text[name]))
+    }
+
     static func countryName(_ code: String, language: AppLanguage) -> String {
         if code == "CN", let name = chinaNames[language] { return name }
         return language.locale.localizedString(forRegionCode: code) ?? code

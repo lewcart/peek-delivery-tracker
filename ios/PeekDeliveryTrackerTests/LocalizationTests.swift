@@ -312,6 +312,11 @@ final class LocalizationTests: XCTestCase {
                          "Zürich Briefzentrum", "Mexico City", "Andorra la Vella"] {
             XCTAssertEqual(TrackingLocation.place(location), .init(country: nil, name: location), location)
         }
+        // A code that is also a state or canton names the country the scan was placed in, and only that one.
+        XCTAssertEqual(TrackingLocation.place("Haiger, DE", placedIn: "DE"), .init(country: "DE", name: "Haiger"))
+        XCTAssertEqual(TrackingLocation.place("Haiger (DE)", placedIn: "DE"), .init(country: "DE", name: "Haiger"))
+        XCTAssertEqual(TrackingLocation.place("Wilmington, DE", placedIn: "US"), .init(country: nil, name: "Wilmington, DE"))
+        XCTAssertEqual(TrackingLocation.place("Hannover, DE", placedIn: nil), .init(country: nil, name: "Hannover, DE"))
         XCTAssertEqual(TrackingLocation.flag("CH"), "🇨🇭")
         // Passport evidence stays a final field that names a region.
         XCTAssertEqual(TrackingLocation.countryCode(in: "Zürich, CH"), "CH")

@@ -1470,7 +1470,7 @@ private struct JournalEventRow: View {
                     .font(.footnote)
                     .fixedSize(horizontal: false, vertical: true)
                 if let location = event.location?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty {
-                    EventLocation(location: location)
+                    EventLocation(location: location, placed: event.place?.country)
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 // A copy's words stay in sight, in case it was a scan of its own.
@@ -1506,10 +1506,12 @@ private struct JournalEventRow: View {
 /// The flag leads and the country closes the place, named in the reader's language.
 private struct EventLocation: View {
     let location: String
+    /// The country the scan was placed in, which settles a final code that is also a state or canton.
+    let placed: String?
     @EnvironmentObject private var localizer: Localizer
 
     var body: some View {
-        let place = TrackingLocation.place(location)
+        let place = TrackingLocation.place(location, placedIn: placed)
         if let country = place.country {
             let name = TrackingLocation.countryName(country, language: localizer.language)
             let text = place.name.isEmpty ? name : "\(place.name), \(name)"
