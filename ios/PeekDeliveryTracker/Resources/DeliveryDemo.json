@@ -203,13 +203,13 @@
           "stage": "accepted",
           "hoursAgo": 38,
           "description": "Collected from the chocolatier",
-          "location": "Brussels, Belgium",
+          "location": "Bruxelles, Belgium",
           "place": {
             "latitude": 50.85,
             "longitude": 4.349,
             "precision": "city",
             "country": "BE",
-            "name": "Brussels"
+            "name": "Bruxelles"
           }
         },
         {

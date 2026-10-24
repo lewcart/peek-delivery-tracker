@@ -158,7 +158,7 @@ test('a gift stays a surprise until it is delivered, then shows its note and wha
   await expect(recipient.locator('.parcel-illustration__ribbon')).toBeVisible();
   // Neither the URL nor the viewer response reveals the message before delivery.
   expect(new URL(recipient.url()).hash).toBe('');
-  await expect(recipient.locator('body')).not.toContainText(/Belgian chocolate|Happy birthday|Chocolaterie|chocolatier|Brussels|DEMOCHOC|Tracking number/i);
+  await expect(recipient.locator('body')).not.toContainText(/Belgian chocolate|Happy birthday|Chocolaterie|chocolatier|Bruxelles|DEMOCHOC|Tracking number/i);
   await expect(recipient.locator('body')).not.toContainText(/\bSam\b/);
   await expect(recipient.getByText('Left the sender')).toHaveCount(1);
   // A gift's way into the alerts is in its card.

@@ -99,7 +99,7 @@ test('draws the route as one stroke, leg after leg', async ({ page }) => {
     stroke.currentTime = Number(stroke.effect!.getComputedTiming().duration) * share;
     return paths.map((path) => Number.parseFloat(getComputedStyle(path).strokeDashoffset));
   }, share);
-  // Out for delivery, the card shows the last mile: the stroke starts where the leg from Brussels comes into the picture.
+  // Out for delivery, the card shows the last mile: the stroke starts where the leg from Bruxelles comes into the picture.
   const [start, waiting] = await left(0);
   expect(start).toBeGreaterThan(.5);
   expect(start).toBeLessThan(1);
