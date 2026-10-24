@@ -23,7 +23,9 @@
 .notification-prompt__close { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 44px; height: 44px; padding: 12px; background: transparent; border-radius: 50%; }
 .notification-prompt__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .notification-prompt .button, .notification-prompt__later { min-height: 44px; padding: 10px 14px; font-size: 12px; font-weight: 550; border-radius: 11px; }
-.notification-prompt__later { background: transparent; color: var(--ink-soft); }
+.notification-prompt__later { padding-inline: 8px; background: transparent; color: var(--ink-soft); }
+.notification-prompt .notification-prompt__or { margin-top: 12px; }
+.notification-prompt__or button { min-height: 0; padding: 0; background: none; color: var(--ink); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .notification-prompt .notification-prompt__error { margin-top: 12px; color: var(--orange-text); }
 .notification-prompt button:disabled { opacity: .55; }
 

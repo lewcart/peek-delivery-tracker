@@ -1,11 +1,13 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { trackAction } from '../lib/analytics';
 import { dismissNotificationInvitation, notificationInvitationDismissed } from '../lib/notificationInvitation';
 import { enablePushNotifications, inspectPushState, type PushState } from '../lib/pushNotifications';
 import { IPHONE_LINKEDIN, IPHONE_SAFARI_27 } from '../test/alertBrowser';
 import { NotificationPrompt } from './NotificationPrompt';
 
+vi.mock('../lib/analytics', async (original) => ({ ...await original<typeof import('../lib/analytics')>(), trackAction: vi.fn() }));
 vi.mock('../lib/pushNotifications', () => ({
   inspectPushState: vi.fn(),
   enablePushNotifications: vi.fn(),
@@ -19,6 +21,7 @@ beforeEach(() => {
   window.localStorage.clear();
   vi.mocked(inspectPushState).mockReset().mockResolvedValue(prompt);
   vi.mocked(enablePushNotifications).mockReset().mockResolvedValue(true);
+  vi.mocked(trackAction).mockClear();
   vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() });
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -126,14 +129,47 @@ describe('NotificationPrompt', () => {
     expect(popup()).not.toBeInTheDocument();
   });
 
-  it('provides iPhone installation steps without requesting permission', async () => {
+  it('offers the app first, then closes once its App Store link is followed', async () => {
     vi.mocked(inspectPushState).mockResolvedValue({ kind: 'install' });
     const user = userEvent.setup();
     render(<NotificationPrompt apiAuth={apiAuth} eligible />);
-    await user.click(await screen.findByRole('button', { name: 'Show me how' }));
+    const app = await screen.findByRole('link', { name: 'Download on my iPhone' });
+    expect(new URL(app.getAttribute('href')!).searchParams.get('ct')).toBe('web-invite');
+    expect(screen.getByText('Know when your parcel arrives.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'add Peek to your Home Screen' }).parentElement).toHaveTextContent('Or add Peek to your Home Screen');
+    // jsdom follows no link to another site.
+    document.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    await user.click(app);
+    expect(trackAction).toHaveBeenCalledWith('notifications-app-get');
+    await waitFor(() => expect(popup()).not.toBeInTheDocument());
+    expect(notificationInvitationDismissed(apiAuth.userId)).toBe(true);
+    expect(enablePushNotifications).not.toHaveBeenCalled();
+  });
+
+  it('names the iPad on an iPad, whose Safari says it is a Mac', async () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, get: () => 5 });
+    try {
+      vi.mocked(inspectPushState).mockResolvedValue({ kind: 'install' });
+      render(<NotificationPrompt apiAuth={apiAuth} eligible />);
+      expect(await screen.findByRole('link', { name: 'Download on my iPad' })).toBeVisible();
+    } finally {
+      delete (navigator as { maxTouchPoints?: number }).maxTouchPoints;
+    }
+  });
+
+  it('provides Home Screen steps without requesting permission', async () => {
+    vi.mocked(inspectPushState).mockResolvedValue({ kind: 'install' });
+    const user = userEvent.setup();
+    render(<NotificationPrompt apiAuth={apiAuth} eligible />);
+    await user.click(await screen.findByRole('button', { name: 'add Peek to your Home Screen' }));
+    expect(screen.getByRole('region', { name: 'Add to your Home Screen' })).toBeInTheDocument();
     expect(screen.getAllByRole('listitem').map((step) => step.textContent))
       .toEqual(['1Open your browser’s Share menu', '2Choose Add to Home Screen', '3Open Peek from your Home Screen and turn on notifications']);
+    expect(screen.queryByRole('link', { name: 'Download on my iPhone' })).toBeNull();
     expect(enablePushNotifications).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Got it' })).toHaveFocus();
     await user.click(screen.getByRole('button', { name: 'Got it' }));
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
   });
@@ -143,7 +179,7 @@ describe('NotificationPrompt', () => {
     vi.mocked(inspectPushState).mockResolvedValue({ kind: 'install' });
     const user = userEvent.setup();
     render(<NotificationPrompt apiAuth={apiAuth} eligible />);
-    await user.click(await screen.findByRole('button', { name: 'Show me how' }));
+    await user.click(await screen.findByRole('button', { name: 'add Peek to your Home Screen' }));
     expect(screen.getAllByRole('listitem').map((step) => step.textContent)).toEqual([
       `1Tap Page Menu in Safari’s address bar${window.location.hostname}`,
       '2Tap Share',
@@ -157,7 +193,7 @@ describe('NotificationPrompt', () => {
     vi.mocked(inspectPushState).mockResolvedValue({ kind: 'install' });
     const user = userEvent.setup();
     render(<NotificationPrompt apiAuth={apiAuth} eligible />);
-    await user.click(await screen.findByRole('button', { name: 'Show me how' }));
+    await user.click(await screen.findByRole('button', { name: 'add Peek to your Home Screen' }));
     expect(screen.getByText('Notifications need Safari.')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Open in Safari' })).toHaveAttribute('href', `x-safari-${window.location.href}`);
     expect(screen.queryByRole('listitem')).toBeNull();

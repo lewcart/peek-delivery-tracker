@@ -8,13 +8,20 @@ const PROVIDER_TOKEN = '129628155';
  * characters at most). `web-banner` is Safari's banner, `web-qr` the code a computer shows on
  * the landing, `web-notify` the app row of a parcel page's "Notify me". In Settings ›
  * Notifications, `web-settings` is the app row an iPhone or iPad shows outside the Home
- * Screen, and `web-settings-qr` the code a computer shows under its switch.
+ * Screen, and `web-settings-qr` the code a computer shows under its switch. `web-invite` is
+ * the button of the deliveries' invitation to notifications in the same place.
  */
-export type AppStoreCampaign = 'web-banner' | 'web-more' | 'web-moves' | 'web-footer' | 'web-qr' | 'web-notify' | 'web-settings' | 'web-settings-qr';
+export type AppStoreCampaign = 'web-banner' | 'web-more' | 'web-moves' | 'web-footer' | 'web-qr' | 'web-notify' | 'web-settings' | 'web-settings-qr' | 'web-invite';
 
 /** The app's page on the App Store, counted under a campaign. */
 export function appStoreLink(campaign: AppStoreCampaign): string {
   return `https://apps.apple.com/app/apple-store/id${APP_STORE_ID}?pt=${PROVIDER_TOKEN}&ct=${campaign}&mt=8`;
+}
+
+/** An iPad, whose Safari says it is a Mac but takes more than one finger. */
+export function onIPad(): boolean {
+  return typeof navigator !== 'undefined'
+    && (/iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 }
 
 /**

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useI18n } from '../i18n';
 import type { ApiAuth } from '../lib/apiClient';
 import { trackAction } from '../lib/analytics';
+import { appStoreLink, onIPad } from '../lib/appStore';
 import {
   dismissNotificationInvitation,
   notificationInvitationDismissed,
@@ -29,11 +30,15 @@ export function NotificationPrompt({ apiAuth, eligible }: { apiAuth: ApiAuth; el
   const alive = useRef(true);
   const revision = useRef(0);
   const panel = useRef<HTMLElement>(null);
+  const primary = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     alive.current = true;
     return () => { alive.current = false; };
   }, []);
+
+  // The Home Screen link that opened the steps is gone; its tap carries on to "Got it".
+  useEffect(() => { if (help) primary.current?.focus({ preventScroll: true }); }, [help]);
 
   useEffect(() => {
     if (!eligible || dismissed || closed) return;
@@ -66,6 +71,12 @@ export function NotificationPrompt({ apiAuth, eligible }: { apiAuth: ApiAuth; el
     setClosed(true);
   }
 
+  function getApp() {
+    trackAction('notifications-app-get');
+    // Close after the tap: a link taken out of the page before then follows nowhere.
+    window.setTimeout(dismiss);
+  }
+
   async function enable() {
     if (state?.kind !== 'prompt' || inFlight.current) return;
     inFlight.current = true;
@@ -89,7 +100,9 @@ export function NotificationPrompt({ apiAuth, eligible }: { apiAuth: ApiAuth; el
   }
 
   if (!eligible || dismissed || closed || (state?.kind !== 'prompt' && state?.kind !== 'install')) return null;
-  const install = state.kind === 'install';
+  // Outside the Home Screen, the app comes first and the Home Screen's steps a link below it.
+  const offer = state.kind === 'install' && !help;
+  const [orBefore, orAfter] = t('notifications.prompt.homeScreen').split('{{link}}');
 
   return (
     <section
@@ -104,15 +117,21 @@ export function NotificationPrompt({ apiAuth, eligible }: { apiAuth: ApiAuth; el
         <Icon name="close" />
       </button>
       <h2 id="notification-prompt-title">{t(help ? 'notifications.prompt.installTitle' : 'notifications.prompt.title')}</h2>
-      {help ? <HomeScreenSteps then="notifications" />
-        : <p>{t(install ? 'notifications.prompt.installDescription' : 'notifications.prompt.description')}</p>}
+      {help ? <HomeScreenSteps then="notifications" /> : <p>{t('notifications.prompt.description')}</p>}
       {failed && <p className="notification-prompt__error" role="alert">{t('notifications.error.enable')}</p>}
       <div className="notification-prompt__actions">
-        <button className="button button--primary" type="button" disabled={busy} aria-busy={busy} onClick={help ? dismiss : install ? () => setHelp(true) : () => void enable()}>
-          {t(help ? 'notifications.prompt.gotIt' : install ? 'notifications.prompt.showHow' : busy ? 'notifications.enabling' : failed ? 'common.retry' : 'notifications.enable')}
-        </button>
+        {offer
+          ? <a className="button button--primary" href={appStoreLink('web-invite')} onClick={getApp}>
+            {t(onIPad() ? 'notifications.prompt.app.ipad' : 'notifications.prompt.app')}
+          </a>
+          : <button ref={primary} className="button button--primary" type="button" disabled={busy} aria-busy={busy} onClick={help ? dismiss : () => void enable()}>
+            {t(help ? 'notifications.prompt.gotIt' : busy ? 'notifications.enabling' : failed ? 'common.retry' : 'notifications.enable')}
+          </button>}
         {!help && <button className="notification-prompt__later" type="button" disabled={busy} onClick={dismiss}>{t('onboarding.notifications.notNow')}</button>}
       </div>
+      {offer && <p className="notification-prompt__or">
+        {orBefore}<button type="button" onClick={() => setHelp(true)}>{t('notifications.prompt.homeScreenLink')}</button>{orAfter}
+      </p>}
     </section>
   );
 }
