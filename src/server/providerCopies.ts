@@ -6,8 +6,10 @@
  * tell the copy from the carrier's scan (eventIdentity.ts); the copies it
  * cannot tell apart stay stored. Once a direct carrier is confirmed for the
  * parcel, its timeline leaves out such a copy: a row only a universal provider
- * wrote, at the minute of one of the carrier's scans, or in that scan's stage
- * within 15 minutes or a whole number of hours up to 14 h away. A copy only
+ * wrote, at the minute of one of the carrier's scans, in that scan's stage
+ * within 15 minutes or a whole number of hours up to 14 h away, or in any stage
+ * and words whole hours away to the second when that second is not a minute's
+ * first (ParcelsApp reads ECMS's Japanese scans an hour off). A copy only
  * whole hours from the carrier's scans shows the provider read them a zone
  * away, so its provider's other rows of that minute are copies too, in any
  * stage (Swiss Post dates a London office's scans on Swiss time, and
@@ -17,13 +19,17 @@
  * UTC), and its row whole hours from a carrier's scan, in any stage, by the
  * shift another of its copies at the same place shows (17TRACK's export-unit
  * scan, read as information received, beside its departure three hours early);
- * the provider's other rows of their minute are copies too. A carrier's scan
- * dated by its day, on a wall clock in no zone (YunExpress's), has no instant
- * to compare: a copy in its stage and words whose time shows that wall clock,
- * whole quarter hours away up to 14 h, is left out. A provider's step
- * the carrier never shows, such as another leg's scans, stays. Push leaves the
- * copies unannounced too (push.ts), and the Live Activity queue tells them with
- * the same rules in SQL (`public.hidden_provider_copy`): change both together.
+ * the provider's other rows of their minute are copies too; a row with no
+ * place is read by a copy with no place. A carrier's scan dated by its day, on
+ * a wall clock in no zone (YunExpress's), has no instant to compare: a copy
+ * whose time shows that wall clock whole quarter hours away up to 14 h, in its
+ * words and stage (or none), or at its second when that is not a minute's
+ * first, is left out, and so is a copy at the wall clock read as UTC, to the
+ * second, in its stage (ParcelsApp's reworded MailAmericas scans). A
+ * provider's step the carrier never shows, such as another leg's scans, stays.
+ * Push leaves the copies unannounced too (push.ts), and the Live Activity
+ * queue tells them with the same rules in SQL (`public.hidden_provider_copy`):
+ * change both together.
  *
  * A row a carrier's scan took over keeps its universal identity and loses the
  * provider's name, and rows stored before rows named their provider have none
@@ -40,6 +46,7 @@ import { isRecord, type JsonObject } from './types';
 export const DIRECT_HISTORY = 'direct_history';
 
 const UNIVERSAL = 'unknown';
+const SECOND_MS = 1_000;
 const MINUTE_MS = 60_000;
 const NEAR_MS = 15 * MINUTE_MS;
 const QUARTER_HOUR_MS = 15 * MINUTE_MS;
@@ -120,20 +127,36 @@ function wallClock(event: JsonObject): number {
   return clockDay(event) ? DateTime.fromISO(String(event.local_time), { zone: 'utc' }).toMillis() : Number.NaN;
 }
 
+/** A time to its second. */
+function second(at: number): number {
+  return Math.floor(at / SECOND_MS) * SECOND_MS;
+}
+
+/** Stages that can name one scan: the same, or the copy's provider left it unclassified. */
+function stagesAgree(copy: JsonObject, scan: JsonObject): boolean {
+  return copy.stage === scan.stage || ['', 'pending'].includes(String(copy.stage ?? ''));
+}
+
 /**
  * Whether `copy` repeats the carrier's `scan`: at its minute, or in its stage close to it or whole
- * hours from it. A scan dated by its day is repeated in its stage and words, at its wall clock in
- * some zone.
+ * hours from it, or whole hours from it to the second when that second is not a minute's first (a
+ * provider reads the carrier's seconds on another clock, in its own words and stage). A scan dated
+ * by its day is repeated at its wall clock in some zone: in its stage and words, or at that second
+ * when it is not a minute's first, or at the wall clock itself, read as UTC, to the second, in its stage.
  */
 function copies(copy: JsonObject, scan: JsonObject): boolean {
   const clock = wallClock(scan);
   if (Number.isFinite(clock)) {
     const shift = Math.floor(instant(copy) / MINUTE_MS) * MINUTE_MS - Math.floor(clock / MINUTE_MS) * MINUTE_MS;
-    return copy.stage === scan.stage && wording(copy) === wording(scan)
-      && shift % QUARTER_HOUR_MS === 0 && Math.abs(shift) <= MAX_SHIFT_MS;
+    const seconds = second(instant(copy)) - clock;
+    return (stagesAgree(copy, scan) && wording(copy) === wording(scan)
+      && shift % QUARTER_HOUR_MS === 0 && Math.abs(shift) <= MAX_SHIFT_MS)
+      || (clock % MINUTE_MS !== 0 && seconds % QUARTER_HOUR_MS === 0 && Math.abs(seconds) <= MAX_SHIFT_MS)
+      || (seconds === 0 && copy.stage === scan.stage);
   }
   const minutes = Math.abs(Math.floor(instant(copy) / MINUTE_MS) - Math.floor(instant(scan) / MINUTE_MS)) * MINUTE_MS;
   if (minutes === 0) return true;
+  if (second(instant(scan)) % MINUTE_MS !== 0 && wholeHours(second(instant(copy)) - second(instant(scan)))) return true;
   return copy.stage === scan.stage
     && (Math.abs(instant(copy) - instant(scan)) <= NEAR_MS || (minutes % HOUR_MS === 0 && minutes <= MAX_SHIFT_MS));
 }
@@ -181,7 +204,7 @@ export function providerCopyScans(row: JsonObject): Map<string, Set<string>> {
   // That provider reads the place's other scans on the same clock: its row whole hours from a carrier's scan, by the
   // shift of such a copy at the same place, lands on that scan's minute once read on the carrier's clock.
   const clock = (event: JsonObject, shift: number) => `${providerName(event)}@${place(event)}@${shift}`;
-  const shifts = new Set(zoned.filter((event) => place(event) !== '')
+  const shifts = new Set(zoned
     .flatMap((event) => own.filter((scan) => hoursAway(event, scan)).map((scan) => clock(event, minutesApart(event, scan)))));
   const twin = (event: JsonObject, copy: JsonObject) => providerName(event) === providerName(copy) && wording(event) === wording(copy)
     && place(event) === place(copy) && event.stage === copy.stage && wholeHours(minutesApart(event, copy));
@@ -190,8 +213,7 @@ export function providerCopyScans(row: JsonObject): Map<string, Set<string>> {
     if (!providerOnly(event) || copied.has(String(event.id))) continue;
     // The provider's twin of a copy, in its words, place and stage whole hours away, is the same scan on another clock.
     const twins = repeats.filter((copy) => twin(event, copy));
-    const shifted = place(event) === '' ? [] : own.filter((scan) => !Number.isFinite(wallClock(scan))
-      && shifts.has(clock(event, minutesApart(event, scan))));
+    const shifted = own.filter((scan) => !Number.isFinite(wallClock(scan)) && shifts.has(clock(event, minutesApart(event, scan))));
     if (twins.length || shifted.length) {
       copied.set(String(event.id), new Set([...twins.flatMap((copy) => [...copied.get(String(copy.id))!]), ...ids(shifted)]));
       zoned.push(event);

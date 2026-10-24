@@ -191,5 +191,84 @@ do $$ begin
     raise exception 'The carrier''s own scan counted as a provider copy';
   end if;
 end; $$;
+-- A copy whole hours from a carrier scan to its second, when that second is not a minute's first, is hidden in
+-- any stage and words; a row three hours away at another second, or hours from a scan on a minute's first second,
+-- stays. For a scan dated by its day: a copy at that scan's second in some zone, at its wall clock read as UTC in
+-- its stage, or in its words with no stage, is hidden; a notice three seconds off, another stage at the wall
+-- clock, or a time the wall clock (with no seconds) does not show, stays. A provider's row with no place is read
+-- by the shift its copy with no place shows; another shift stays.
+insert into public.packages(id, user_id, tracking_number, label, carrier, current_stage, carrier_data)
+values ('97000000-0000-0000-0000-000000000031', '97000000-0000-0000-0000-000000000001', 'COPYTEST3', 'Seconds',
+  'posti', 'in_transit', '{"routing": {"confirmed_carrier": "posti"}}'),
+ ('97000000-0000-0000-0000-000000000041', '97000000-0000-0000-0000-000000000001', 'COPYTEST4', 'Wall clocks',
+  'posti', 'in_transit', '{"routing": {"confirmed_carrier": "posti"}}'),
+ ('97000000-0000-0000-0000-000000000051', '97000000-0000-0000-0000-000000000001', 'COPYTEST5', 'No place',
+  'posti', 'customs', '{"routing": {"confirmed_carrier": "posti"}}');
+insert into public.tracking_events(id, package_id, stage, description, location, provider_event_id, occurred_at, created_at, raw_data)
+values
+ ('97000000-0000-0000-0000-000000000032', '97000000-0000-0000-0000-000000000031', 'accepted', 'Arrived at origin facility.',
+  'NRT', 'posti:arrived', '2026-10-21T11:46:56Z', '2026-10-23T00:00:00Z', '{}'),
+ ('97000000-0000-0000-0000-000000000033', '97000000-0000-0000-0000-000000000031', 'customs', 'Customs',
+  null, 'posti:customs', '2026-10-22T15:00:00Z', '2026-10-23T00:00:00Z', '{}'),
+ ('97000000-0000-0000-0000-000000000034', '97000000-0000-0000-0000-000000000031', 'in_transit', 'Arrived at origin facility. Arrived',
+  'Narita', 'unknown:arrived', '2026-10-21T12:46:56Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000035', '97000000-0000-0000-0000-000000000031', 'in_transit', 'Notice',
+  null, 'unknown:notice', '2026-10-21T14:46:13Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000036', '97000000-0000-0000-0000-000000000031', 'in_transit', 'Out for delivery',
+  null, 'unknown:round', '2026-10-22T17:00:00Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000042', '97000000-0000-0000-0000-000000000041', 'registered', 'Created',
+  null, 'posti:created', '2026-10-07T00:00:00Z', '2026-10-23T00:00:00Z', '{"local_time": "2026-10-07T12:09:07"}'),
+ ('97000000-0000-0000-0000-000000000043', '97000000-0000-0000-0000-000000000041', 'in_transit', 'In transit to the airport',
+  null, 'posti:airport', '2026-10-14T00:00:00Z', '2026-10-23T00:00:00Z', '{"local_time": "2026-10-14T11:30:00"}'),
+ ('97000000-0000-0000-0000-000000000044', '97000000-0000-0000-0000-000000000041', 'registered', 'Pendiente de recoger',
+  null, 'posti:pending', '2026-10-13T00:00:00Z', '2026-10-23T00:00:00Z', '{"local_time": "2026-10-13T15:14:00"}'),
+ ('97000000-0000-0000-0000-000000000045', '97000000-0000-0000-0000-000000000041', 'accepted', 'Shipment registered',
+  null, 'unknown:registered', '2026-10-07T11:09:07Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000046', '97000000-0000-0000-0000-000000000041', 'in_transit', 'On the way to the airport',
+  null, 'unknown:airport', '2026-10-14T11:30:00Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000047', '97000000-0000-0000-0000-000000000041', 'pending', 'Pendiente  de recoger',
+  null, 'unknown:pending', '2026-10-13T13:14:00Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000048', '97000000-0000-0000-0000-000000000041', 'registered', 'We are expecting your parcel',
+  null, 'unknown:expecting', '2026-10-07T12:09:04Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000049', '97000000-0000-0000-0000-000000000041', 'customs', 'Customs',
+  null, 'unknown:customs', '2026-10-14T11:30:00Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000050', '97000000-0000-0000-0000-000000000041', 'in_transit', 'Received by sorting center',
+  null, 'unknown:sorting', '2026-10-14T12:30:16Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000052', '97000000-0000-0000-0000-000000000051', 'customs', 'Customs Clearance',
+  'IT', 'posti:clearance', '2026-10-21T07:55:00Z', '2026-10-23T00:00:00Z', '{}'),
+ ('97000000-0000-0000-0000-000000000053', '97000000-0000-0000-0000-000000000051', 'in_transit', 'B2C ClearanceStatus4',
+  'NL', 'posti:cleared', '2026-10-22T10:42:00Z', '2026-10-23T00:00:00Z', '{}'),
+ ('97000000-0000-0000-0000-000000000054', '97000000-0000-0000-0000-000000000051', 'customs', 'Customs Import submitted',
+  null, 'unknown:submitted', '2026-10-21T08:55:00Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000055', '97000000-0000-0000-0000-000000000051', 'customs', 'Customs Import cleared',
+  null, 'unknown:cleared', '2026-10-22T11:42:00Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}'),
+ ('97000000-0000-0000-0000-000000000056', '97000000-0000-0000-0000-000000000051', 'customs', 'Customs Import cleared',
+  null, 'unknown:cleared-later', '2026-10-22T12:42:00Z', '2026-10-23T00:00:00Z', '{"universal_provider": "ParcelsApp"}');
+do $$ begin
+  if not public.hidden_provider_copy('97000000-0000-0000-0000-000000000034') then
+    raise exception 'A copy whole hours from a carrier scan to its second, in another stage, was not hidden';
+  end if;
+  if public.hidden_provider_copy('97000000-0000-0000-0000-000000000035')
+    or public.hidden_provider_copy('97000000-0000-0000-0000-000000000036') then
+    raise exception 'A provider row hours from a carrier scan with no second in common was hidden';
+  end if;
+  if not public.hidden_provider_copy('97000000-0000-0000-0000-000000000045')
+    or not public.hidden_provider_copy('97000000-0000-0000-0000-000000000046')
+    or not public.hidden_provider_copy('97000000-0000-0000-0000-000000000047') then
+    raise exception 'A copy of a day-dated scan at its second, at its wall clock or in its words was not hidden';
+  end if;
+  if public.hidden_provider_copy('97000000-0000-0000-0000-000000000048')
+    or public.hidden_provider_copy('97000000-0000-0000-0000-000000000049')
+    or public.hidden_provider_copy('97000000-0000-0000-0000-000000000050') then
+    raise exception 'A provider step beside a day-dated scan was hidden';
+  end if;
+  if not public.hidden_provider_copy('97000000-0000-0000-0000-000000000054')
+    or not public.hidden_provider_copy('97000000-0000-0000-0000-000000000055') then
+    raise exception 'A provider row with no place at the shift of its copy with no place was not hidden';
+  end if;
+  if public.hidden_provider_copy('97000000-0000-0000-0000-000000000056') then
+    raise exception 'A provider row with no place at another shift was hidden';
+  end if;
+end; $$;
 reset role;
 rollback;
