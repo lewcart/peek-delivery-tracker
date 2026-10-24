@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { JsonObject } from './types';
-import { datedObservations, filledPlaceholders, misdatedCopies, restatedIdentities, sameInstantIdentities, sharedScans, relayedScans, withIdentities, withoutCopyDrift } from './eventIdentity';
+import { datedObservations, filledPlaceholders, misdatedCopies, restatedIdentities, retimedScans, sameInstantIdentities, sharedScans, relayedScans, withIdentities, withoutCopyDrift } from './eventIdentity';
 
 // New events carry the sync's ISO spelling; stored rows come back from
 // PostgREST with an explicit +00:00 offset. Both name the same instant.
@@ -450,6 +450,76 @@ describe('rows stored with a placeholder of the carrier\'s template left in', ()
     expect(filledPlaceholders([scan, { ...saved }], [saved]).size).toBe(0);
     expect(filledPlaceholders([scan, { ...scan, provider_event_id: 'bpost:other', description: 'Item available at the Parcel Locker' }], [saved]).size).toBe(0);
     expect(filledPlaceholders([scan], [saved, { ...saved, provider_event_id: 'bpost:copy' }]).size).toBe(0);
+  });
+});
+
+describe('a scan its carrier moves a little later', () => {
+  // A carrier moved a departure an hour later and lists only the later time (synthetic place and times).
+  const place = 'EXAMPLE CITY DISTRIBUTION CENTER';
+  const at = (time: string, id: string, description = 'Departed Facility', extra: JsonObject = {}) => ({
+    provider_event_id: id, occurred_at: new Date(time).toISOString(), stage: 'in_transit', description, location: place,
+    raw_data: { time }, ...extra,
+  });
+  const label = at('2026-10-21T17:45:00-07:00', 'usps:label', 'Shipping Label Created', { stage: 'registered' });
+  const arrived = at('2026-10-22T21:56:00-07:00', 'usps:arrived', 'Arrived at Facility');
+  const departed = at('2026-10-23T01:55:00-07:00', 'usps:departed');
+  const later = at('2026-10-23T03:00:00-07:00', 'usps:departed-later');
+  const stored = [label, arrived, departed];
+
+  it('takes over the row the answer no longer lists, up to three hours later', () => {
+    expect(pairs(retimedScans([label, arrived, later], stored, 'usps'))).toEqual([['usps:departed-later', 'usps:departed']]);
+    const threeHours = at('2026-10-23T04:55:00-07:00', 'usps:three-hours');
+    expect(pairs(retimedScans([label, arrived, threeHours], stored, 'usps'))).toEqual([['usps:three-hours', 'usps:departed']]);
+    // Codes that agree, wording and place apart from case and spacing.
+    expect(pairs(retimedScans([label, arrived, { ...later, description: ' departed  facility', raw_data: { time: later.raw_data.time, provider_code: 'DEP' } }],
+      [label, arrived, { ...departed, raw_data: { ...departed.raw_data, provider_code: 'DEP' } }], 'usps'))).toEqual([['usps:departed-later', 'usps:departed']]);
+  });
+
+  it('keeps a row the answer still lists: the carrier tells both scans', () => {
+    expect(retimedScans([label, arrived, departed, later], stored, 'usps').size).toBe(0);
+  });
+
+  it('keeps a row the next round of the same scan replaces: a carrier listing only the latest of a run shows another scan', () => {
+    // TNT scans a parcel held at its depot each working day and lists only the latest scan.
+    expect(retimedScans([label, arrived, at('2026-10-23T04:56:00-07:00', 'usps:over-three-hours')], stored, 'usps').size).toBe(0);
+    expect(retimedScans([label, arrived, at('2026-10-24T00:21:00-07:00', 'usps:next-day')], stored, 'usps').size).toBe(0);
+    // Nor does a carrier move a scan earlier.
+    expect(retimedScans([label, arrived, at('2026-10-23T01:00:00-07:00', 'usps:earlier')], stored, 'usps').size).toBe(0);
+  });
+
+  it('needs the same wording, place and stage, and codes that agree', () => {
+    for (const scan of [
+      { ...later, description: 'Departed Post Office' },
+      { ...later, location: 'OTHER CITY DISTRIBUTION CENTER' },
+      { ...later, stage: 'out_for_delivery' },
+      { ...later, raw_data: { ...later.raw_data, provider_code: 'OTHER' } },
+    ]) {
+      const rows = [label, arrived, { ...departed, raw_data: { ...departed.raw_data, provider_code: 'DEP' } }];
+      expect(retimedScans([label, arrived, { ...scan, raw_data: { provider_code: 'DEP', ...scan.raw_data } }], rows, 'usps').size).toBe(0);
+    }
+  });
+
+  it('needs nothing of the carrier between the two, and an older scan of the carrier in the answer', () => {
+    // A scan between them makes the later one the next visit.
+    const between = at('2026-10-23T02:30:00-07:00', 'usps:between', 'Arrived at Facility');
+    expect(retimedScans([label, arrived, between, later], stored, 'usps').size).toBe(0);
+    expect(retimedScans([label, arrived, later], [...stored, between], 'usps').size).toBe(0);
+    // An answer that starts after the row may be a shorter window of the history.
+    expect(retimedScans([later], stored, 'usps').size).toBe(0);
+  });
+
+  it('leaves two alike scans or rows, other sources, observations, days alone and matched scans alone', () => {
+    expect(retimedScans([label, arrived, later, at('2026-10-23T03:30:00-07:00', 'usps:departed-again')], stored, 'usps').size).toBe(0);
+    expect(retimedScans([label, arrived, later], [...stored, at('2026-10-23T01:56:00-07:00', 'usps:departed-twice')], 'usps').size).toBe(0);
+    const universal = (row: JsonObject) => ({ ...row, provider_event_id: String(row.provider_event_id).replace('usps:', 'unknown:') });
+    expect(retimedScans([label, arrived, later].map(universal), stored.map(universal), 'unknown').size).toBe(0);
+    expect(retimedScans([label, arrived, later], stored, 'fedex').size).toBe(0);
+    expect(retimedScans([label, arrived, later], [label, arrived, { ...departed, provider_event_id: 'fedex:departed' }], 'usps').size).toBe(0);
+    expect(retimedScans([label, arrived, later], [label, arrived, { ...departed, observed_without_provider_timestamp: true }], 'usps').size).toBe(0);
+    const days = [label, arrived, { ...departed, occurred_at: '2026-10-23T00:00:00.000Z', raw_data: { time: '2026-10-23' } }];
+    expect(retimedScans([label, arrived, { ...later, occurred_at: '2026-10-23T01:00:00.000Z' }], days, 'usps').size).toBe(0);
+    expect(retimedScans([label, arrived, later], stored, 'usps', new Map([['usps:departed-later', 'unknown:copy']])).size).toBe(0);
+    expect(retimedScans([label, arrived, later], stored, 'usps', new Map([['usps:other', 'usps:departed']])).size).toBe(0);
   });
 });
 

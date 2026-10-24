@@ -35,7 +35,7 @@ import {
 import type { DeliveryEmailService } from './email/deliveryEmails';
 import { PushDispatchError, type CompositePushNotificationService } from './push';
 import { REDETECTION_PAGE, STORED_EVENT_IDENTITIES, SyncJobLeaseLost, type SupabaseServiceClient } from './supabase';
-import { clockDay, datedObservations, filledPlaceholders, misdatedCopies, restatedIdentities, sameInstantIdentities, scanDay, sharedScans, relayedScans, UNIVERSAL_PROVIDER, UNWORDED_STEP, withIdentities, withoutCopyDrift } from './eventIdentity';
+import { clockDay, datedObservations, filledPlaceholders, misdatedCopies, restatedIdentities, retimedScans, sameInstantIdentities, scanDay, sharedScans, relayedScans, UNIVERSAL_PROVIDER, UNWORDED_STEP, withIdentities, withoutCopyDrift } from './eventIdentity';
 import {
   askedForCheck,
   providerFailureSummary,
@@ -1751,7 +1751,10 @@ export class TrackingSyncService {
       // The earlier carrier's relay of a delivery scan stays its own row, at the same second or to the minute.
       const relaying = fetched.earlierCarrierId ?? earlierCarrier(parcel);
       const shared = sharedScans(events.filter((event) => !normalized.relays.has(String(event.provider_event_id))), stored, reworded, relaying);
-      const matches = { reused: new Map([...reworded, ...shared.reused]), skipped: shared.skipped };
+      // A scan the carrier's own answer moved a little later takes over the row it no longer lists.
+      const retimed = typeof result.tracking_provider === 'string' ? new Map<string, string>()
+        : retimedScans(events, stored, sourceCarrierId, new Map([...reworded, ...shared.reused, ...shared.skipped]));
+      const matches = { reused: new Map([...reworded, ...shared.reused, ...retimed]), skipped: shared.skipped };
       // The parcel's own carrier listing fewer of the scans already stored (JRT dropping a parcel's
       // later scans and keeping the label's, sometimes with a label scan the rows lack) takes nothing
       // back while each stored scan keeps its stage and no scan is newer than the stored progress: the

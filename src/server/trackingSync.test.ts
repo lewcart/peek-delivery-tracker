@@ -5746,6 +5746,41 @@ it('rewrites in place a scan stored with a placeholder of the carrier\'s templat
     .toEqual([{ id: 'row-0', provider_event_id: 'bpost:placeholder', description: 'Item available at the bbox locker' }]);
 });
 
+it('moves the row of a scan its carrier restates a little later, and keeps the next day\'s scan in the same words', async () => {
+  const store = eventStore();
+  // A carrier moves a departure an hour later and lists only the later time; a day later it lists a new departure
+  // from the same place in the same words, and only that one (synthetic place and times).
+  const scan = (time: string, description: string) => ({ time, stage: 'in_transit', description, location: 'Example City Hub' });
+  const result = (...events: ReturnType<typeof scan>[]) => ({ status: 'in_transit', current_stage: 'in_transit',
+    last_update: events.at(-1)!.time, last_status_text: events.at(-1)!.description, events });
+  const arrived = scan('2026-10-22T21:56:00-07:00', 'Arrived at Facility');
+  const departed = scan('2026-10-23T01:55:00-07:00', 'Departed Facility');
+  const later = { ...departed, time: '2026-10-23T03:00:00-07:00' };
+  const nextDay = { ...departed, time: '2026-10-24T02:10:00-07:00' };
+  const adapter = { fetch: vi.fn()
+    .mockResolvedValueOnce(result(arrived, departed))
+    .mockResolvedValueOnce(result(arrived, later))
+    .mockResolvedValueOnce(result(arrived, later))
+    .mockResolvedValue(result(arrived, nextDay)) };
+  const service = new TrackingSyncService(store.client as unknown as SupabaseServiceClient, adapter, null,
+    () => new Date('2026-10-24T12:00:00Z'));
+  const load = () => ({ id: 'retimed-parcel', user_id: 'owner', carrier: 'dhl', tracking_number: 'TEST1234',
+    current_stage: store.rows.size ? 'in_transit' : 'pending', [STORED_EVENT_IDENTITIES]: store.identities() });
+  const departures = () => [...store.rows.values()].filter((row) => row.description === 'Departed Facility')
+    .map(({ id, occurred_at }) => ({ id, at: new Date(String(occurred_at)).toISOString() }));
+
+  await service.syncPackage(load());
+  expect(departures()).toEqual([{ id: 'row-2', at: '2026-10-23T08:55:00.000Z' }]);
+  // The departure's row moves to the later time in place: no second row, nothing announced again.
+  await expect(service.syncPackage(load())).resolves.toMatchObject({ updated: 0, unchanged: 1 });
+  expect(departures()).toEqual([{ id: 'row-2', at: '2026-10-23T10:00:00.000Z' }]);
+  await expect(service.syncPackage(load())).resolves.toMatchObject({ updated: 0, unchanged: 1 });
+  expect(departures()).toEqual([{ id: 'row-2', at: '2026-10-23T10:00:00.000Z' }]);
+  // A day later it is another scan, and both stay.
+  await expect(service.syncPackage(load())).resolves.toMatchObject({ updated: 1, unchanged: 0 });
+  expect(departures()).toEqual([{ id: 'row-2', at: '2026-10-23T10:00:00.000Z' }, { id: 'row-3', at: '2026-10-24T09:10:00.000Z' }]);
+});
+
 it('tells a check that stored a scan from one that rewrote the scans it had', async () => {
   const store = eventStore();
   const scan = (time: string, description: string, location = '') => ({ time, stage: 'in_transit', description, location });

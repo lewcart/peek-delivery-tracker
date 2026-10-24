@@ -23,6 +23,9 @@
  *   row showing that wall clock under another offset (DHL Express's mobile API
  *   and global portal). A scan its source restates with or without its
  *   milliseconds takes over the row of that second (Royal Mail's locker drop-off).
+ * - Whatever the policy, a scan the carrier's own answer moved up to three
+ *   hours later takes over the row of the earlier time that the answer no
+ *   longer lists (`retimedScans`).
  * - A row taken over keeps its old identity while its strings follow the
  *   scan. When a later check meets the scan again, a policy that matched the
  *   old strings (AliExpress's town in brackets) no longer matches, so a scan
@@ -515,6 +518,55 @@ function heldByCarrier(row: JsonObject): boolean {
  */
 function copies(scan: JsonObject, row: JsonObject): boolean {
   return instantOf(scan) === instantOf(row) && stageOf(scan) !== '' && !placesConflict(placeWords(scan), placeWords(row));
+}
+
+/** How much later a source may restate one of its scans: a correction of the scan's time, not the next round of scans. */
+const RETIMED_WITHIN_MS = 3 * HOUR_MS;
+
+/**
+ * Maps the computed identity of each new scan of `source`, the carrier that answered, to the
+ * stored row of that source the answer moved to it: USPS moved a departure from 01:55 to 03:00,
+ * and then listed only the later one. The scan is no more than three hours after the row, with
+ * the same wording, place and stage, and codes that agree when both carry one. The answer no
+ * longer lists the row but still lists an older scan of the source, so it is no shorter window
+ * of the history, and neither the answer nor the stored rows hold a scan of the source between
+ * the two. Scans and rows another rule matched, observations, scans dated by their day alone and
+ * universal or app rows are left out, and the match is one to one. A carrier that lists only the
+ * latest of a run of the same scan (TNT's daily scan of a parcel held at its depot) moves it to
+ * the next day: those are scans of their own, and stay.
+ */
+export function retimedScans(
+  events: readonly JsonObject[],
+  stored: readonly JsonObject[],
+  source: string,
+  matched: ReadonlyMap<string, string> = new Map(),
+): Map<string, string> {
+  const retimed = new Map<string, string>();
+  if (source === '' || source === UNIVERSAL || source === 'app') return retimed;
+  const own = (row: JsonObject) => sourceOf(identity(row)) === source && !observedOnly(row) && !dayAlone(row)
+    && Number.isFinite(instantOf(row));
+  const storedIds = new Set(stored.map(identity));
+  const listed = new Set([...events.map(identity), ...matched.values()]);
+  const answer = events.filter(own);
+  const held = [...answer, ...stored.filter(own)];
+  const scans = answer.filter((scan) => !storedIds.has(identity(scan)) && !matched.has(identity(scan)));
+  const rows = stored.filter((row) => own(row) && !listed.has(identity(row)));
+  const earliest = Math.min(...answer.map(instantOf));
+  const alike = (scan: JsonObject, row: JsonObject) => {
+    const [from, to] = [instantOf(row), instantOf(scan)];
+    return to > from && to - from <= RETIMED_WITHIN_MS && earliest < from
+      && wordingOf(scan) !== '' && wordingOf(scan) === wordingOf(row) && placeOf(scan) === placeOf(row)
+      && stageOf(scan) !== '' && stageOf(scan) === stageOf(row) && codesAgree(scan, row);
+  };
+  for (const scan of scans) {
+    const matching = rows.filter((row) => alike(scan, row));
+    if (matching.length !== 1) continue;
+    const row = matching[0]!;
+    if (scans.filter((other) => alike(other, row)).length !== 1) continue;
+    if (held.some((other) => instantOf(other) > instantOf(row) && instantOf(other) < instantOf(scan))) continue;
+    retimed.set(identity(scan), identity(row));
+  }
+  return retimed;
 }
 
 /**
