@@ -317,6 +317,9 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(TrackingLocation.place("Haiger (DE)", placedIn: "DE"), .init(country: "DE", name: "Haiger"))
         XCTAssertEqual(TrackingLocation.place("Wilmington, DE", placedIn: "US"), .init(country: nil, name: "Wilmington, DE"))
         XCTAssertEqual(TrackingLocation.place("Hannover, DE", placedIn: nil), .init(country: nil, name: "Hannover, DE"))
+        XCTAssertEqual(TrackingLocation.place("Austin, TX", placedIn: "US"), .init(country: nil, name: "Austin, TX"))
+        XCTAssertEqual(TrackingLocation.place("Los Angeles, CA", placedIn: "US"), .init(country: nil, name: "Los Angeles, CA"))
+        XCTAssertEqual(TrackingLocation.place("Toronto, CA", placedIn: "CA"), .init(country: "CA", name: "Toronto"))
         XCTAssertEqual(TrackingLocation.flag("CH"), "🇨🇭")
         // Passport evidence stays a final field that names a region.
         XCTAssertEqual(TrackingLocation.countryCode(in: "Zürich, CH"), "CH")

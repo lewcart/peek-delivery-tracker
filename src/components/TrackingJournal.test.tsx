@@ -46,9 +46,12 @@ describe('TrackingJournal', () => {
       { ...event('bracket', '2024-09-09T09:00:00', 'Sorted', 'Haiger (DE)'), place: placed('DE') },
       { ...event('state', '2024-09-09T08:00:00', 'Sorted', 'Wilmington, DE'), place: placed('US') },
       event('unplaced', '2024-09-09T07:00:00', 'Sorted', 'Hannover, DE'),
+      { ...event('texas', '2024-09-09T06:00:00', 'Sorted', 'Austin, TX'), place: placed('US') },
+      { ...event('california', '2024-09-09T05:00:00', 'Sorted', 'Los Angeles, CA'), place: placed('US') },
+      { ...event('canada', '2024-09-09T04:00:00', 'Sorted', 'Toronto, CA'), place: placed('CA') },
     ]} />);
     expect([...coded.querySelectorAll('.tracking-journal__location')].map(place => place.textContent)).toEqual([
-      '🇩🇪Haiger, Germany', '🇩🇪Haiger, Germany', 'Wilmington, DE', 'Hannover, DE',
+      '🇩🇪Haiger, Germany', '🇩🇪Haiger, Germany', 'Wilmington, DE', 'Hannover, DE', 'Austin, TX', 'Los Angeles, CA', '🇨🇦Toronto, Canada',
     ]);
     expect(flag).toHaveClass('tracking-journal__flag');
     expect(flag).toHaveAttribute('aria-hidden', 'true');
