@@ -208,7 +208,7 @@ describe('an answer through a link', () => {
     ['a right answer with words', { answer: 'right', reasons: ['status'] }],
     ['a carrier named for a found parcel', { carrierName: 'Example Post' }],
     ['a parcel found elsewhere with nobody named', { answer: 'found_elsewhere', reasons: [] }],
-    ['a note past its limit', { note: 'x'.repeat(1_001) }],
+    ['a note past its limit', { note: 'x'.repeat(4_001) }],
     ['a tracking page past its limit', { answer: 'found_elsewhere', reasons: [], trackingPage: 'x'.repeat(501) }],
     ['a note that is not text', { note: 4 }],
     ['no place the question was asked', { asked: 'email' }],
@@ -220,6 +220,13 @@ describe('an answer through a link', () => {
     expect(response.status).toBe(400);
     expect(read).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
+  });
+
+  it('keeps a long note whole up to its limit', async () => {
+    found();
+    const note = 'x'.repeat(4_000);
+    expect((await viaLink(answer({ note }))).status).toBe(204);
+    expect((record.mock.calls[0][0] as JsonObject).note).toBe(note);
   });
 
   it('limits how fast one address may answer', async () => {

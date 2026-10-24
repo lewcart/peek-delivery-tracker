@@ -529,7 +529,7 @@ export function parcelFeedbackValues(payload: JsonObject): ParcelFeedbackValues 
     throw new HttpError(400, 'Choose supported reasons');
   }
   const reasons = given as ApiParcelFeedbackReason[];
-  const note = feedbackWords(payload.note, 1_000, 'A note');
+  const note = feedbackWords(payload.note, 4_000, 'A note');
   const carrierName = feedbackWords(payload.carrierName, 120, 'A carrier name');
   const trackingPage = feedbackWords(payload.trackingPage, 500, 'A tracking page');
   if (payload.asked !== 'page' && payload.asked !== 'back') throw new HttpError(400, 'Say where the question was asked');

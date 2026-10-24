@@ -78,6 +78,7 @@
 .peekfb-field { display: grid; gap: 6px; margin-top: 14px; }
 .peekfb-field--first { margin-top: 0; }
 .peekfb-field label { margin-inline: 2px; color: var(--ink-soft); font-size: 12px; }
+.peekfb-left { margin: 0 2px; color: var(--ink-soft); font-size: 12px; text-align: end; }
 .peekfb-field input, .peekfb-field textarea {
   width: 100%; min-width: 0; min-height: 50px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink);
   background: var(--paper); font-size: 16px; line-height: 1.4; resize: none; transition: border-color .18s, box-shadow .18s;

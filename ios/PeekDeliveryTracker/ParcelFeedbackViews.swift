@@ -481,6 +481,8 @@ private struct ParcelFeedbackWordsSheet: View {
         reasons.isEmpty && ParcelFeedbackRequest.words(note, limit: ParcelFeedbackRequest.noteLimit) == nil
     }
 
+    private var noteLeft: Int { ParcelFeedbackRequest.noteLimit - note.unicodeScalars.count }
+
     var body: some View {
         FeedbackSheet(title: localizer.text("feedback.whatsOff"), busy: model.sending, writing: writing) {
             FeedbackFlow(spacing: 6) {
@@ -490,6 +492,13 @@ private struct ParcelFeedbackWordsSheet: View {
                 TextField(text: $note, prompt: Text(verbatim: ""), axis: .vertical) { Text(localizer.text("feedback.note")) }
                     .lineLimit(2...6)
                     .focused($writing)
+            }
+            if noteLeft <= ParcelFeedbackRequest.noteWarning {
+                Text(localizer.text("feedback.noteLeft.many", ["count": noteLeft]))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal, 2)
             }
             if failed { FeedbackFailure() }
             FeedbackSendButton(busy: model.sending, disabled: empty, action: send)

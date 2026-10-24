@@ -57,7 +57,9 @@ const BACK_MS = 12_000;
 const WORD_MS = 4_000;
 /** A page left for less than this was not compared with the carrier's. */
 const AWAY_MS = 1_500;
-const NOTE_LIMIT = 1_000;
+const NOTE_LIMIT = 4_000;
+/** A note this close to its limit shows how many characters are left, so nothing is cut off unseen. */
+const NOTE_WARNING = 200;
 const CARRIER_LIMIT = 120;
 const PAGE_LIMIT = 500;
 
@@ -352,6 +354,7 @@ function WrongSheet({ feedback, initial, dismiss }: { feedback: ParcelFeedbackSt
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
+  const left = NOTE_LIMIT - note.length;
   const toggle = (reason: ApiParcelFeedbackReason) => setPicked((current) => current.includes(reason) ? current.filter((one) => one !== reason) : [...current, reason]);
   async function send() {
     setSending(true);
@@ -368,7 +371,9 @@ function WrongSheet({ feedback, initial, dismiss }: { feedback: ParcelFeedbackSt
     </div>
     <div className="peekfb-field">
       <label htmlFor={field}>{t('feedback.note')}</label>
-      <textarea id={field} rows={2} maxLength={NOTE_LIMIT} value={note} onChange={(event) => setNote(event.target.value)} />
+      <textarea id={field} rows={2} maxLength={NOTE_LIMIT} value={note} onChange={(event) => setNote(event.target.value)}
+        aria-describedby={left <= NOTE_WARNING ? `${field}-left` : undefined} />
+      {left <= NOTE_WARNING && <p id={`${field}-left`} className="peekfb-left">{t('feedback.noteLeft.many', { count: left })}</p>}
     </div>
     {failed && <p className="sheet__error" role="alert">{t('feedback.failed')}</p>}
     <div className="peeks__actions">

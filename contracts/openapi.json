@@ -37053,7 +37053,7 @@
           },
           "note": {
             "type": "string",
-            "maxLength": 1000
+            "maxLength": 4000
           },
           "carrierName": {
             "type": "string",

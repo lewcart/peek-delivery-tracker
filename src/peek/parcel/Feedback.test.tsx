@@ -138,6 +138,24 @@ describe('Pip’s question about a parcel a carrier answers for', () => {
     expect(send).toHaveBeenCalledTimes(3);
   });
 
+  it('says how much room a long note has left before its limit stops it', async () => {
+    const user = userEvent.setup();
+    open();
+    await user.click(within(bubble()).getByRole('button', { name: 'Not quite' }));
+    await user.click(within(bubble()).getByRole('button', { name: 'Something else' }));
+    await user.click(await within(bubble()).findByRole('button', { name: 'Add a note' }));
+    const sheet = screen.getByRole('dialog', { name: 'What’s off?' });
+    const field = within(sheet).getByLabelText('Anything to add? Optional');
+    expect(field).toHaveAttribute('maxLength', '4000');
+    fireEvent.change(field, { target: { value: 'a'.repeat(3_700) } });
+    expect(within(sheet).queryByText(/characters? left/)).toBeNull();
+    fireEvent.change(field, { target: { value: 'a'.repeat(3_850) } });
+    expect(within(sheet).getByText('150 characters left')).toBeVisible();
+    expect(field).toHaveAccessibleDescription('150 characters left');
+    fireEvent.change(field, { target: { value: 'a'.repeat(3_999) } });
+    expect(within(sheet).getByText('1 character left')).toBeVisible();
+  });
+
   it('stands on every visit, for a reader who has more to say about a scan already answered for', () => {
     open({ notes: memoryNotes({ at: hoursAgo(1), scan: SCAN }) });
     expect(within(bubble()).getByText('Did I get this one right?')).toBeVisible();

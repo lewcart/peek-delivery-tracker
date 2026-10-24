@@ -118,7 +118,9 @@ struct ParcelFeedbackMemory {
 }
 
 extension ParcelFeedbackRequest {
-    static let noteLimit = 1_000
+    static let noteLimit = 4_000
+    /// A note this close to its limit shows how many characters are left, so nothing is cut off unseen.
+    static let noteWarning = 200
     static let carrierNameLimit = 120
     static let trackingPageLimit = 500
 
