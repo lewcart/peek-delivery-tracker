@@ -21,7 +21,8 @@
  *   stored under the old label (India Post's scans abroad). One whose feeds
  *   put different offsets on a scan's wall clock lets the scan take over the
  *   row showing that wall clock under another offset (DHL Express's mobile API
- *   and global portal).
+ *   and global portal). A scan its source restates with or without its
+ *   milliseconds takes over the row of that second (Royal Mail's locker drop-off).
  * - A row taken over keeps its old identity while its strings follow the
  *   scan. When a later check meets the scan again, a policy that matched the
  *   old strings (AliExpress's town in brackets) no longer matches, so a scan
@@ -108,7 +109,8 @@ function byInstant(rows: readonly JsonObject[]): Map<number, JsonObject[]> {
  *
  * A policy's `relabelledFrom` zone adds a pass for the scans and rows left,
  * matched by `relabelled`, and its `matchWallClock` another, matched by
- * `sameWallClock`.
+ * `sameWallClock`. A last pass, for every policy, matches the scans and rows
+ * left by `restatedSecond`.
  */
 export function sameInstantIdentities(
   events: readonly JsonObject[],
@@ -147,7 +149,27 @@ export function sameInstantIdentities(
   const zone = relabelledFrom(policy);
   if (zone) matchLeft(reused, unmatched, candidates, (scan, row) => relabelled(zone, scan, row));
   if (matchesWallClock(policy)) matchLeft(reused, unmatched, candidates, sameWallClock);
+  matchLeft(reused, unmatched, candidates, (scan, row) => restatedSecond(policy, scan, row));
   return reused;
+}
+
+/**
+ * One scan its source restated with or without its milliseconds: Royal Mail
+ * first dated a locker drop-off 16:31:18.092, then 16:31:18. The same second,
+ * one of the times that whole second, the same location and wording apart
+ * from case and spacing, and the provider code the policy requires, or codes
+ * that agree when both carry one.
+ */
+function restatedSecond(policy: SameInstantIdentityPolicy, scan: JsonObject, row: JsonObject): boolean {
+  const [shown, saved] = [instantOf(scan), instantOf(row)];
+  if (!Number.isFinite(shown) || !Number.isFinite(saved) || shown === saved
+    || Math.floor(shown / 1_000) !== Math.floor(saved / 1_000) || (shown % 1_000 !== 0 && saved % 1_000 !== 0)) return false;
+  const [code, savedCode] = [providerCode(scan), providerCode(row)];
+  if (policy.requireProviderCode ? !code || code.toLowerCase() === 'unknown' || code !== savedCode : code && savedCode && code !== savedCode) {
+    return false;
+  }
+  return wordingOf(scan) !== '' && wordingOf(scan) === wordingOf(row)
+    && String(scan.location ?? '').trim() === String(row.location ?? '').trim();
 }
 
 /** Each scan left whose one matching row left matches no other scan left takes that row over. */

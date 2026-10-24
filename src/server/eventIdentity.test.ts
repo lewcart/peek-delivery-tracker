@@ -332,6 +332,50 @@ describe('a scan whose source\'s feeds put different offsets on its wall clock',
   });
 });
 
+describe('a scan its source restates with or without its milliseconds', () => {
+  // Royal Mail first dated a locker drop-off to the millisecond, then to the second (synthetic place).
+  const description = 'Sender advised item dropped off at parcel locker';
+  const location = 'Example Delivery Office RM Parcel Locker';
+  const row = { provider_event_id: 'royal-mail:precise', occurred_at: '2026-10-23T15:31:18.092+00:00', time: '2026-10-23T16:31:18.092+01:00',
+    stage: 'accepted', description, location, raw_data: { provider_code: 'LOPPA' } };
+  const scan = { package_id: 'package-1', provider_event_id: 'royal-mail:whole', occurred_at: '2026-10-23T15:31:18.000Z',
+    stage: 'accepted', description, location, raw_data: { time: '2026-10-23T16:31:18+01:00', provider_code: 'LOPPA' } };
+
+  it('takes over the row of that second, both ways', () => {
+    expect([...sameInstantIdentities([scan], [row], 'royal-mail')]).toEqual([['royal-mail:whole', 'royal-mail:precise']]);
+    const precise = { ...row, package_id: 'package-1', provider_event_id: 'royal-mail:again' };
+    const whole = { ...scan, provider_event_id: 'royal-mail:stored', occurred_at: '2026-10-23T15:31:18+00:00' };
+    expect([...sameInstantIdentities([precise], [whole], 'royal-mail')]).toEqual([['royal-mail:again', 'royal-mail:stored']]);
+  });
+
+  it('needs one time to be that whole second, the same place and wording, the code the policy requires, and one match', () => {
+    for (const different of [
+      { ...row, occurred_at: '2026-10-23T15:31:19.092+00:00' },
+      { ...row, occurred_at: '2026-10-23T15:31:17.092+00:00' },
+      { ...row, location: 'Another Delivery Office' },
+      { ...row, description: 'Item collected from parcel locker' },
+      { ...row, raw_data: { provider_code: 'EVDAV' } },
+      { ...row, raw_data: {} },
+      { ...row, observed_without_provider_timestamp: true },
+      { ...row, provider_event_id: 'unknown:precise' },
+    ]) expect(sameInstantIdentities([scan], [different], 'royal-mail').size).toBe(0);
+    // Two times with milliseconds of their own are two scans.
+    expect(sameInstantIdentities([{ ...scan, occurred_at: '2026-10-23T15:31:18.500Z' }], [row], 'royal-mail').size).toBe(0);
+    expect(sameInstantIdentities([{ ...scan, raw_data: { provider_code: 'Unknown' } }], [{ ...row, raw_data: { provider_code: 'Unknown' } }], 'royal-mail').size)
+      .toBe(0);
+    expect(sameInstantIdentities([scan], [row, { ...row, provider_event_id: 'royal-mail:twin' }], 'royal-mail').size).toBe(0);
+    expect(sameInstantIdentities([scan, { ...scan, provider_event_id: 'royal-mail:twin' }], [row], 'royal-mail').size).toBe(0);
+  });
+
+  it('leaves a source without a policy out, and lets codes that agree do for one that requires none', () => {
+    const as = (source: string, value: Record<string, unknown>) => ({ ...value, provider_event_id: String(value.provider_event_id).replace('royal-mail', source) });
+    expect(sameInstantIdentities([as('dhl', scan)], [as('dhl', row)], 'dhl').size).toBe(0);
+    expect(sameInstantIdentities([as('dhl-express', scan)], [as('dhl-express', { ...row, raw_data: {} })], 'dhl-express').size).toBe(1);
+    expect(sameInstantIdentities([as('dhl-express', scan)], [as('dhl-express', { ...row, raw_data: { provider_code: 'OTHER' } })], 'dhl-express').size)
+      .toBe(0);
+  });
+});
+
 describe('rows an earlier take-over left under an old identity', () => {
   const at = '2026-09-27T02:03:08+08:00';
   const instant = '2026-09-26T18:03:08+00:00';

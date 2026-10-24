@@ -1540,6 +1540,27 @@ describe('TrackingSyncService', () => {
       expect.objectContaining({ anomaly_codes: ['early_stage_regression'] }), expect.any(Array));
   });
 
+  it('keeps one row of a scan its carrier restates without its milliseconds', async () => {
+    // Royal Mail dated a locker drop-off to the millisecond, then to the second (synthetic place and number).
+    const scan = { description: 'Sender advised item dropped off at parcel locker', location: 'Example Delivery Office RM Parcel Locker',
+      stage: 'accepted', provider_code: 'LOPPA' };
+    const stored = { ...scan, raw_data: { provider_code: 'LOPPA', time: '2026-10-23T16:31:18.092+01:00' },
+      occurred_at: '2026-10-23T15:31:18.092Z', provider_event_id: providerEventId('royal-mail', '2026-10-23T16:31:18.092+01:00', scan.location, scan.description) };
+    const client = { ...fakeClient(),
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-10-24T10:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined),
+    };
+    const adapter = { fetch: vi.fn().mockResolvedValue({ status: 'in_transit', current_stage: 'accepted', last_status_text: scan.description,
+      last_update: '2026-10-23T16:31:18+01:00', events: [{ ...scan, time: '2026-10-23T16:31:18+01:00' }] }) };
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date('2026-10-24T10:00:00Z'));
+    await service.syncPackage({ id: 'restated', carrier: 'royal-mail', tracking_number: 'TEST1234', current_stage: 'accepted',
+      [STORED_EVENT_IDENTITIES]: [stored] }, { trigger: 'scheduled' });
+    const saved = client.insertEvents.mock.calls.flatMap((call) => call[0] as JsonObject[]);
+    // The scan updates its stored row in place, now dated to the second.
+    expect(saved.map((event) => event.provider_event_id)).toEqual([stored.provider_event_id]);
+    expect(Date.parse(String(saved[0]!.occurred_at))).toBe(Date.parse('2026-10-23T15:31:18Z'));
+  });
+
   it('holds a saved stage only as far as the scans the parcel keeps show it', () => {
     const parcel = { [STORED_EVENT_IDENTITIES]: [] };
     const rows = (...stages: string[]) => stages.map((stage) => ({ stage }));
