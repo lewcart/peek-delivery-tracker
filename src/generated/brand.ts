@@ -771,6 +771,7 @@ export const CARRIER_DECALS: Record<string, CarrierDecal> = {
   "exmate": "exmate",
   "express-one": "express-one",
   "fan-courier": "fan-courier",
+  "far-international": "far-international",
   "fargo-courier": "fargo-courier",
   "fargo-uz": "fargo-uz",
   "fastdrop": "fastdrop",
@@ -14662,6 +14663,38 @@ export const CARRIER_TRUCK: TruckGeometry = {
         "cx": 11.5,
         "cy": 5.92,
         "r": 1.12,
+        "fill": "accent"
+      }
+    ],
+    "far-international": [
+      {
+        "type": "polygon",
+        "d": "M6.13 6.74L9.49 6.74L8.95 7.82L7.06 7.82L4.89 12.26L3.43 12.26Z",
+        "fill": "accent"
+      },
+      {
+        "type": "polygon",
+        "d": "M6.64 9.14L8.29 9.14L7.74 10.22L6.1 10.22Z",
+        "fill": "#ed6d34"
+      },
+      {
+        "type": "polygon",
+        "d": "M10.39 6.74L13.06 6.74L13.06 8.9L11.74 8.9L11.74 7.82L11.14 7.82L9.22 12.26L7.63 12.26Z",
+        "fill": "accent"
+      },
+      {
+        "type": "polygon",
+        "d": "M11.74 10.34L13.06 10.34L13.06 12.26L11.74 12.26Z",
+        "fill": "accent"
+      },
+      {
+        "type": "polygon",
+        "d": "M14.63 6.74L18.1 6.74L18.57 7.1L18.57 8.06L18.34 9.26L17.38 10.22L17.85 12.26L16.53 12.26L16.06 10.22L10.3 10.22L10.78 9.14L16.77 9.14L17.08 8.66L17.13 7.82L15.82 7.82L15.69 8.9L14.12 8.9Z",
+        "fill": "accent"
+      },
+      {
+        "type": "polygon",
+        "d": "M13.91 10.34L15.22 10.34L14.84 12.26L13.52 12.26Z",
         "fill": "accent"
       }
     ]
