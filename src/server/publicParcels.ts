@@ -438,7 +438,7 @@ export function publicParcelResponse(found: StoredParcelLink, alerts: ApiParcelA
       last_synced_at: optionalText(row.last_synced_at),
       sync_status: String(row.sync_status) as ApiSyncStatus,
       sync_error: typeof row.sync_error === 'string' && SYNC_ERROR_CODE.test(row.sync_error) ? row.sync_error : null,
-      // A stored link is always a private credential (Planzer, Dachser), and a postcode is the recipient's.
+      // A stored link is always a private credential (Planzer, Dachser, a Freightways sender's account), and a postcode is the recipient's.
       tracking_url: null,
       dpd_postcode: null,
       carrier_data: publicCarrierData(carrierData, numberShown, wrapped),

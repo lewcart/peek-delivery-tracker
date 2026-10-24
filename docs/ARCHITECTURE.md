@@ -216,8 +216,9 @@ Key server modules:
     (`lang`), which the page speaks over the browser's own choice.
   - Tokens stay out of request logs and error reports.
 - **Private data**: tracking numbers, labels, carrier history, push endpoints and capability
-  URLs (Planzer, Dachser) never go into analytics. They do appear in operator logs and
-  Sentry; see [OBSERVABILITY.md](OBSERVABILITY.md).
+  URLs (the tracking links a carrier keeps, such as Planzer's or a Freightways network's) never
+  go into analytics. They do appear in operator logs and Sentry; see
+  [OBSERVABILITY.md](OBSERVABILITY.md).
 - **Pictures**: the invitation card, a parcel link's preview image and the delivery
   email's card are drawn on the server with the fonts it ships, and ask nothing of the web.
   The renderer would fetch a font for a character they lack and a drawing for an emoji, so
