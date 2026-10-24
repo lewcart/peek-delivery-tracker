@@ -1,5 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { memo, startTransition, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { createPortal, flushSync } from 'react-dom';
 import { useI18n } from '../i18n';
 import { carrierInfo, SELECTABLE_CARRIERS, type CarrierInfo } from '../lib/carriers';
 import {
@@ -11,7 +11,7 @@ import {
 import { useSheetDialog } from '../lib/modal';
 import { countryName } from 'universal-parcel-scraper/app';
 import type { CarrierId } from '../types';
-import { CarrierTruck } from './CarrierMark';
+import { CarrierTruck, TruckDefinitions } from './CarrierMark';
 import { Icon } from './Icon';
 import './CarrierPickerSheet.css';
 
@@ -28,12 +28,34 @@ export interface CarrierPickerTag {
 
 type Choice = CarrierId | 'auto';
 
-interface Option {
+interface CarrierOption {
   id: string;
-  choice: Choice;
-  carrier?: CarrierInfo;
+  carrier: CarrierInfo;
   result?: CarrierSearchResult;
+  /** The line under the name: the other name that matched, or the carrier's countries. */
+  sub: string;
 }
+
+type Option = CarrierOption | { id: string; carrier?: undefined };
+
+/** A run of rows under one heading, and where its first row stands among all the rows. */
+interface Run<Section> { start: number; options: CarrierOption[]; section: Section }
+
+/** Runs one after another, the first starting at row `first`. */
+function runs<Section>(sections: readonly Omit<Run<Section>, 'start'>[], first: number): Run<Section>[] {
+  let start = first;
+  return sections.map((run) => {
+    start += run.options.length;
+    return { ...run, start: start - run.options.length };
+  });
+}
+
+/**
+ * Rows drawn as the sheet opens, a few screens' worth; the rest follow a batch a frame, so a slow phone opens the
+ * sheet at once and the A to Z list fills in below the fold.
+ */
+const FIRST_ROWS = 40;
+const ROWS_PER_FRAME = 120;
 
 /** The name with the searched text marked, when the name itself matched. */
 function highlighted(name: string, range?: readonly [number, number]): ReactNode {
@@ -47,6 +69,36 @@ function highlighted(name: string, range?: readonly [number, number]): ReactNode
 }
 
 /**
+ * One carrier's row. It draws again only when its own state changes, so a new batch of rows or a moved highlight
+ * leaves the others alone.
+ */
+const CarrierRow = memo(function CarrierRow({ item, index, active, selected, tag, trucks, onSelect, onActive }: {
+  item: CarrierOption;
+  index: number;
+  active: boolean;
+  selected: boolean;
+  tag?: CarrierPickerTag;
+  /** The id of the sheet's `TruckDefinitions`. */
+  trucks: string;
+  onSelect: (choice: Choice) => void;
+  onActive: (index: number) => void;
+}) {
+  const { id, carrier, result, sub } = item;
+  return <div id={id} role="option" aria-selected={selected} className={`carrier-picker__option${active ? ' is-active' : ''}`}
+    aria-labelledby={`${id}-name`} aria-describedby={sub || tag ? `${id}-more` : undefined}
+    onClick={() => onSelect(carrier.id)} onPointerMove={() => onActive(index)}>
+    <CarrierTruck carrier={carrier} shared={trucks} />
+    <span className="carrier-picker__text">
+      <span id={`${id}-name`} className="carrier-picker__name">{highlighted(carrier.name, result?.highlight)}</span>
+      {sub && <span className="carrier-picker__sub">{sub}</span>}
+    </span>
+    {(sub || tag) && <span id={`${id}-more`} hidden>{[sub, tag?.label].filter(Boolean).join(', ')}</span>}
+    {tag && <span className={`carrier-picker__tag carrier-picker__tag--${tag.tone}`} aria-hidden="true">{tag.label}</span>}
+    {selected && <Icon name="check" className="carrier-picker__check" />}
+  </div>;
+});
+
+/**
  * Choose one of the catalog's carriers: automatic detection first when it is
  * offered, then the sections the caller passes (the carriers that fit the
  * number, the ones used before), then every carrier from A to Z. Typing
@@ -55,6 +107,10 @@ function highlighted(name: string, range?: readonly [number, number]): ReactNode
  * The sections keep the order they opened with: an answer that arrives while
  * the sheet is open only changes tags and the automatic row's text, so nothing
  * moves under the reader's finger.
+ *
+ * The rows come in batches (`FIRST_ROWS`, then `ROWS_PER_FRAME`), and the
+ * trucks share one drawing of what they have in common. A letter on the rail
+ * or the keyboard's highlight draws the rows it reaches at once.
  */
 export function CarrierPickerSheet({
   selected,
@@ -75,6 +131,7 @@ export function CarrierPickerSheet({
   const { locale, languageTag, t } = useI18n();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  const [drawn, setDrawn] = useState(FIRST_ROWS);
   const [openingSections] = useState(sections);
   const search = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -86,6 +143,8 @@ export function CarrierPickerSheet({
   const baseId = useId();
   const titleId = `${baseId}-title`;
   const listId = `${baseId}-list`;
+  // Referred to from `href`, so only characters a URL fragment keeps as they are.
+  const trucks = `${baseId.replace(/[^\w-]/g, '')}-truck`;
   // A touch keyboard would cover the list, so only a pointer device starts in the search field.
   const [startInSearch] = useState(() => window.matchMedia?.('(pointer: fine)').matches ?? true);
   const [dialog, close] = useSheetDialog<HTMLDivElement>(true, onClose, startInSearch ? search : undefined);
@@ -103,7 +162,6 @@ export function CarrierPickerSheet({
     () => (code: string): readonly string[] => countryNameLists.get(code) ?? [countryName(code, languageTag)],
     [countryNameLists, languageTag],
   );
-  const subtitle = (carrier: CarrierInfo) => countryLine(carrier.countries, (code) => countryNames(code)[0]);
 
   const trimmed = query.trim();
   const results = useMemo(() => trimmed ? searchCarriers(trimmed, carriers, {
@@ -111,24 +169,43 @@ export function CarrierPickerSheet({
     countryNames,
     preferred: new Set(openingSections[0]?.carriers ?? []),
   }) : null, [trimmed, carriers, languageTag, countryNames, openingSections]);
-  const letters = useMemo(() => alphabetSections(carriers, languageTag), [carriers, languageTag]);
 
-  const option = (key: string, carrier: CarrierInfo, result?: CarrierSearchResult): Option => ({
-    id: `${baseId}-${key}-${carrier.id}`, choice: carrier.id, carrier, result,
-  });
-  const browsing = openingSections.map((section) => ({
-    ...section,
-    options: section.carriers.map((id) => option(section.key, carrierInfo(id, locale))),
-  }));
-  const alphabet = letters.map((section) => ({
-    ...section,
-    options: section.carriers.map((carrier) => option('all', carrier)),
-  }));
-  const autoOption: Option | null = auto ? { id: `${baseId}-auto`, choice: 'auto' } : null;
-  const options: Option[] = results
-    ? results.map((result) => option('result', result.carrier, result))
-    : [...(autoOption ? [autoOption] : []), ...browsing.flatMap((section) => section.options), ...alphabet.flatMap((section) => section.options)];
-  const activeOption = options[Math.min(active, options.length - 1)];
+  // The rows, built once for each list so that a row keeps its props from one batch to the next.
+  const offersAuto = Boolean(auto);
+  const { autoOption, browsing, alphabet, letters } = useMemo(() => {
+    const subtitle = (carrier: CarrierInfo) => countryLine(carrier.countries, (code) => countryNames(code)[0]);
+    const option = (key: string, carrier: CarrierInfo): CarrierOption => ({
+      id: `${baseId}-${key}-${carrier.id}`, carrier, sub: subtitle(carrier),
+    });
+    const letters = alphabetSections(carriers, languageTag);
+    const first = offersAuto ? 1 : 0;
+    const browsing = runs(openingSections.map((section) => ({
+      section, options: section.carriers.map((id) => option(section.key, carrierInfo(id, locale))),
+    })), first);
+    const alphabet = runs(letters.map((section) => ({
+      section, options: section.carriers.map((carrier) => option('all', carrier)),
+    })), first + browsing.reduce((count, run) => count + run.options.length, 0));
+    return { autoOption: offersAuto ? { id: `${baseId}-auto` } : null, browsing, alphabet, letters };
+  }, [offersAuto, baseId, carriers, countryNames, languageTag, locale, openingSections]);
+  const found = useMemo(() => results?.map((result): CarrierOption => ({
+    id: `${baseId}-result-${result.carrier.id}`, carrier: result.carrier, result,
+    sub: result.alias ? t('picker.alias', { name: result.alias }) : countryLine(result.carrier.countries, (code) => countryNames(code)[0]),
+  })) ?? null, [results, baseId, t, countryNames]);
+  const options: Option[] = useMemo(() => found
+    ?? [...(autoOption ? [autoOption] : []), ...browsing.flatMap((run) => run.options), ...alphabet.flatMap((run) => run.options)],
+  [found, autoOption, browsing, alphabet]);
+  const activeIndex = Math.min(active, options.length - 1);
+  const activeOption = options[activeIndex];
+  // Rows up to the highlighted one are always drawn, however far the keyboard took it.
+  const shown = Math.max(drawn, activeIndex + 1);
+
+  // One more batch a frame, as a transition: typing or a tap goes first.
+  const total = options.length;
+  useEffect(() => {
+    if (drawn >= total) return;
+    const frame = requestAnimationFrame(() => startTransition(() => setDrawn((count) => count + ROWS_PER_FRAME)));
+    return () => cancelAnimationFrame(frame);
+  }, [drawn, total]);
 
   const activeId = activeOption?.id;
   useEffect(() => {
@@ -145,16 +222,21 @@ export function CarrierPickerSheet({
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown') { event.preventDefault(); move(1); }
     else if (event.key === 'ArrowUp') { event.preventDefault(); move(-1); }
-    else if (event.key === 'Enter' && activeOption) { event.preventDefault(); onSelect(activeOption.choice); }
+    else if (event.key === 'Enter' && activeOption) { event.preventDefault(); onSelect(activeOption.carrier?.id ?? 'auto'); }
   }
 
   function changeQuery(value: string) {
     setQuery(value);
     setActive(0);
+    setDrawn(FIRST_ROWS);
     list.current?.scrollTo?.({ top: 0 });
   }
 
   function jump(letter: string) {
+    // The letter's rows, and a screen's worth after them so that it can reach the top of the list, are drawn first.
+    const run = alphabet.find((candidate) => candidate.section.letter === letter);
+    const reach = run ? run.start + run.options.length + FIRST_ROWS : 0;
+    if (reach > shown) flushSync(() => setDrawn(reach));
     list.current?.querySelector(`[data-letter="${CSS.escape(letter)}"]`)?.scrollIntoView?.({ block: 'start' });
   }
 
@@ -193,39 +275,10 @@ export function CarrierPickerSheet({
     setScrub(null);
   }
 
-  const renderOption = (item: Option) => {
-    const index = options.indexOf(item);
-    const isSelected = item.choice === selected;
-    const className = `carrier-picker__option${index === active ? ' is-active' : ''}`;
-    if (!item.carrier) {
-      return <div key={item.id} id={item.id} role="option" aria-selected={isSelected} className={`${className} carrier-picker__option--auto`}
-        onClick={() => onSelect('auto')} onPointerMove={() => setActive(index)}>
-        <span className={`carrier-picker__detect${auto?.busy ? ' is-busy' : ''}`}><Icon name="detect" /></span>
-        <span className="carrier-picker__text">
-          <span className="carrier-picker__name">{t('add.detect')}</span>
-          <span className="carrier-picker__sub">
-            {auto?.recommended && <><span className="carrier-picker__tag carrier-picker__tag--quiet">{t('picker.recommended')}</span>{' '}</>}
-            {auto?.description}
-          </span>
-        </span>
-        {isSelected && <Icon name="check" className="carrier-picker__check" />}
-      </div>;
-    }
-    const tag = tags[item.carrier.id];
-    const sub = item.result?.alias ? t('picker.alias', { name: item.result.alias }) : subtitle(item.carrier);
-    return <div key={item.id} id={item.id} role="option" aria-selected={isSelected} className={className}
-      aria-labelledby={`${item.id}-name`} aria-describedby={sub || tag ? `${item.id}-more` : undefined}
-      onClick={() => onSelect(item.carrier!.id)} onPointerMove={() => setActive(index)}>
-      <CarrierTruck carrier={item.carrier} />
-      <span className="carrier-picker__text">
-        <span id={`${item.id}-name`} className="carrier-picker__name">{highlighted(item.carrier.name, item.result?.highlight)}</span>
-        {sub && <span className="carrier-picker__sub">{sub}</span>}
-      </span>
-      {(sub || tag) && <span id={`${item.id}-more`} hidden>{[sub, tag?.label].filter(Boolean).join(', ')}</span>}
-      {tag && <span className={`carrier-picker__tag carrier-picker__tag--${tag.tone}`} aria-hidden="true">{tag.label}</span>}
-      {isSelected && <Icon name="check" className="carrier-picker__check" />}
-    </div>;
-  };
+  const row = (item: CarrierOption, index: number) => <CarrierRow key={item.id} item={item} index={index} active={index === activeIndex}
+    selected={item.carrier.id === selected} tag={tags[item.carrier.id]} trucks={trucks} onSelect={onSelect} onActive={setActive} />;
+  // The drawn rows of a run: none when it starts past them.
+  const rows = <Section,>(run: Run<Section>) => run.options.slice(0, Math.max(0, shown - run.start)).map((item, offset) => row(item, run.start + offset));
 
   return createPortal(
     <div className="sheet-backdrop carrier-picker-backdrop" onClick={close}>
@@ -238,6 +291,7 @@ export function CarrierPickerSheet({
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
+        <TruckDefinitions id={trucks} />
         <div className="carrier-picker__heading">
           <button type="button" className="carrier-picker__cancel" onClick={close}>{t('common.cancel')}</button>
           <h2 className="carrier-picker__title" id={titleId}>{t('add.carrier')}</h2>
@@ -271,33 +325,45 @@ export function CarrierPickerSheet({
         </label>
         <div className="carrier-picker__body">
           <div ref={list} id={listId} role="listbox" aria-labelledby={titleId} className="carrier-picker__list">
-            {results ? <>
-              {results.length > 0 && <div className="carrier-picker__section-title" aria-hidden="true">
-                {t('picker.results.many', { count: results.length })}
+            {found ? <>
+              {found.length > 0 && <div className="carrier-picker__section-title" aria-hidden="true">
+                {t('picker.results.many', { count: found.length })}
               </div>}
-              {options.map(renderOption)}
+              {found.slice(0, shown).map(row)}
             </> : <>
-              {autoOption && renderOption(autoOption)}
-              {browsing.filter((section) => section.options.length > 0).map((section) => (
-                <div key={section.key} role="group" aria-labelledby={`${baseId}-${section.key}`}>
-                  <div id={`${baseId}-${section.key}`} role="presentation" className="carrier-picker__section-title">{section.title}</div>
-                  {section.options.map(renderOption)}
+              {autoOption && <div id={autoOption.id} role="option" aria-selected={selected === 'auto'}
+                className={`carrier-picker__option${activeIndex === 0 ? ' is-active' : ''} carrier-picker__option--auto`}
+                onClick={() => onSelect('auto')} onPointerMove={() => setActive(0)}>
+                <span className={`carrier-picker__detect${auto?.busy ? ' is-busy' : ''}`}><Icon name="detect" /></span>
+                <span className="carrier-picker__text">
+                  <span className="carrier-picker__name">{t('add.detect')}</span>
+                  <span className="carrier-picker__sub">
+                    {auto?.recommended && <><span className="carrier-picker__tag carrier-picker__tag--quiet">{t('picker.recommended')}</span>{' '}</>}
+                    {auto?.description}
+                  </span>
+                </span>
+                {selected === 'auto' && <Icon name="check" className="carrier-picker__check" />}
+              </div>}
+              {browsing.filter((run) => run.options.length > 0 && run.start < shown).map((run) => (
+                <div key={run.section.key} role="group" aria-labelledby={`${baseId}-${run.section.key}`}>
+                  <div id={`${baseId}-${run.section.key}`} role="presentation" className="carrier-picker__section-title">{run.section.title}</div>
+                  {rows(run)}
                 </div>
               ))}
               <div role="group" aria-labelledby={`${baseId}-all`}>
                 <div id={`${baseId}-all`} role="presentation" className="carrier-picker__section-title">{t('picker.section.all')}</div>
-                {alphabet.map((section) => (
+                {alphabet.filter((run) => run.start < shown).map((run) => (
                   // Each letter holds its own rows, so its sticky heading leaves with them.
-                  <div key={section.letter} role="presentation" data-letter={section.letter}>
-                    <div className="carrier-picker__letter" aria-hidden="true">{section.letter}</div>
-                    {section.options.map(renderOption)}
+                  <div key={run.section.letter} role="presentation" data-letter={run.section.letter}>
+                    <div className="carrier-picker__letter" aria-hidden="true">{run.section.letter}</div>
+                    {rows(run)}
                   </div>
                 ))}
               </div>
             </>}
           </div>
-          {results?.length === 0 && <p className="carrier-picker__empty" role="status">{t('picker.empty', { query: trimmed })}</p>}
-          {!results && (
+          {found?.length === 0 && <p className="carrier-picker__empty" role="status">{t('picker.empty', { query: trimmed })}</p>}
+          {!found && (
             <nav
               ref={rail}
               className="carrier-picker__rail"

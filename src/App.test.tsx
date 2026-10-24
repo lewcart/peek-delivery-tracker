@@ -7,7 +7,7 @@ import { rememberPostcode } from './lib/postcodeMemory';
 import { announceKeepOutcome } from './peek/pending';
 import { createDemoRepo } from './store/demoRepo';
 import { ParcelsProvider } from './store/ParcelsContext';
-import { carrierPicker, pickCarrier } from './test/carrierPicker';
+import { carrierPicker, everyCarrierListed, pickCarrier } from './test/carrierPicker';
 import { RefreshTimeoutError, type ParcelRepo, type ParcelWithEvents } from './types';
 
 function renderApp(repo: ParcelRepo = createDemoRepo(window.localStorage)) {
@@ -885,6 +885,7 @@ describe('App', () => {
     await user.type(within(sheet).getByLabelText(/tracking number/i), '76434219');
 
     await user.click(within(sheet).getByRole('button', { name: /^Detect automatically/ }));
+    await everyCarrierListed();
     const carrier = within(carrierPicker()).getByRole('group', { name: 'All carriers' });
     const regional = [
       'DPD France',

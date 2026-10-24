@@ -31,7 +31,7 @@ class MemoryStorage implements Storage {
 }
 
 // Components wait in real time before they act (a typing pause of 800 ms, a carrier lookup 350 ms
-// after the number settles), and a test that opens the carrier picker renders every carrier: one
+// after the number settles), and the carrier picker fills in every carrier over a few frames: one
 // role query over it takes a few hundred milliseconds. Testing Library's one second left too little
 // for the rest on a busy machine, so its waits fail there while the page is still on its way.
 configure({ asyncUtilTimeout: 5_000 });

@@ -39,6 +39,8 @@
 .carrier-picker__rail button.is-current { background: var(--ochre); color: var(--canvas); }
 .carrier-picker__bubble { position: absolute; right: 52px; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: var(--ink); color: var(--canvas); font-size: 24px; font-weight: 650; translate: 0 -50%; box-shadow: var(--shadow); pointer-events: none; }
 .carrier-truck { display: inline-flex; flex: none; }
+/* The drawings the picker's trucks use: in the document, not on the page. */
+.truck-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
 .carrier-truck svg { display: block; width: 27px; height: 18px; overflow: visible; stroke: none; stroke-width: 0; }
 
 @media (hover: hover) {
