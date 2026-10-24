@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UpstreamHttpError } from 'universal-parcel-scraper/node';
-import { freshnessWindow, recheckSources, recognizers, RoutingDeferred, routingState, suggestedInput, TrackingRouter, type RoutedResult } from './trackingRouting';
+import { earlierParcelRows, freshnessWindow, recheckSources, recognizers, RoutingDeferred, routingState, suggestedInput, TrackingRouter, withoutEarlierParcel, type RoutedResult } from './trackingRouting';
 import { refusesNumber } from './numberRefusal';
 import { STORED_EVENT_IDENTITIES } from './supabase';
 import type { JsonObject } from './types';
@@ -2812,5 +2812,66 @@ describe('universal preflight and recipient input', () => {
     filed.universal.mockImplementation(async (source) => { throw new InputRequiredError(source, 'postcode'); });
     const asked = await filed.router.fetch(parcel({ carrier: 'dpd', tracking_number: 'NOSHAPE42' }), true).catch((error) => error);
     expect(asked.routing.provider_input_needed).toMatchObject({ field: 'dpdPostcode' });
+  });
+});
+
+describe('a reused number\'s earlier parcel an older release stored', () => {
+  const added = '2026-10-20T09:00:00Z';
+  const own = { provider_event_id: 'app:pending', occurred_at: added, stage: 'pending', description: 'Tracking added' };
+  // A label printed ten months before the parcel was added, which providers no longer list.
+  const label = { provider_event_id: 'unknown:label', occurred_at: '2025-12-15T10:00:00+00:00', stage: 'registered',
+    description: 'Label created', universal_provider: 'ParcelsApp' };
+  const stored = (rows: JsonObject[], overrides: JsonObject = {}) => parcel({ tracking_number: '12345678', created_at: added,
+    current_stage: 'registered', [STORED_EVENT_IDENTITIES]: [own, ...rows], ...overrides });
+
+  it('finds the rows when every scan ended three months before the parcel was added', () => {
+    expect(earlierParcelRows(stored([label]))).toEqual(['unknown:label']);
+    // A stage change a check stored when it saw it is dated by the check: the earlier parcel's too.
+    const seen = { provider_event_id: 'unknown:seen', occurred_at: '2026-10-20T09:00:01Z', stage: 'pending',
+      description: 'Shipped', observed_without_provider_timestamp: true };
+    expect(earlierParcelRows(stored([label, seen]))).toEqual(['unknown:label', 'unknown:seen']);
+    // A scan dated on a local clock alone reads as UTC.
+    expect(earlierParcelRows(stored([{ ...label, local_time: '2025-12-15T11:00:00' }]))).toEqual(['unknown:label']);
+  });
+
+  it.each([
+    // A seller's label can wait a month for the parcel, and a carrier that stops listing the
+    // parcel's own scans keeps them (scans_withdrawn): they are not that much older than the parcel.
+    ['scans within three months of the addition', [{ ...label, occurred_at: '2026-08-01T10:00:00+00:00' }], {}],
+    ['a newer scan beside the old label', [label, { ...label, provider_event_id: 'unknown:new', occurred_at: '2026-10-21T08:00:00+00:00' }], {}],
+    // An old delivery may be a parcel looked up again.
+    ['a delivery among the rows', [label, { ...label, provider_event_id: 'unknown:done', stage: 'delivered' }], {}],
+    ['a delivered parcel', [label], { current_stage: 'delivered' }],
+    ['nothing but Peek\'s own row', [], {}],
+    ['a handoff', [label], { carrier_data: { original_carrier: 'asendia' } }],
+  ])('keeps the rows for %s', (_label, rows, overrides) => {
+    expect(earlierParcelRows(stored(rows as JsonObject[], overrides))).toBeNull();
+  });
+
+  it('keeps the rows when they were not loaded', () => {
+    expect(earlierParcelRows(parcel({ created_at: added, current_stage: 'registered' }))).toBeNull();
+  });
+
+  it('routes the parcel as one that never had them', () => {
+    const routing = state({ last_event_at: '2025-12-15T10:00:00.000Z', last_success_at: '2026-10-21T10:00:00.000Z',
+      discovered_carrier: 'chronopost', preferred_provider: 'ParcelsApp', preferred_number: '12345678',
+      reported_carriers_seen: ['Chronopost'], confirmed_carrier: 'chronopost', confirmed_number: '12345678',
+      failures: { ParcelsApp: { kind: 'no_history', count: 6, retry_at: '2026-10-24T18:00:00.000Z' } },
+      candidate_probes: { 'dpd': { count: 3, retry_at: '2026-10-24T18:00:00.000Z' } } });
+    const forgotten = withoutEarlierParcel(stored([label], { sync_status: 'waiting', last_status_text: 'Label created',
+      expected_delivery: '2026-01-05', carrier_data: { lookup_country_hint: 'FR', status: 'pending', current_stage: 'registered',
+        last_status_text: 'Label created', tracking_provider: 'ParcelsApp', discovered_carrier: 'chronopost',
+        reported_carriers: ['Chronopost'], direct_local_history: { carrier: 'chronopost', events: [] }, routing } }));
+    expect(forgotten).toMatchObject({ current_stage: 'pending', last_status_text: null, expected_delivery: null,
+      [STORED_EVENT_IDENTITIES]: [own] });
+    expect(Object.keys(forgotten.carrier_data as JsonObject).sort()).toEqual(['lookup_country_hint', 'routing']);
+    const kept = (forgotten.carrier_data as JsonObject).routing as JsonObject;
+    // The number's cooldowns stay.
+    expect(kept).toMatchObject({ failures: routing.failures, candidate_probes: { 'dpd': { count: 3 } },
+      cleared_confirmation: { carrier: 'chronopost', number: '12345678' } });
+    for (const key of ['last_event_at', 'last_success_at', 'discovered_carrier', 'preferred_provider', 'preferred_number',
+      'reported_carriers_seen', 'confirmed_carrier', 'confirmed_number']) expect(kept).not.toHaveProperty(key);
+    // So a parcel looked up from France is offered Mondial Relay's postcode, as one that never showed the label is.
+    expect(suggestedInput(forgotten, routingState(forgotten))).toEqual({ carrier: 'mondial-relay', field: 'dpdPostcode' });
   });
 });

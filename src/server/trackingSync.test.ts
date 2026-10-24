@@ -4741,6 +4741,89 @@ describe('TrackingSyncService', () => {
     expect(parcel).toMatchObject({ carrier_data: { scans_withdrawn: { unknown: '2026-09-10T12:00:00.000Z' } } });
   });
 
+  it.each([
+    // Printed ten months before the parcel was added: a reused number's earlier parcel, which an
+    // older release stored and today's rules refuse. The check forgets it.
+    ['an earlier parcel\'s label', '2025-12-15T10:00:00+00:00', true],
+    // The parcel's own label, which the providers stopped listing, stays, with the signal.
+    ['its own label', '2026-10-19T10:00:00+00:00', false],
+  ])('routes a parcel that stored %s, now that every source answers without history', async (_label, printed, forgets) => {
+    const client = { ...fakeClient(),
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-10-24T12:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined),
+    };
+    const adapter = { fetch: vi.fn().mockRejectedValue(new NoHistoryError('Chronopost')), fetchUniversal: vi.fn(async (source: string) => {
+      throw source === 'Ship24' ? new NotFoundError(source) : new IndeterminateError(source, `${source} has no usable shipment history`);
+    }) };
+    const added = '2026-10-20T09:00:00Z';
+    const own = { provider_event_id: 'app:pending', occurred_at: added, stage: 'pending', description: 'Tracking added' };
+    const label = { provider_event_id: 'unknown:label', occurred_at: printed, stage: 'registered', description: 'Label created',
+      universal_provider: 'ParcelsApp' };
+    let parcel: JsonObject = { id: 'reused', carrier: 'unknown', tracking_number: '12345678', current_stage: 'registered', created_at: added,
+      sync_status: 'waiting', last_status_text: 'Label created', [STORED_EVENT_IDENTITIES]: [own, label],
+      carrier_data: { lookup_country_hint: 'FR', status: 'pending', current_stage: 'registered', last_status_text: 'Label created',
+        tracking_provider: 'ParcelsApp', discovered_carrier: 'chronopost', reported_carriers: ['Chronopost'],
+        routing: { version: 1, configured_carrier: 'unknown', consecutive_failures: 0, probe_cursor: 0, discovery_cursor: 0,
+          last_event_at: new Date(printed).toISOString(), last_success_at: '2026-10-21T10:00:00.000Z', discovered_carrier: 'chronopost',
+          preferred_provider: 'ParcelsApp' } } };
+    client.updatePackage.mockImplementation(async (_id: string, values: JsonObject) => { parcel = { ...parcel, ...values }; });
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date('2026-10-24T12:00:00Z'));
+    await expect(service.syncPackage(parcel, { trigger: 'scheduled' })).resolves.toMatchObject({ waiting: 1, errors: 0 });
+    const [, selected, , , deleted] = client.applyTrackingSync.mock.calls[0] as unknown as [JsonObject, JsonObject, JsonObject[], string[], string[]];
+    const steps = client.completeSyncAttempt.mock.lastCall![2] as JsonObject[];
+    const routing = (parcel.carrier_data as JsonObject).routing as JsonObject;
+    if (forgets) {
+      expect(selected).toMatchObject({ sync_status: 'syncing', current_stage: 'pending', last_status_text: null, expected_delivery: null });
+      expect(deleted).toEqual(['unknown:label']);
+      expect(steps.find((step) => step.step === 'selected')?.details).toMatchObject({ earlier_parcel_rows: 1 });
+      // As for a number nobody has seen: no signal, and a parcel looked up from France is offered Mondial Relay's postcode.
+      expect(client.completeSyncAttempt.mock.lastCall![1]).toMatchObject({ outcome: 'waiting', anomaly_codes: [] });
+      expect(parcel).toMatchObject({ current_stage: 'pending', sync_status: 'waiting', carrier_data: { lookup_country_hint: 'FR' } });
+      expect(parcel.carrier_data).not.toHaveProperty('discovered_carrier');
+      expect(parcel.carrier_data).not.toHaveProperty('tracking_provider');
+      expect(routing.input_suggested).toEqual({ carrier: 'mondial-relay', field: 'dpdPostcode' });
+      for (const key of ['last_event_at', 'last_success_at', 'discovered_carrier', 'preferred_provider']) expect(routing[key]).toBeUndefined();
+    } else {
+      expect(selected).toEqual({ sync_status: 'syncing', sync_error: null });
+      expect(deleted ?? []).toEqual([]);
+      expect(client.completeSyncAttempt.mock.lastCall![1]).toMatchObject({ outcome: 'waiting', anomaly_codes: ['scans_withdrawn'] });
+      expect(parcel).toMatchObject({ current_stage: 'registered', carrier_data: { discovered_carrier: 'chronopost' } });
+      expect(routing).toMatchObject({ last_event_at: new Date(printed).toISOString(), discovered_carrier: 'chronopost' });
+    }
+  });
+
+  it('forgets the earlier parcel its own carrier still lists, and the confirmation it gave', async () => {
+    const client = { ...fakeClient(),
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-10-24T12:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined),
+    };
+    // Picked up six months before the parcel was added, and never delivered.
+    const earlier = { status: 'in_transit', current_stage: 'accepted', last_update: '2026-04-14T10:00:00Z',
+      events: [{ time: '2026-04-14T10:00:00Z', description: 'Parcel accepted', stage: 'accepted' }] };
+    const adapter = { fetch: vi.fn().mockResolvedValue(earlier), fetchUniversal: vi.fn(async (source: string) => {
+      throw source === 'Ship24' ? new NotFoundError(source) : new IndeterminateError(source, `${source} has no usable shipment history`);
+    }) };
+    const added = '2026-10-06T09:00:00Z';
+    let parcel: JsonObject = { id: 'filed', carrier: 'swiss-post', tracking_number: 'TEST1234', current_stage: 'accepted', created_at: added,
+      sync_status: 'ok', last_synced_at: '2026-10-07T09:00:00Z', last_status_text: 'Parcel accepted',
+      [STORED_EVENT_IDENTITIES]: [{ provider_event_id: 'app:pending', occurred_at: added, stage: 'pending', description: 'Tracking added' },
+        { provider_event_id: 'swiss-post:pickup', occurred_at: '2026-04-14T10:00:00+00:00', stage: 'accepted', description: 'Parcel accepted' }],
+      carrier_data: { lookup_country_hint: 'DE', status: 'in_transit', active_tracking_carrier: 'swiss-post',
+        routing: { version: 1, configured_carrier: 'swiss-post', consecutive_failures: 0, probe_cursor: 0, discovery_cursor: 0, failures: {},
+          last_event_at: '2026-04-14T10:00:00.000Z', confirmed_carrier: 'swiss-post', confirmed_number: 'TEST1234' } } };
+    client.updatePackage.mockImplementation(async (_id: string, values: JsonObject) => { parcel = { ...parcel, ...values }; });
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date('2026-10-24T12:00:00Z'));
+    await expect(service.syncPackage(parcel, { trigger: 'refresh' })).resolves.toMatchObject({ waiting: 1, errors: 0 });
+    expect(adapter.fetch).toHaveBeenCalled();
+    expect((client.applyTrackingSync.mock.calls[0] as unknown[])[4]).toEqual(['swiss-post:pickup']);
+    expect(parcel).toMatchObject({ current_stage: 'pending', sync_status: 'waiting', carrier_data: { lookup_country_hint: 'DE' } });
+    expect(parcel.carrier_data).not.toHaveProperty('active_tracking_carrier');
+    const routing = (parcel.carrier_data as JsonObject).routing as JsonObject;
+    expect(routing).toMatchObject({ cleared_confirmation: { carrier: 'swiss-post', number: 'TEST1234' } });
+    expect(routing.confirmed_carrier).toBeUndefined();
+    expect(routing.last_event_at).toBeUndefined();
+  });
+
   it('keeps a number nobody has seen waiting while one provider rests on a rate limit', async () => {
     const client = { ...fakeClient(),
       acquireTrackingProvider: vi.fn(async (source: string) => ({ token: source === 'ParcelsApp' ? null : 'lease',

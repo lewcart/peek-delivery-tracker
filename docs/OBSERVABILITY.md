@@ -86,7 +86,9 @@ All tables and views here are service-role only.
   a check stored for the first time: a stored scan rewritten in place, as when its location
   fills in, is not new. It is null for checks recorded before the column existed.
 - `tracking_sync_steps`: `selected`, `fetch`, `normalize`, `persist_events`,
-  `persist_package`, `complete`, each with status and duration. `persist_events` has
+  `persist_package`, `complete`, each with status and duration. `selected` has
+  `earlier_parcel_rows` when the check deleted the stored rows of a reused number's earlier
+  parcel first ([ROUTING.md](ROUTING.md)). `persist_events` has
   `events_persisted`, the rows written, `events_new`, and `copies_absorbed`, the universal
   copies of the carrier's scans it deleted. `persist_package` has `selected_stage` and
   `saved_stage`, the stage the parcel keeps, and `stage_held` when the two differ:

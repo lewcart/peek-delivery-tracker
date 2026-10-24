@@ -458,6 +458,51 @@ export function foreignHistory(result: CarrierResult, carrier: string, addedAt: 
   const newest = newestScan([result]);
   return newest > 0 && newest < millis(addedAt) - OTHER_CARRIER_GAP;
 }
+/** A row Peek writes itself (`app:` source), such as "Tracking added". */
+const ownRow = (row: JsonObject) => String(row.provider_event_id ?? '').startsWith('app:');
+/**
+ * The stored rows of a parcel that are all a reused number's earlier parcel, as `oldLabel`
+ * reads an answer today: the parcel's stage and its rows, other than Peek's own, whose newest
+ * scan ended three months before the parcel was added, none of them a delivery or a return. A
+ * release or an Add preflight before that rule stored them. The provider ids of those rows;
+ * null when the rows were not loaded, when they are not all that parcel's, or for a handoff.
+ * A scan a carrier stops listing is not one: the parcel's own scans are not that much older
+ * than the parcel, and they stay (`scans_withdrawn`).
+ */
+export function earlierParcelRows(parcel: JsonObject): string[] | null {
+  const stored = parcel[STORED_EVENT_IDENTITIES];
+  const data = isRecord(parcel.carrier_data) ? parcel.carrier_data : {};
+  if (!Array.isArray(stored) || data.original_carrier) return null;
+  const rows = stored.filter(isRecord).filter((row) => !ownRow(row));
+  if (!rows.length || !rows.every((row) => typeof row.provider_event_id === 'string')) return null;
+  const answer: CarrierResult = { status: 'pending', current_stage: String(parcel.current_stage ?? 'pending') as CarrierResult['current_stage'],
+    last_update: null, events: rows.map((row) => ({ description: String(row.description ?? ''), stage: String(row.stage ?? 'pending'),
+      // A stage change a check stored when it saw it is dated by that check, not by the carrier.
+      ...(row.observed_without_provider_timestamp === true ? {} : { time: String(row.occurred_at ?? '') }),
+      ...(typeof row.local_time === 'string' ? { local_time: row.local_time } : {}) })) };
+  return oldLabel(parcel.created_at, answer) ? rows.map((row) => String(row.provider_event_id)) : null;
+}
+/** What a parcel keeps of its carrier data once it forgets a reused number's earlier parcel: what the owner gave and the number's cooldowns. */
+const KEPT_WITHOUT_EARLIER_PARCEL = ['lookup_country_hint', 'universal_input', 'add_recognition_pending', 'delivery_probe', 'earlier_checked_at'];
+/** Routing a reused number's earlier parcel taught: where its answers came from, its watermark and what filed or confirmed it. */
+const EARLIER_PARCEL_ROUTING = ['last_event_at', 'last_success_at', 'discovered_carrier', 'preferred_provider', 'preferred_number',
+  'reported_carriers_seen', 'provider_copy', 'set_aside', 'partial_history', 'partial_checked_at', 'carrier_named_at', 'input_suggested'];
+/**
+ * The parcel as if it had never stored a reused number's earlier parcel (`earlierParcelRows`):
+ * no stage, summary, estimate or rows of that parcel, nor the routing it taught, so the check
+ * routes it as a number nobody has seen (the postcode it may suggest, recognition, discovery).
+ * The cooldowns the number met stay.
+ */
+export function withoutEarlierParcel(parcel: JsonObject): JsonObject {
+  const data = isRecord(parcel.carrier_data) ? parcel.carrier_data : {};
+  const routing = routingState(parcel);
+  for (const key of EARLIER_PARCEL_ROUTING) delete routing[key];
+  clearConfirmation(routing);
+  const stored = parcel[STORED_EVENT_IDENTITIES];
+  return { ...parcel, current_stage: 'pending', last_status_text: null, expected_delivery: null,
+    carrier_data: { ...Object.fromEntries(KEPT_WITHOUT_EARLIER_PARCEL.filter((key) => data[key] !== undefined).map((key) => [key, data[key]])), routing },
+    ...(Array.isArray(stored) ? { [STORED_EVENT_IDENTITIES]: stored.filter((row) => isRecord(row) && ownRow(row)) } : {}) };
+}
 /** Whether a carrier has an adapter of its own for the router to ask. */
 export function directCarrier(carrier: string): boolean {
   return AUTOMATIC_CARRIER_IDS.has(carrier) && carrierAdapter(carrier) !== 'universal';

@@ -47,7 +47,7 @@ import {
 import { isRecord, type JsonObject } from './types';
 import { UniversalTracker } from 'universal-parcel-scraper/node';
 import type { UniversalSource } from 'universal-parcel-scraper';
-import { answeredWithoutHistory, catalogRules, clearConfirmation, detectionExpects, directCarrier, freshnessWindow, hasRoutingProgress, rereadStage, RoutingDeferred, routingFailure, routingState, TrackingRouter, type RoutedResult } from './trackingRouting';
+import { answeredWithoutHistory, catalogRules, clearConfirmation, detectionExpects, directCarrier, earlierParcelRows, freshnessWindow, hasRoutingProgress, rereadStage, RoutingDeferred, routingFailure, routingState, TrackingRouter, withoutEarlierParcel, type RoutedResult } from './trackingRouting';
 import { REDETECTION_WINDOW_MS, rerouteAskable } from './redetection';
 import { upuHistory } from './upuHistory';
 import { sparseLookupRecheck, UNSEEN_HOURLY_MS, unseenFor, unseenIntervalHours, unseenRecheckDue } from './unseenLookup';
@@ -1459,6 +1459,12 @@ export class TrackingSyncService {
     lookups?: SharedLookups,
   ): Promise<SyncOutcome> {
     const carrierId = String(parcel.carrier ?? '');
+    const accountRequired = requiresAmazonAccount(carrierId, String(parcel.tracking_number ?? ''));
+    const unsupported = accountRequired || (!AUTOMATIC_CARRIER_IDS.has(carrierId) && !this.adapter.fetchUniversal);
+    // Rows an older release stored of a reused number's earlier parcel, which today's rules
+    // refuse: the check deletes them first and routes the parcel as if it never had them.
+    const earlier = unsupported ? null : earlierParcelRows(parcel);
+    if (earlier) Object.assign(parcel, withoutEarlierParcel(parcel), { sync_status: 'syncing', sync_error: null });
     const previousStage = String(parcel.current_stage ?? 'pending');
     const addition = isRecord(parcel.carrier_data) && parcel.carrier_data.add_recognition_pending === true;
     let consumeAddition = addition;
@@ -1498,8 +1504,7 @@ export class TrackingSyncService {
       return 'superseded';
     };
 
-    const accountRequired = requiresAmazonAccount(carrierId, String(parcel.tracking_number ?? ''));
-    if (accountRequired || (!AUTOMATIC_CARRIER_IDS.has(carrierId) && !this.adapter.fetchUniversal)) {
+    if (unsupported) {
       audit.record('selected', 'succeeded', 0, { automatic: false });
       audit.skip('fetch', 'unsupported_carrier');
       audit.skip('normalize', 'unsupported_carrier');
@@ -1533,15 +1538,18 @@ export class TrackingSyncService {
     let anomalies: SyncAnomalyCode[] = [];
     try {
       await audit.step('selected', async () => {
-        await persist({ sync_status: 'syncing', sync_error: null });
-      }, () => ({ automatic: true }));
+        await persist({ sync_status: 'syncing', sync_error: null, ...(earlier ? {
+          current_stage: parcel.current_stage, last_status_text: null, expected_delivery: null, carrier_data: parcel.carrier_data,
+        } : {}) }, [], [], earlier ?? []);
+      }, () => ({ automatic: true, ...(earlier ? { earlier_parcel_rows: earlier.length } : {}) }));
 
       operation = 'fetch';
       let fetched: RoutedResult;
       const fetchStartedAt = performance.now();
       // The check sees the routing its number shares with the other copies in the run.
       const checks = lookups?.for(parcel);
-      const subject = checks?.parcel ?? parcel;
+      // Another copy's routing for the number may still hold what the earlier parcel taught.
+      const subject = checks ? earlier ? withoutEarlierParcel(checks.parcel) : checks.parcel : parcel;
       const once = <T>(key: readonly unknown[], lookup: () => Promise<T>) => checks ? checks.once(key, lookup) : lookup();
       // Where the parcel was looked up from stays the parcel's, even for a carrier asked without its data.
       const lookupCountry = normalizedLookupCountry(isRecord(subject.carrier_data) ? subject.carrier_data.lookup_country_hint : undefined);
