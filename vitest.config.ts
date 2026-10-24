@@ -19,6 +19,9 @@ export default defineConfig({
     },
     setupFiles: ['src/test/setup.ts'],
     css: false,
+    // A run took every core of the shared machine beside other projects' suites. Four is the scraper's
+    // cap, and as many as a CI runner has.
+    maxWorkers: 4,
     // Several of Testing Library's waits (see src/test/setup.ts) fit in one test.
     testTimeout: 20_000,
     coverage: {

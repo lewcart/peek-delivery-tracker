@@ -10,6 +10,9 @@ export default defineConfig({
   test: {
     include: ['src/server/**/*.test.ts'],
     environment: 'node',
+    // A run took every core of the shared machine beside other projects' suites. Four is the scraper's
+    // cap, and as many as a CI runner has.
+    maxWorkers: 4,
     testTimeout: 10_000,
     coverage: {
       provider: 'v8',
