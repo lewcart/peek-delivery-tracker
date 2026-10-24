@@ -65,11 +65,20 @@ insert into packages (id,user_id,tracking_number,label,carrier,current_stage,syn
  ('83000000-0000-0000-0000-000000000003','10000000-0000-0000-0000-000000000001','LX123456785NL','AliExpress order','aliexpress','in_transit','ok','{}'),
  ('83000000-0000-0000-0000-000000000004','10000000-0000-0000-0000-000000000001','990000000000000012','Postal order','swiss-post','in_transit','ok','{"international_tracking_number":"LX123456785NL"}'),
  ('83000000-0000-0000-0000-000000000005','10000000-0000-0000-0000-000000000001','SY12345678901','Partner order','sunyou','in_transit','ok','{"original_carrier":"sunyou","active_tracking_carrier":"swiss-post","active_tracking_number":"990000000000000013"}'),
- ('83000000-0000-0000-0000-000000000006','10000000-0000-0000-0000-000000000001','990000000000000013','Local order','swiss-post','in_transit','ok','{}');
+ ('83000000-0000-0000-0000-000000000006','10000000-0000-0000-0000-000000000001','990000000000000013','Local order','swiss-post','in_transit','ok','{}'),
+ -- Handed over under the international number; Swiss Post's later answers add its domestic one.
+ ('83000000-0000-0000-0000-000000000007','10000000-0000-0000-0000-000000000001','LTN000000001N1','Refills','landmark-global','in_transit','ok','{"original_carrier":"landmark-global","original_tracking_number":"LTN000000001N1","original_canonical_tracking_number":"LTN000000001","canonical_tracking_number":"990000000000000014","international_tracking_number":"CC000000001BE","active_tracking_carrier":"swiss-post","active_tracking_number":"CC000000001BE"}'),
+ ('83000000-0000-0000-0000-000000000008','10000000-0000-0000-0000-000000000001','990000000000000014','Unknown','swiss-post','in_transit','ok','{"canonical_tracking_number":"990000000000000014","international_tracking_number":"CC000000001BE"}');
 do $$
 begin
-  if public.auto_link_package_tracking('10000000-0000-0000-0000-000000000001') <> 3 then
+  if public.auto_link_package_tracking('10000000-0000-0000-0000-000000000001') <> 4 then
     raise exception 'Expected postal reference and already-switched parcels to merge';
+  end if;
+  if not exists(select 1 from packages where id='83000000-0000-0000-0000-000000000008'
+    and label='Refills / Unknown' and carrier_data->>'original_carrier'='landmark-global'
+    and carrier_data->>'original_tracking_number'='LTN000000001N1')
+    or exists(select 1 from packages where id='83000000-0000-0000-0000-000000000007') then
+    raise exception 'A parcel added under Swiss Post''s domestic number stayed apart from its handoff';
   end if;
   if not exists(select 1 from packages where id='83000000-0000-0000-0000-000000000002'
     and label='GLS order / Post name' and carrier_data->>'original_carrier'='gls-de'
