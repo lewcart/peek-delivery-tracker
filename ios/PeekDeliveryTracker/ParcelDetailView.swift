@@ -480,9 +480,13 @@ struct ParcelDetailView: View {
             } else if let error = parcel.syncError {
                 Text(localizer.trackingFailureMessage(error))
                     .font(.footnote).foregroundStyle(Brand.warning)
-                if editable, error == "carrier:input_required", parcel.activeTrackingCarrier == parcel.carrier,
+                if editable, ["carrier:input_required", "carrier:invalid_input"].contains(error), parcel.activeTrackingCarrier == parcel.carrier,
                    !catalog.requirements(for: parcel.carrier, trackingNumber: parcel.trackingNumber).isEmpty {
                     Button(localizer.text("detail.updateTrackingDetails")) { carrierEditor = CarrierEditorRequest() }
+                        .font(.footnote).foregroundStyle(branding.ink)
+                }
+                if editable, error == "carrier:refused_number" {
+                    Button(localizer.text("detail.changeCarrier")) { carrierEditor = CarrierEditorRequest() }
                         .font(.footnote).foregroundStyle(branding.ink)
                 }
             }

@@ -143,11 +143,11 @@ describe('shipment details', () => {
     expect(screen.getByText(/Corner shop/)).toHaveTextContent('12 Main Street');
   });
 
-  it('opens the existing tracking editor for missing input', async () => {
-    show({ syncStatus: 'error', syncError: 'carrier:input_required' });
+  it.each(['carrier:input_required', 'carrier:invalid_input'])('opens the existing tracking editor for missing or refused input (%s)', async (syncError) => {
+    show({ syncStatus: 'error', syncError });
     await userEvent.click(screen.getByRole('button', { name: 'Update tracking details' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.queryByText('carrier:input_required')).not.toBeInTheDocument();
+    expect(screen.queryByText(syncError)).not.toBeInTheDocument();
   });
 
   it('says the carrier does not issue the number, and opens the carrier editor', async () => {

@@ -282,6 +282,12 @@ extension Parcel {
         )
     }
 
+    /// What a card says the parcel needs: no failed update for a number only the owner can correct, whose status says to check it.
+    func notice(now: Date = Date()) -> ParcelAttention? {
+        let reason = attention(now: now)
+        return reason == .syncError && numberToCheck ? nil : reason
+    }
+
     func attention(now: Date = Date()) -> ParcelAttention? {
         switch currentStage {
         case .failedAttempt: return .failedAttempt

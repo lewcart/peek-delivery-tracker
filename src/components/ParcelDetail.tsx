@@ -645,7 +645,8 @@ export function ParcelDetail({
         {automaticTracking && parcel.syncError && (
           <div className="detail__sync-error" role="status">
             <p>{trackingFailureMessage(parcel.syncError, t)}</p>
-            {parcel.syncError === 'carrier:input_required' && carrier.id === parcel.carrier && carrierRequirements(parcel.carrier, parcel.trackingNumber).length > 0 && (
+            {(parcel.syncError === 'carrier:input_required' || parcel.syncError === 'carrier:invalid_input') && carrier.id === parcel.carrier
+              && carrierRequirements(parcel.carrier, parcel.trackingNumber).length > 0 && (
               <button type="button" className="button button--secondary" onClick={() => setEditingCarrier(true)}>{t('detail.updateTrackingDetails')}</button>
             )}
             {parcel.syncError === REFUSED_NUMBER && (
