@@ -71,11 +71,14 @@ paczka,paczki,paczek,przesyłka,przesyłki,kurier,poczta,tracking,status,dostawa
 ## What's new
 
 ```text
-• Peek działa teraz na iPadzie: otwarta przesyłka wyświetla się obok listy. Są też skróty klawiszowe i pasek menu.
-• Na iPadzie pierwszy ekran Peek pokazuje całą trasę przesyłki na pełnym ekranie, z polem numeru przesyłki nad nią. Stuknij mapę, aby otworzyć przykładową przesyłkę.
-• Udostępniony link do przesyłki otwiera się w Peek. Śledź ją bez konta, a Peek będzie Cię powiadamiać, dopóki nie zostanie doręczona.
-• Przytrzymaj przesyłkę na liście, aby zobaczyć jej opcje, albo przeciągnij na listę numer śledzenia z innej aplikacji, aby go dodać.
-• Peek dopasowuje się do największych rozmiarów tekstu i po zamknięciu aplikacji przez system ponownie otwiera ostatnio oglądaną przesyłkę.
-• Numer złożony tylko z sześciu cyfr to zwykle kod odbioru, więc Peek prosi teraz o numer śledzenia. Rozpoznaje też numery zamówień Shein.
-• Peek rozpoznaje numery przesyłek Correos de Cuba.
+• Gdy przewoźnik w ogóle nie wydaje takich numerów śledzenia, przesyłka pokazuje teraz „Sprawdź numer śledzenia” i proponuje „Zmień przewoźnika”, zamiast informować, że nie udało się pobrać ostatniej aktualizacji.
+• Gdy przewoźnik przesyłki potrzebuje kodu pocztowego dostawy, aby ją znaleźć, Peek teraz o niego prosi. Jeśli przewoźnik odrzuci kod pocztowy, przesyłka proponuje „Uzupełnij dane śledzenia”, a jeśli przewoźnik nie znajdzie przesyłki z tym kodem, przesyłka informuje o tym obok kodu i proponuje „Zmień kod pocztowy”.
+• „Zmień przewoźnika” pokazuje obecnego przewoźnika przesyłki na górze listy.
+• Gdy skan doręczenia nie podaje miejsca, mapa pokazuje przesyłkę jako doręczoną na ostatnim przystanku, jeśli leży on w kraju docelowym, a w przeciwnym razie jako ostatnio widzianą w tym miejscu.
+• Na karcie przesyłki nazwy miejsc na mapie nie chowają się już pod przyciskami u góry.
+• Trasa w obrębie jednej lub dwóch miejscowości wyświetla się jako jedno miejsce, a przystanki zbyt bliskie, by je rozróżnić, mają wspólny znacznik.
+• Gdy obrócisz iPhone’a poziomo, globus trzyma trasę z dala od Dynamic Island.
+• Skan zapisany w postaci „Haiger, DE” pokazuje flagę i nazwę kraju.
+• Twoja notatka w „Dobrze to odczytałem?” może mieć do 4000 znaków, a pod koniec pokazuje, ile jeszcze zostało.
+• Na iPadzie „Zmień przewoźnika” i panele „Znajomi” otwierają się na środku ekranu, a „Udostępnij” otwiera się obok swojego przycisku.
 ```

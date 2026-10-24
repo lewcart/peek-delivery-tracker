@@ -71,11 +71,14 @@ seguir,rastrear,rastreio,tracking,localizar,entrega,entregas,envio,envios,correi
 ## What's new
 
 ```text
-• O Peek já funciona no iPad: a encomenda que abres aparece ao lado da lista, com atalhos de teclado e barra de menus.
-• No iPad, o primeiro ecrã do Peek mostra toda a viagem de uma encomenda em ecrã inteiro, com o campo do número de seguimento por cima. Toca no mapa para abrir uma encomenda de exemplo.
-• Uma ligação de encomenda partilhada abre-se no Peek. Segue-a sem conta e o Peek envia-te notificações até ser entregue.
-• Mantém premida uma encomenda na lista para ver as suas ações, ou arrasta para a lista um número de seguimento de outra app para o adicionar.
-• O Peek adapta-se aos maiores tamanhos de texto e volta a abrir a encomenda que estavas a ver depois de o sistema fechar a app.
-• Um número de apenas seis dígitos costuma ser um código de levantamento, por isso o Peek pede agora o número de seguimento. Também reconhece os números de encomenda da Shein.
-• O Peek reconhece os números de seguimento dos Correos de Cuba.
+• Quando uma transportadora não emite um número de seguimento, a encomenda mostra agora «Verifica o número de seguimento» e propõe Alterar transportadora, em vez de dizer que não foi possível obter a última atualização.
+• Quando a transportadora de uma encomenda precisa do código postal de entrega para a encontrar, o Peek pede-to agora. Se a transportadora recusar o código postal, a encomenda propõe Atualizar dados de seguimento; se não encontrar nenhuma encomenda com ele, a encomenda indica-o ao lado do código postal e propõe Alterar código postal.
+• Alterar transportadora mostra a transportadora atual da encomenda no topo da lista.
+• Quando a leitura de entrega não tem local, o mapa mostra a encomenda entregue na última paragem se esta ficar no país de destino e, caso contrário, onde foi vista pela última vez.
+• Na ficha de uma encomenda, os nomes dos locais no mapa já não ficam por baixo dos botões no topo.
+• Um percurso dentro de uma ou duas localidades aparece como um só local, e as paragens demasiado próximas para as distinguir partilham uma só marca.
+• Com o iPhone na horizontal, o globo mantém o percurso longe da Dynamic Island.
+• Uma leitura registada como «Haiger, DE» mostra a bandeira e o nome do país.
+• A tua nota em «Acertei nesta?» pode ter até 4000 caracteres e, perto do fim, mostra quantos faltam.
+• No iPad, Alterar transportadora e os painéis de Amigos abrem-se no centro do ecrã, e Partilhar abre-se ao lado do seu botão.
 ```

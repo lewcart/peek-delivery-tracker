@@ -71,11 +71,14 @@ pacco,spedizione,spedizioni,tracking,traccia,tracciare,consegna,segui,ordine,pos
 ## What's new
 
 ```text
-• Peek ora funziona su iPad: il pacco aperto compare accanto all’elenco, con abbreviazioni da tastiera e barra dei menu.
-• Su iPad, la prima schermata di Peek mostra l’intero viaggio di un pacco su tutto lo schermo, con il campo del numero di tracciamento sopra. Tocca la mappa per aprire un pacco di esempio.
-• Un link a un pacco condiviso si apre in Peek. Seguilo senza account: Peek ti invia notifiche finché non viene consegnato.
-• Tieni premuto un pacco nell’elenco per vederne le azioni, oppure trascina sull’elenco un numero di tracciamento da un’altra app per aggiungerlo.
-• Peek si adatta alle dimensioni del testo più grandi e riapre il pacco che stavi guardando dopo che il sistema ha chiuso l’app.
-• Sei cifre da sole di solito sono un codice di ritiro, quindi ora Peek chiede il numero di tracciamento. Riconosce anche i numeri d’ordine Shein.
-• Peek riconosce i numeri di tracciamento di Correos de Cuba.
+• Quando un corriere non rilascia un numero di tracciamento, il pacco ora mostra «Controlla il numero di tracciamento» e propone Cambia corriere, invece di dire che non è stato possibile ottenere l’ultimo aggiornamento.
+• Quando il corriere di un pacco ha bisogno del codice postale di consegna per trovarlo, ora Peek te lo chiede. Se il corriere rifiuta il codice postale, il pacco propone Aggiorna i dati di tracciamento; se non trova nessun pacco con quel codice, il pacco lo segnala accanto al codice postale e propone Modifica codice postale.
+• Cambia corriere mostra il corriere attuale del pacco in cima all’elenco.
+• Quando la scansione di consegna non indica un luogo, la mappa mostra il pacco consegnato all’ultima tappa se questa si trova nel paese di destinazione, altrimenti dove è stato visto l’ultima volta.
+• Nella scheda di un pacco, i nomi dei luoghi sulla mappa non finiscono più sotto i pulsanti in alto.
+• Un viaggio dentro una o due città appare come un solo luogo, e le tappe troppo vicine per distinguerle condividono un solo segno.
+• Con l’iPhone in orizzontale, il globo tiene il percorso lontano dalla Dynamic Island.
+• Una scansione scritta come «Haiger, DE» mostra la bandiera e il nome del paese.
+• La tua nota in «Questo l’ho azzeccato?» può arrivare a 4.000 caratteri e, verso la fine, mostra quanti ne restano.
+• Su iPad, Cambia corriere e i pannelli di Amici si aprono al centro dello schermo, e Condividi si apre accanto al suo pulsante.
 ```

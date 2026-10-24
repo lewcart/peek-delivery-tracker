@@ -71,11 +71,14 @@ rastrear,rastreo,rastreador,localizar,seguir,paquete,envíos,pedido,pedidos,entr
 ## What's new
 
 ```text
-• Peek ya funciona en iPad: el paquete que abres aparece junto a la lista, con funciones rápidas de teclado y barra de menús.
-• En iPad, la primera pantalla de Peek muestra todo el recorrido de un paquete a pantalla completa, con el campo del número de seguimiento encima. Toca el mapa para abrir un paquete de ejemplo.
-• Un enlace de paquete compartido se abre en Peek. Síguelo sin cuenta y Peek te avisará hasta que se entregue.
-• Mantén pulsado un paquete de la lista para ver sus acciones, o arrastra a la lista un número de seguimiento desde otra app para añadirlo.
-• Peek se adapta a los tamaños de texto más grandes y, si el sistema cierra la app, vuelve a abrir el paquete que estabas viendo.
-• Un número de solo seis cifras suele ser un código de recogida, así que Peek ahora pide el número de seguimiento. También reconoce los números de pedido de Shein.
-• Peek reconoce los números de seguimiento de Correos de Cuba.
+• Cuando un transportista no emite un número de seguimiento, el paquete ahora muestra «Revisa el número de seguimiento» y ofrece Cambiar transportista, en lugar de decir que no se pudo obtener la última actualización.
+• Cuando el transportista de un paquete necesita el código postal de entrega para encontrarlo, Peek ahora te lo pide. Si el transportista rechaza el código postal, el paquete ofrece Actualizar datos de seguimiento; si no encuentra ningún paquete con él, el paquete lo indica junto al código postal y ofrece Cambiar código postal.
+• Cambiar transportista muestra el transportista actual del paquete al principio de la lista.
+• Cuando el escaneo de entrega no indica ningún lugar, el mapa muestra el paquete entregado en su última parada si esa parada está en el país de destino y, si no, dónde se vio por última vez.
+• En la ficha de un paquete, los nombres de lugares del mapa ya no quedan debajo de los botones de arriba.
+• Un trayecto dentro de una o dos localidades se muestra como un solo lugar, y las paradas demasiado cercanas para distinguirlas comparten una sola marca.
+• Con el iPhone en horizontal, el globo mantiene la ruta lejos de la Dynamic Island.
+• Un escaneo escrito como «Haiger, DE» muestra la bandera y el nombre del país.
+• Tu nota en «¿He acertado con este?» puede tener hasta 4000 caracteres y, cerca del final, muestra cuántos quedan.
+• En iPad, Cambiar transportista y los paneles de Amigos se abren en el centro de la pantalla, y Compartir se abre junto a su botón.
 ```

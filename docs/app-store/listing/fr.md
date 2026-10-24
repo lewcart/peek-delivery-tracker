@@ -73,11 +73,14 @@ livraison,suivre,paquet,commande,poste,courrier,envoi,tracking,tracker,relais,le
 ## What's new
 
 ```text
-• Peek fonctionne désormais sur iPad : le colis ouvert s’affiche à côté de la liste, avec des raccourcis clavier et une barre des menus.
-• Sur iPad, le premier écran de Peek déploie tout le trajet d’un colis sur l’écran, avec le champ du numéro de suivi au-dessus. Touche la carte pour ouvrir un colis d’exemple.
-• Un lien de colis partagé s’ouvre dans Peek. Suis le colis sans compte : Peek t’envoie des notifications jusqu’à sa livraison.
-• Maintiens le doigt sur un colis de la liste pour voir ses actions, ou fais glisser un numéro de suivi d’une autre app vers la liste pour l’ajouter.
-• Peek s’adapte aux plus grandes tailles de texte et, si le système a fermé l’app, rouvre le colis que tu regardais.
-• Un numéro à six chiffres est généralement un code de retrait : Peek demande désormais le numéro de suivi. Il reconnaît aussi les numéros de commande Shein.
-• Peek reconnaît les numéros de suivi de Correos de Cuba.
+• Quand un transporteur ne délivre pas un numéro de suivi, le colis affiche désormais « Numéro de suivi à vérifier » et propose Changer de transporteur, au lieu de dire que la dernière mise à jour n’a pas pu être récupérée.
+• Quand le transporteur d’un colis a besoin du code postal de livraison pour le trouver, Peek le demande désormais. Si le transporteur refuse le code postal, le colis propose Compléter les informations de suivi ; s’il ne trouve aucun colis avec ce code, le colis le signale à côté du code postal et propose Modifier le code postal.
+• Changer de transporteur montre le transporteur actuel du colis en haut de la liste.
+• Quand le scan de livraison n’a pas de lieu, la carte montre le colis livré à sa dernière étape si elle se trouve dans le pays de destination, et sinon sa dernière position connue.
+• Sur la fiche d’un colis, les noms de lieux de la carte ne passent plus sous les boutons du haut.
+• Un trajet qui tient en une ou deux villes s’affiche comme un seul lieu, et des étapes trop proches pour être distinguées partagent un seul repère.
+• iPhone à l’horizontale : le globe garde le trajet à l’écart de la Dynamic Island.
+• Un scan noté comme « Haiger, DE » affiche le drapeau et le nom du pays.
+• Ta note dans « J’ai tout bon pour ce colis ? » peut atteindre 4 000 caractères, et indique combien il en reste vers la fin.
+• Sur iPad, Changer de transporteur et les fenêtres Amis s’ouvrent au centre de l’écran, et Partager s’ouvre à côté de son bouton.
 ```

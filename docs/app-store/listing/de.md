@@ -71,11 +71,14 @@ paket,pakete,paketverfolgung,tracker,tracking,verfolgen,sendung,lieferung,post,v
 ## What's new
 
 ```text
-• Peek läuft jetzt auf dem iPad: Das geöffnete Paket steht neben der Liste, dazu gibt es Tastaturkurzbefehle und eine Menüleiste.
-• Auf dem iPad zeigt der erste Bildschirm von Peek die ganze Reise eines Pakets über das volle Display, mit dem Feld für die Sendungsnummer darüber. Tippe auf die Karte, um ein Beispielpaket zu öffnen.
-• Ein geteilter Paketlink öffnet sich in Peek. Verfolge das Paket ohne Konto, und Peek schickt dir Mitteilungen, bis es zugestellt ist.
-• Halte ein Paket in der Liste gedrückt, um seine Aktionen zu sehen, oder zieh eine Sendungsnummer aus einer anderen App auf die Liste, um sie hinzuzufügen.
-• Peek passt sich auch der maximalen Textgröße an und öffnet das zuletzt angesehene Paket wieder, nachdem das System die App geschlossen hat.
-• Sechs Ziffern allein sind meist ein Abholcode, deshalb fragt Peek jetzt nach der Sendungsnummer. Auch Shein-Bestellnummern erkennt Peek.
-• Peek erkennt Sendungsnummern von Correos de Cuba.
+• Vergibt ein Paketdienst solche Sendungsnummern gar nicht, zeigt das Paket jetzt „Sendungsnummer prüfen“ und bietet „Paketdienst ändern“ an, statt zu melden, dass die letzte Aktualisierung nicht abgerufen werden konnte.
+• Braucht der Paketdienst eines Pakets die Postleitzahl der Lieferadresse, um es zu finden, fragt Peek jetzt danach. Lehnt der Paketdienst die Postleitzahl ab, bietet das Paket „Sendungsdaten ergänzen“ an; findet er mit ihr kein Paket, steht das neben der Postleitzahl, und das Paket bietet „Postleitzahl ändern“ an.
+• „Paketdienst ändern“ zeigt den aktuellen Paketdienst des Pakets ganz oben in der Liste.
+• Hat der Zustellscan keinen Ort, zeigt die Karte das Paket am letzten Halt als zugestellt, wenn dieser im Zielland liegt, und sonst als dort zuletzt gesehen.
+• Auf der Seite eines Pakets verdecken die Tasten oben keine Ortsnamen der Karte mehr.
+• Eine Reise innerhalb von ein, zwei Orten erscheint als ein Ort, und Stationen, die zu nah beieinanderliegen, teilen sich eine Markierung.
+• Mit dem iPhone im Querformat hält der Globus die Route von der Dynamic Island fern.
+• Ein Scan wie „Haiger, DE“ zeigt die Flagge und den Namen des Landes.
+• Deine Notiz zu „Liege ich hier richtig?“ darf bis zu 4000 Zeichen lang sein und zeigt gegen Ende, wie viele noch übrig sind.
+• Auf dem iPad öffnen sich „Paketdienst ändern“ und die Freunde-Fenster in der Mitte des Bildschirms, und „Teilen“ öffnet sich neben seiner Taste.
 ```

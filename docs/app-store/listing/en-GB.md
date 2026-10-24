@@ -73,11 +73,14 @@ delivery,tracking,shipment,order,courier,post,mail,shipping,track,deliveries,map
 ## What's new
 
 ```text
-• Peek now runs on iPad: the parcel you open shows beside the list, with keyboard shortcuts and a menu bar.
-• On iPad, Peek’s first screen spreads a parcel’s whole journey across the display, with the tracking number field above it. Tap the map to open a sample parcel.
-• A shared parcel link opens in Peek. Follow it without an account, and Peek notifies you until it’s delivered.
-• Touch and hold a parcel in the list for its actions, or drop a tracking number from another app onto the list to add it.
-• Peek fits the largest text sizes, and reopens the parcel you were looking at after the system closes it.
-• Six digits alone are usually a pickup code, so Peek now asks for the tracking number. It also spots Shein order numbers.
-• Peek recognises Correos de Cuba tracking numbers.
+• When a carrier doesn’t issue a tracking number, the parcel now says “Check the tracking number” and offers Change carrier, rather than saying it couldn’t get the latest update.
+• When a parcel’s carrier needs the delivery postcode to find it, Peek now asks for it. If the carrier turns the postcode down, the parcel offers Update tracking details; if it finds no parcel with it, the parcel says so beside the postcode and offers Edit postcode.
+• Change carrier shows the parcel’s current carrier at the top of the list.
+• When the delivery scan has no place, the map shows the parcel delivered at its last stop if that stop is in the country it was going to, and otherwise where it was last seen.
+• On a parcel’s card, the map’s place names no longer sit under the buttons at the top.
+• A journey within a town or two shows as one place, and stops too close to tell apart share one mark.
+• With your iPhone on its side, the globe keeps the route clear of the Dynamic Island.
+• A scan written like “Haiger, DE” shows the country’s flag and name.
+• Your note on “Did I get this one right?” can run to 4,000 characters, and shows how many are left near the end.
+• On iPad, Change carrier and the Friends panels open in the middle of the screen, and Share opens beside its button.
 ```
