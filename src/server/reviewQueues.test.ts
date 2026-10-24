@@ -54,7 +54,7 @@ function fakeClient(claims: Array<'claimed' | 'running' | 'done' | Error> = ['cl
     fixReplayedTrackingSupportCases: vi.fn().mockResolvedValue(1),
     // The ambiguous case's parcel is still on its way.
     trackingNumberStages: vi.fn(async (numbers: string[]) => new Map(numbers.map((number) => [number, ['in_transit']]))),
-    // No saved parcel for the numbers of unfiled cases.
+    // No saved parcel for the numbers of the cases left open.
     trackingNumberParcels: vi.fn(async (): Promise<Map<string, JsonObject[]>> => new Map()),
     ignoreReplayedTrackingSupportCases: vi.fn(async (_version: string, cases: unknown[]) => cases.length),
     listOpenTrackingStatusObservations: vi.fn().mockResolvedValue(OPEN_OBSERVATIONS),
@@ -135,7 +135,7 @@ describe('review queue replay', () => {
     await expect(replayReviewQueues(client as unknown as SupabaseServiceClient, 'v1'))
       .resolves.toMatchObject({ cases_replayed: 2, cases_fixed: 0, cases_ignored: 1 });
     expect(client.fixReplayedTrackingSupportCases).not.toHaveBeenCalled();
-    expect(client.trackingNumberParcels).not.toHaveBeenCalled();
+    expect(client.trackingNumberParcels).toHaveBeenCalledExactlyOnceWith(['204618']);
     expect(client.ignoreReplayedTrackingSupportCases).toHaveBeenCalledExactlyOnceWith('v1', [{ id: 'case-pickup',
       note: 'Six digits filed under no carrier: a pickup code, not a tracking number. The apps ask for the parcel’s tracking number instead.' }]);
   });
@@ -205,6 +205,39 @@ describe('review queue replay', () => {
       .resolves.toMatchObject({ cases_replayed: 3, cases_ignored: 1 });
     expect(client.ignoreReplayedTrackingSupportCases).toHaveBeenCalledExactlyOnceWith('v1', [{ id: 'case-314159265355',
       note: 'Its parcel was filed under fedex, one of the carriers its shape fits, once fedex tracked the number: no gap left.' }]);
+  });
+
+  it('ignores a case on a reference its carrier resolves to a barcode of its own that fits that carrier', async () => {
+    const client = fakeClient();
+    const supportCase = (number: string, carrier: string, verified: string | null): JsonObject => ({ id: `case-${number}`,
+      tracking_number: number, configured_carrier: carrier, direct_verified_carrier: verified,
+      reasons: ['ambiguous_shape', 'recognition_unknown'], last_outcome: 'unchanged' });
+    const parcel = (number: string, barcode: string | null): JsonObject => ({ tracking_number: number, one_off: true,
+      carrier: 'hermes-de', current_stage: 'accepted', created_at: '2026-09-10T05:00:00Z',
+      carrier_data: { ...(barcode ? { canonical_tracking_number: barcode } : {}),
+        routing: { version: 1, confirmed_carrier: 'hermes-de', confirmed_number: number } } });
+    // Made-up 14-digit numbers: only 90000000001000 and 90000000001017 hold Hermes Germany's check digit.
+    client.listOpenTrackingSupportCases.mockResolvedValue([
+      supportCase('31415926535897', 'hermes-de', 'hermes-de'),
+      // A barcode Hermes's shape does not fit, and no barcode at all.
+      supportCase('27182818284590', 'hermes-de', 'hermes-de'),
+      supportCase('10000000000001', 'hermes-de', 'hermes-de'),
+      // Filed under another carrier than its parcel.
+      supportCase('12345678901234', 'dpd-de', 'dpd-de'),
+      // A barcode typed as it is waits for Hermes to track it directly.
+      supportCase('90000000001017', 'hermes-de', null),
+    ]);
+    client.trackingNumberParcels.mockResolvedValue(new Map([
+      ['31415926535897', [parcel('31415926535897', '90000000001000')]],
+      ['27182818284590', [parcel('27182818284590', '12345678901234')]],
+      ['10000000000001', [parcel('10000000000001', null)]],
+      ['12345678901234', [parcel('12345678901234', '90000000001000')]],
+      ['90000000001017', [parcel('90000000001017', null)]],
+    ]));
+    await expect(replayReviewQueues(client as unknown as SupabaseServiceClient, 'v1', new Date('2026-09-10T12:00:00Z')))
+      .resolves.toMatchObject({ cases_replayed: 5, cases_ignored: 1 });
+    expect(client.ignoreReplayedTrackingSupportCases).toHaveBeenCalledExactlyOnceWith('v1', [{ id: 'case-31415926535897',
+      note: 'hermes-de resolves the number to a barcode of its own, one its shape fits, and tracks that: no gap left.' }]);
   });
 
   it('ignores a case whose parcels are gone once a check of one got no answer, not one only detection saw', async () => {

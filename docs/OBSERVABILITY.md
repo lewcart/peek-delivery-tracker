@@ -233,7 +233,10 @@ whose last check got no answer (`waiting`): no check is left to update it. So is
 opened while its parcel was filed under no carrier, once a check filed every saved parcel
 with the number under one carrier the shape fits that tracked it, such as FedEx, which
 recognition asks only through a browser: a one-off lookup may get no later check to clear
-the reasons. So is a case on a pickup code filed under no carrier, which was never a
+the reasons. So is a case on a reference, filed under its parcels' carrier or none, that
+the carrier tracked and resolves to a barcode of its own (`canonical_tracking_number`)
+the carrier's shape fits, such as a Hermes Germany order number: every check keeps the
+reference's reasons. So is a case on a pickup code filed under no carrier, which was never a
 tracking number. A case only the
 Add sheet's recognition saw stays open, since detection could still learn its shape.
 `tracking_review_runs` keeps one row per version, so restarts and other servers do not
