@@ -71,6 +71,35 @@ describe('ChangeCarrierSheet', () => {
     expect(within(await screen.findByRole('dialog', { name: 'Carrier' })).queryByRole('option', { name: /^Detect automatically/ })).not.toBeInTheDocument();
   });
 
+  it('heads the picker with the parcel’s own carrier unless the number’s carriers show it already', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ refused: false })));
+    const user = userEvent.setup();
+    const carriers = (group: HTMLElement) => within(group).getAllByRole('option').map((option) => option.id.split('-').at(-1));
+    const open = async (carrier: ParcelWithEvents['carrier']) => {
+      const view = render(<ChangeCarrierSheet parcel={{ ...parcel, carrier, trackingNumber: '1Z999AA10123456784' }}
+        usedCarriers={['chronopost', 'dpd']} onChange={vi.fn()} onClose={vi.fn()} />);
+      await user.click(within(screen.getByRole('dialog', { name: 'Change carrier' })).getByRole('button', { name: /^Carrier / }));
+      return { view, picker: await screen.findByRole('dialog', { name: 'Carrier' }) };
+    };
+
+    // A carrier that doesn't fit the number, still offered: on top, and not again among the ones used before.
+    const chronopost = await open('chronopost');
+    const [current, detected, used] = within(chronopost.picker).getAllByRole('group');
+    expect(current).toHaveAccessibleName('Current');
+    expect(carriers(current)).toEqual(['chronopost']);
+    expect(within(current).getByRole('option')).toHaveAttribute('aria-selected', 'true');
+    expect(detected).toHaveAccessibleName('Detected');
+    expect(carriers(detected)).toEqual(['ups']);
+    expect(used).toHaveAccessibleName('You’ve used');
+    expect(carriers(used)).toEqual(['dpd']);
+    chronopost.view.unmount();
+
+    // The carrier the number names is shown once, where it fits.
+    const ups = await open('ups');
+    expect(within(ups.picker).queryByRole('group', { name: 'Current' })).not.toBeInTheDocument();
+    expect(within(within(ups.picker).getByRole('group', { name: 'Detected' })).getByRole('option')).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('opens on automatic detection for a parcel filed under no carrier', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ refused: false })));
     const user = userEvent.setup();

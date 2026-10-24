@@ -70,16 +70,16 @@ export function ChangeCarrierSheet({
     ? t('picker.auto.detected', { carrier: carrierInfo(automaticCarrier, locale).name }) : t('picker.auto.change');
   // A carrier that issues no number of this shape is pointed out before the change is saved.
   const refused = useNumberRefusal(automatic ? null : chosenCarrier, parcel.trackingNumber);
-  // The picker leads with automatic detection, then the parcel's own carrier when no longer
-  // offered and not filed automatically, then the carriers its number fits, then the ones used before.
+  // The picker leads with automatic detection, then the parcel's own carrier unless it is filed automatically or
+  // among the carriers its number fits, which come next, then the ones used before. So the carrier it has is in view
+  // without scrolling, and one no longer offered is there at all.
   const fitting = (detected.confidence === 'high' ? [detected.carrier] : detected.candidates)
     .filter((id) => carrierInfo(id).capabilities.selectable);
+  const own: CarrierId[] = (automaticCarrier && unfiled) || fitting.includes(parcel.carrier) ? [] : [parcel.carrier];
   const pickerSections: CarrierPickerSection[] = [
-    ...(carrierInfo(parcel.carrier).capabilities.selectable || (automaticCarrier && unfiled) ? [] : [
-      { key: 'current', title: t('picker.section.current'), carriers: [parcel.carrier] },
-    ]),
+    { key: 'current', title: t('picker.section.current'), carriers: own },
     { key: 'fits', title: t(detected.confidence === 'high' ? 'picker.section.detected' : 'picker.section.fits'), carriers: fitting },
-    { key: 'used', title: t('picker.section.used'), carriers: usedCarriers.filter((id) => !fitting.includes(id)) },
+    { key: 'used', title: t('picker.section.used'), carriers: usedCarriers.filter((id) => !fitting.includes(id) && !own.includes(id)) },
   ].filter((section) => section.carriers.length > 0);
   const requirements = carrierRequirements(chosenCarrier, parcel.trackingNumber);
   const valueFor = (field: CarrierInputField) => field === 'trackingUrl'
