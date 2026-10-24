@@ -857,6 +857,7 @@
   "tracking.failure.maintenance": "O serviço de seguimento está em manutenção. Tenta novamente mais tarde.",
   "tracking.failure.notFound": "A transportadora ainda não encontrou esta encomenda. Verifica os dados ou tenta novamente mais tarde.",
   "tracking.failure.rateLimited": "A transportadora está a limitar as consultas. Aguarda antes de tentar novamente.",
+  "tracking.failure.placeholderNumber": "Isto não parece um número de seguimento real. Verifica o número no teu pedido e adiciona a encomenda de novo.",
   "tracking.failure.refusedNumber": "Esta transportadora não emite números de seguimento como este. Verifica o número ou escolhe outra transportadora.",
   "tracking.failure.severalParcels": "Este número de seguimento abrange várias encomendas. Adiciona cada encomenda com o seu próprio número.",
   "event.carrier.incomplete": "Dados de entrega incompletos",

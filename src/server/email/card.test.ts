@@ -15,7 +15,7 @@ const ZURICH = town('Zürich', 'CH', 47.367, 8.55);
 
 function parcel(scans: [stage: Stage, at: string, place?: EventPlace][]): ParcelWithEvents {
   return {
-    id: 'p', trackingNumber: 'TESTPARCEL123456', label: 'A private name', carrier: 'dhl', createdAt: '2026-10-01T08:00:00Z', syncStatus: 'ok',
+    id: 'p', trackingNumber: 'TESTPARCEL983456', label: 'A private name', carrier: 'dhl', createdAt: '2026-10-01T08:00:00Z', syncStatus: 'ok',
     events: scans.map(([stage, occurredAt, place], index) => ({ id: `e${index}`, parcelId: 'p', stage, description: 'Delivered', occurredAt, place })),
   };
 }

@@ -152,6 +152,14 @@ adapter refuses the number alone ([`numberRefusal.ts`](../src/server/numberRefus
 the reader is told to check the number or the carrier; a refused input such as a postcode
 keeps `carrier:invalid_input`, which asks for the parcel's details.
 
+A placeholder number, such as 123456789, is one under which providers merge other people's
+shipments, and the scraper looks it up nowhere (`placeholder_number`). A check refused so
+fails at once, at any stage, as `carrier:placeholder_number`, which asks the owner to check
+the number and add the parcel again. Whatever was stored from such a number is served
+without its carrier scans, status line, estimate and carrier data, with that error, whether
+or not a check ran since ([`eventPlaces.ts`](../src/server/eventPlaces.ts)); the rows stay
+stored.
+
 A scan an adapter dates by its day alone, with no clock (NACEX's history), is stored as a
 row of that day anyway, in the carrier's order: a second after the scan before it when that
 one is of the same day, else at the start of the day on the carrier's home clock, the one

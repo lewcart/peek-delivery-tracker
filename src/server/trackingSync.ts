@@ -1,5 +1,5 @@
 import 'server-only';
-import { deferredTrackingFailure, trackingFailureCode } from './trackingFailure';
+import { deferredTrackingFailure, PLACEHOLDER_NUMBER, trackingFailureCode } from './trackingFailure';
 import { CarrierError, carrierErrorKind, stageSource, resultStage, resultHasUpdate, CARRIER_DEFINITIONS, type CarrierId } from 'universal-parcel-scraper';
 export { classifyStage, inferStage, stageSource, resultStage, resultHasUpdate } from 'universal-parcel-scraper';
 import { AMAZON_ACCOUNT_MESSAGE, AMAZON_HISTORY_EXPIRED, requiresAmazonAccount } from '../lib/amazon';
@@ -1602,6 +1602,7 @@ export class TrackingSyncService {
           : [];
         const routingUnannounced = error instanceof RoutingDeferred
           && error.routing.failures[carrierId]?.kind !== 'input_required'
+          && deferredTrackingFailure(error.routing.failures, carrierId) !== PLACEHOLDER_NUMBER
           && (Boolean(error.routing.provider_input_needed) || error.routing.failures[carrierId]?.kind === 'not_found'
             || (failures.length > 0 && failures.every((failure) => ['not_found', 'no_history', 'input_required'].includes(failure.kind))));
         if (!hasProgress && (isUnannouncedTrackingError(error) || routingUnannounced)) {
@@ -2107,9 +2108,13 @@ export class TrackingSyncService {
       if (error instanceof RoutingDeferred) {
         // A parcel with no scans whose own carrier refuses the number, such as one chosen by hand
         // that issues no number of its shape, shows why at the first check: only its details can change that.
-        const refused = previousStage === 'pending' && error.routing.failures[carrierId]?.user_error === 'carrier:invalid_input';
+        // So does a placeholder number at any stage: no source looks it up, and what was stored from it is
+        // other people's shipments (eventPlaces.ts leaves it out).
+        const code = deferredTrackingFailure(error.routing.failures, carrierId);
+        const refused = (previousStage === 'pending' && error.routing.failures[carrierId]?.user_error === 'carrier:invalid_input')
+          || code === PLACEHOLDER_NUMBER;
         const failing = error.stale || refused;
-        const syncError = failing ? await failureCopy(deferredTrackingFailure(error.routing.failures, carrierId), carrierId, parcel) ?? error.message : null;
+        const syncError = failing ? await failureCopy(code, carrierId, parcel) ?? error.message : null;
         try {
           await persist({ last_synced_at: this.now().toISOString(),
             sync_status: failing ? 'error' : previousStage === 'pending' ? 'waiting' : 'ok',

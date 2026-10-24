@@ -294,6 +294,15 @@ describe('ParcelPage stages and troubles', () => {
     expect(screen.queryByText('Tracking history')).toBeNull();
   });
 
+  it('asks for the right number instead of waiting for a carrier when the number is a placeholder', async () => {
+    await shown(view([scan('pending', 60, 'Tracking added')], { carrier: 'unknown', syncStatus: 'error', syncError: 'carrier:placeholder_number' }));
+    expect(within(card()).getByText('This doesn’t look like a real tracking number. Check the number in your order and add the parcel again.')).toBeVisible();
+    expect(screen.queryByText(/^No carrier knows/)).toBeNull();
+    expect(screen.queryByText(/^Keep this page/)).toBeNull();
+    // No carrier will ever answer: there is nothing to be told about.
+    expect(screen.queryByRole('button', { name: /found/i })).toBeNull();
+  });
+
   it('flags a parcel at customs', async () => {
     await shown(view([...journey, scan('customs', 2)], { expectedDelivery: '2099-01-05' }));
     expect(screen.getByRole('heading', { level: 1, name: 'At customs' })).toBeVisible();

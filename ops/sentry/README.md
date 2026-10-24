@@ -48,6 +48,7 @@ failures age out of the window; a new failure meanwhile reminds as usual.
   healthy, filed as missing input, whether or not routing made the check. So is a number
   that names several parcels (inconclusive with the reason `several_parcels`, such as an
   Australia Post consignment of several articles): the owner has to give one parcel's number.
+  So is a placeholder number, such as 123456789, that every source refuses (`placeholder_number`).
 - A carrier whose own lookup answers with fewer of the parcel's stored scans, each stored one
   in its stored stage and none newer than the stored progress, has answered: the check keeps
   the stored progress, and the parcel's first such answer is a `scans_withdrawn` review signal.

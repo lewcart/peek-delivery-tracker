@@ -380,13 +380,14 @@ export function isWrappedGift({ link, package: row }: StoredParcelLink): boolean
  * other. Its owner always sees everything.
  */
 export function publicParcelResponse(found: StoredParcelLink, alerts: ApiParcelAlerts): ApiPublicParcelResponse {
-  const { link, package: row } = found;
+  const { link } = found;
+  // As every client is served it: a placeholder number's parcel without what was stored from it, for one.
+  const row = withEventPlaces(found.package);
   const owner = link.owner === true;
   const wrapped = isWrappedGift(found);
   const numberShown = owner || (link.show_number === true && !wrapped);
   const trackingNumber = String(row.tracking_number ?? '');
-  const stored = withEventPlaces(row).tracking_events;
-  const events = (Array.isArray(stored) ? stored.filter(isRecord) : []).map((event): ApiTrackingEventRow => ({
+  const events = (Array.isArray(row.tracking_events) ? row.tracking_events.filter(isRecord) : []).map((event): ApiTrackingEventRow => ({
     id: String(event.id),
     package_id: String(event.package_id),
     stage: event.stage as ApiTrackingEventRow['stage'],

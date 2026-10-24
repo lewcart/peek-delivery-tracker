@@ -145,8 +145,8 @@ final class ParcelShareTests: XCTestCase {
 
     func testAHiddenNumberShowsOnlyItsEndByTheServicesRule() {
         XCTAssertEqual(ParcelNumberHint(hiding: "1234567890899").masked, "••• 899")
-        XCTAssertEqual(ParcelNumberHint(hiding: "TESTPARCEL123456").masked, "••• 3456")
-        XCTAssertEqual(ParcelNumberHint(hiding: "TESTPARCEL1234567890").masked, "••• 7890")
+        XCTAssertEqual(ParcelNumberHint(hiding: "TESTPARCEL983456").masked, "••• 3456")
+        XCTAssertEqual(ParcelNumberHint(hiding: "TESTPARCEL9834567890").masked, "••• 7890")
         XCTAssertEqual(ParcelNumberHint(hiding: "1234567899").masked, "••• 99")
         XCTAssertEqual(ParcelNumberHint(hiding: "ABCDE"), ParcelNumberHint(head: "", tail: "E"))
         XCTAssertEqual(ParcelNumberHint(hiding: "AB"), ParcelNumberHint(head: "", tail: ""))
@@ -646,7 +646,7 @@ final class ParcelShareTests: XCTestCase {
             accessToken: "access", tokenType: "bearer", expiresIn: 3600,
             expiresAt: Int(Date().timeIntervalSince1970) + 3600, refreshToken: "refresh", user: user
         ))
-        let parcel = Parcel(id: UUID(), trackingNumber: "TESTPARCEL123456", label: "Moon lamp", carrier: .dpd,
+        let parcel = Parcel(id: UUID(), trackingNumber: "TESTPARCEL983456", label: "Moon lamp", carrier: .dpd,
                             createdAt: "2026-10-02T08:00:00Z", syncStatus: .ok, notificationsMuted: false)
         let path = "/api/packages/\(parcel.id.uuidString)/share"
         let shared = try JSONEncoder.deliveryTracker.encode(try fixture().parcelShare)

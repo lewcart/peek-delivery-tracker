@@ -61,7 +61,7 @@ describe('parcel link model', () => {
     expect(maskedNumber(view.numberHint!)).toBe('••• 3456');
 
     const shown = parcelLinkView(owner as ApiPublicParcelResponse);
-    expect(shown.parcel.trackingNumber).toBe('TESTPARCEL123456');
+    expect(shown.parcel.trackingNumber).toBe('TESTPARCEL983456');
     expect(shown.numberHint).toBeNull();
   });
 
@@ -104,7 +104,7 @@ describe('parcel link model', () => {
 
   it('shows the same end of a masked number as the server, and cleans the words a link carries', () => {
     expect(maskedNumber(numberEnds('1234567890899'))).toBe('••• 899');
-    expect(maskedNumber(numberEnds('TESTPARCEL123456'))).toBe('••• 3456');
+    expect(maskedNumber(numberEnds('TESTPARCEL983456'))).toBe('••• 3456');
     expect(numberEnds('1234567899')).toEqual({ head: '', tail: '99' });
     expect(numberEnds('12345')).toEqual({ head: '', tail: '5' });
     // An answer kept on the device from before the start was hidden still reads as it did.
@@ -148,13 +148,13 @@ describe('the API backend', () => {
   it('looks a parcel up without a cookie, a referrer, a name or anything it was not asked to send', async () => {
     const { links, request } = api(json(owner, 201));
     const lookup = await links.lookupParcel({
-      trackingNumber: ' testparcel-123456 ', carrier: 'dpd', dpdPostcode: ' 8000 ', label: 'For Mum', name: 'For Mum',
+      trackingNumber: ' testparcel-983456 ', carrier: 'dpd', dpdPostcode: ' 8000 ', label: 'For Mum', name: 'For Mum',
     } as never);
-    expect(lookup).toMatchObject({ id: ID, key: KEY, view: { link: { role: 'owner' }, parcel: { trackingNumber: 'TESTPARCEL123456' } } });
+    expect(lookup).toMatchObject({ id: ID, key: KEY, view: { link: { role: 'owner' }, parcel: { trackingNumber: 'TESTPARCEL983456' } } });
     const [path, init] = request.mock.calls[0];
     expect(path).toBe('/api/public/parcels');
     expect(init).toMatchObject({ method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store' });
-    expect(JSON.parse(String(init!.body))).toEqual({ trackingNumber: 'TESTPARCEL123456', carrier: 'dpd', dpdPostcode: '8000' });
+    expect(JSON.parse(String(init!.body))).toEqual({ trackingNumber: 'TESTPARCEL983456', carrier: 'dpd', dpdPostcode: '8000' });
     expect(String(init!.body)).not.toContain('Mum');
     expect(new Headers(init!.headers).has('X-Parcel-Key')).toBe(false);
   });
@@ -167,7 +167,7 @@ describe('the API backend', () => {
 
   it('refuses a lookup answer without a usable key', async () => {
     const { links } = api(json({ ...owner, key: 'short' }, 201));
-    expect((await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL123456' }))).kind).toBe('server');
+    expect((await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL983456' }))).kind).toBe('server');
   });
 
   it('reads with the owner key only when the device holds one', async () => {
@@ -302,9 +302,9 @@ describe('the API backend', () => {
       json({ error: 'No lookups are left for today. Sign in to keep going.', scope: 'daily' }, 429, { 'Retry-After': '3600' }),
       json({ error: 'Too many requests. Try again shortly.' }, 429),
     );
-    const burst = await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL123456' }));
+    const burst = await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL983456' }));
     expect(burst).toMatchObject({ kind: 'burst', retryAfterSeconds: 42 });
-    const daily = await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL123456' }));
+    const daily = await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL983456' }));
     expect(daily).toMatchObject({ kind: 'daily', retryAfterSeconds: 3600 });
     expect(parcelLinkErrorKey(daily)).toBe('peek.dailyLimit');
     expect(await failure(links.readParcelLink(ID))).toMatchObject({ kind: 'burst', retryAfterSeconds: 60 });
@@ -318,7 +318,7 @@ describe('the API backend', () => {
     ['Choose a supported carrier', null],
   ] as const)('maps the refusal “%s” to the advice the app already has', async (message, guidance) => {
     const { links } = api(json({ error: message }, 400));
-    const error = await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL123456' }));
+    const error = await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL983456' }));
     expect(error).toMatchObject({ kind: 'validation', guidance });
     expect(parcelLinkErrorKey(error)).toBe(guidance ?? 'error.trackingNumber');
   });
@@ -333,10 +333,10 @@ describe('the API backend', () => {
       new Response('not json', { status: 500 }),
     );
     expect((await failure(links.readParcelLink(ID))).kind).toBe('offline');
-    expect((await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL123456' }))).kind).toBe('offline');
-    expect(await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL123456' })))
+    expect((await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL983456' }))).kind).toBe('offline');
+    expect(await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL983456' })))
       .toMatchObject({ kind: 'server', guidance: 'add.amazonCheckUnavailable', retryAfterSeconds: 5 });
-    expect(await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL123456' }))).toMatchObject({ kind: 'server', guidance: null });
+    expect(await failure(links.lookupParcel({ trackingNumber: 'TESTPARCEL983456' }))).toMatchObject({ kind: 'server', guidance: null });
     expect((await failure(links.readParcelLink(ID))).kind).toBe('server');
     expect((await failure(links.readParcelLink(ID))).kind).toBe('server');
   });

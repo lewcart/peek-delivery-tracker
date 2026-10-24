@@ -5,6 +5,7 @@ import { detectCarrierMatch } from '../lib/carriers';
 import { AUTOMATIC_CARRIER_IDS } from './carriers';
 import { localClockCarrier } from './directLocalHistory';
 import { refusesNumber } from './numberRefusal';
+import { refusedNumberCode } from './trackingFailure';
 import { asNewAs, catalogRules, directCarrier, opensBrowser, recognizers, releaseLapses, routingState } from './trackingRouting';
 import { isRecord, type JsonObject } from './types';
 
@@ -68,7 +69,7 @@ function rerouteLead(parcel: JsonObject, rules: string, now: number, refused: Re
   if (routing.rules === rules || data.original_carrier || (!unfiled && !provider) || (finished && !unfiled)) return null;
   // A carrier that refused the number under an older release counts as not asked:
   // this release's adapter may take it (rerouteAskable checks).
-  const refusedBefore = (carrier: string) => routing.failures[carrier]?.user_error === 'carrier:invalid_input';
+  const refusedBefore = (carrier: string) => refusedNumberCode(routing.failures[carrier]?.user_error);
   // An answer set aside as older than the parcel that the parcel's newest scan has since
   // come back to, as a provider's corrected clock brings it, or one on local clocks that
   // the catalog now dates: the carrier's check would take it. One without movement wouldn't.

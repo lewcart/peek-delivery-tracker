@@ -15,7 +15,7 @@ import { recordHealthIncident, recordRefresh, recordRoutingSignal, recordSyncAno
 import { healthMessage, healthReviewSignal, observeTrackingHealth, type HealthSample } from './trackingHealth';
 import { SupabaseError, type SupabaseServiceClient } from './supabase';
 import { isRecord, type JsonObject } from './types';
-import { trackingFailureCode } from './trackingFailure';
+import { PLACEHOLDER_NUMBER, trackingFailureCode } from './trackingFailure';
 import { trackingSupportContext } from './trackingSupport';
 
 /**
@@ -132,17 +132,25 @@ export function providerFailureSummary(failures: unknown): string | null {
   return pairs.length ? pairs.join(',').slice(0, 300) : null;
 }
 
-/** The carrier's answers only the owner can act on: a missing input, a number it does not issue, one naming several parcels. */
-const OWNER_TO_CORRECT: ReadonlySet<string> = new Set(['carrier:input_required', 'carrier:invalid_input', 'carrier:several_parcels']);
+/**
+ * The carrier's answers only the owner can act on: a missing input, a number it does not issue, one naming several
+ * parcels, a placeholder number.
+ */
+const OWNER_TO_CORRECT: ReadonlySet<string> = new Set([
+  'carrier:input_required', 'carrier:invalid_input', 'carrier:several_parcels', PLACEHOLDER_NUMBER,
+]);
 
 /**
  * Whether the check failed on the carrier's answer for the owner to act on, through routing or not,
  * including one routing still waits out before asking the carrier again.
  */
 function refusedNumber(completion: SyncAuditCompletion, carrier: string): boolean {
-  const failure = isRecord(completion.providerFailures) ? completion.providerFailures[carrier] : undefined;
+  const failures = isRecord(completion.providerFailures) ? completion.providerFailures : {};
+  const failure = failures[carrier];
   return (isRecord(failure) && OWNER_TO_CORRECT.has(String(failure.user_error)))
-    || OWNER_TO_CORRECT.has(String(trackingFailureCode(completion.error)));
+    || OWNER_TO_CORRECT.has(String(trackingFailureCode(completion.error)))
+    // A placeholder number, refused by every source whatever the parcel's carrier.
+    || Object.values(failures).some((other) => isRecord(other) && other.user_error === PLACEHOLDER_NUMBER);
 }
 
 /**

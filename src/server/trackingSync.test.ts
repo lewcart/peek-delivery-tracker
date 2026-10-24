@@ -4826,6 +4826,33 @@ describe('TrackingSyncService', () => {
     expect(client.updatePackage.mock.calls.at(-1)![1]).toMatchObject({ sync_status: 'error', sync_error: 'carrier:invalid_input' });
   });
 
+  it('asks the owner to correct a placeholder number every source refuses, whatever the parcel showed before', async () => {
+    const client = { ...fakeClient(),
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-09-10T12:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined),
+    };
+    const refusal = (source: string) => new InvalidInputError(source, `${source} refuses a placeholder number`, { reason: 'placeholder_number' });
+    const adapter = { fetch: vi.fn(async () => { throw refusal('DHL'); }),
+      fetchUniversal: vi.fn(async (source: string) => { throw refusal(source); }) };
+    const parcel = { id: 'placeholder', carrier: 'unknown', tracking_number: '1234567890', current_stage: 'delivered',
+      carrier_data: { routing: { version: 1, configured_carrier: 'unknown', consecutive_failures: 0, probe_cursor: 0, discovery_cursor: 0 } } };
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date('2026-09-10T12:00:00Z'));
+    await expect(service.syncPackage(parcel, { trigger: 'scheduled' })).resolves.toMatchObject({ waiting: 0, errors: 1 });
+    const saved = client.updatePackage.mock.calls.at(-1)![1];
+    expect(saved).toMatchObject({ sync_status: 'error', sync_error: 'carrier:placeholder_number' });
+    // The stored stage stays: the parcel is served without it (eventPlaces.ts).
+    expect(saved).not.toHaveProperty('current_stage');
+    // Only the owner can correct the number: the carriers and providers answered.
+    expect(client.recordTrackingHealth).toHaveBeenLastCalledWith(expect.any(String), 'placeholder',
+      expect.arrayContaining([expect.objectContaining({ kind: 'refresh', healthy: true })]));
+
+    // So does a parcel without scans whose own carrier refuses it, at the first check.
+    const own = { ...parcel, id: 'placeholder-dhl', carrier: 'dhl', current_stage: 'pending',
+      carrier_data: { routing: { ...parcel.carrier_data.routing, configured_carrier: 'dhl' } } };
+    await expect(service.syncPackage(own, { trigger: 'package' })).resolves.toMatchObject({ waiting: 0, errors: 1 });
+    expect(client.updatePackage.mock.calls.at(-1)![1]).toMatchObject({ sync_status: 'error', sync_error: 'carrier:placeholder_number' });
+  });
+
   it('records no health sample for a scheduled check that contacted no provider', async () => {
     const client = fakeClient();
     const adapter = { fetch: vi.fn(), fetchUniversal: vi.fn() };

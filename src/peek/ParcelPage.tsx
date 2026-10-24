@@ -9,11 +9,12 @@ import { PeekLockup } from '../components/PeekMark';
 import { PickupPointCard } from '../components/PickupPointCard';
 import { stampOrigin } from '../components/ParcelStamp';
 import { TrackingJournal } from '../components/TrackingJournal';
-import { localizedDeliveryWindow, localizedEventDescription, stageLabel, useI18n, type MessageKey } from '../i18n';
+import { localizedDeliveryWindow, localizedEventDescription, stageLabel, trackingFailureMessage, useI18n, type MessageKey } from '../i18n';
 import { trackAction, trackScreen } from '../lib/analytics';
 import { carrierBrand } from '../lib/carrierBrand';
 import { activeTrackingCarrierId, carrierInfo, deliveringCarrierId, displayedCarrierId, formatTrackingNumber, tracksAutomatically } from '../lib/carriers';
 import { LANDING_PATH } from '../lib/experience';
+import { PLACEHOLDER_NUMBER } from '../lib/messages';
 import { captureCardOrigin } from '../lib/cardTransition';
 import { useCardDialog } from '../lib/cardDialog';
 import { focusClickedButton } from '../lib/modal';
@@ -230,6 +231,8 @@ function Parcel({ linkId, entrance, state, view, onHome }: {
   const moving = parcelHasCarrierUpdate(parcel);
   // No carrier has been found for the number yet: the card stays neutral.
   const carrierKnown = parcel.carrier !== 'unknown' || moving;
+  // A placeholder number, such as 123456789: no carrier will ever know it, so the page asks for the right one instead.
+  const placeholder = parcel.syncError === PLACEHOLDER_NUMBER;
   const number = parcel.trackingNumber ? formatTrackingNumber(parcel.trackingNumber, parcel.carrier)
     : numberHint ? maskedNumber(numberHint) : null;
   const headline = wrapped ? t('share.gift.headline') : opened ? t('share.gift.here') : parcelHeadline(parcel, t);
@@ -257,7 +260,7 @@ function Parcel({ linkId, entrance, state, view, onHome }: {
   const deliveringId = deliveringCarrierId(parcel);
   const delivering = carrierKnown && deliveringId ? carrierInfo(deliveringId, locale) : null;
   const deliveryNote = delivering ? t('parcel.deliveryCarrier', { carrier: delivering.name }) : null;
-  const notes = present ? (deliveryNote ? [deliveryNote] : []) : !carrierKnown ? [number ? t('link.unknown.body', { number }) : t('link.unknown.bodyNoNumber')] : [
+  const notes = present ? (deliveryNote ? [deliveryNote] : []) : placeholder ? [trackingFailureMessage(parcel.syncError, t)] : !carrierKnown ? [number ? t('link.unknown.body', { number }) : t('link.unknown.bodyNoNumber')] : [
     previousEstimateLine(previousEstimate, parcel, wording),
     deliveryNote,
     // A label a day old or more: the sender still has the parcel, and the carrier can tell nothing until they hand it over.
@@ -401,7 +404,7 @@ function Parcel({ linkId, entrance, state, view, onHome }: {
   }
   // Nothing scanned yet: being told is the one next step, and every scan is worth telling.
   const early = !moving || stage === 'registered';
-  const canPing = !final && !checking;
+  const canPing = !final && !checking && !placeholder;
   // A wrapped gift says little, and keeps its one button in its card; any other parcel has it among its actions.
   const ping: PingAction | undefined = canPing && !wrapped ? {
     label: t(alert ? 'alerts.action.on' : !carrierKnown ? 'alerts.action.found' : early ? 'alerts.action.moves' : 'alerts.action.ping'),
@@ -433,7 +436,7 @@ function Parcel({ linkId, entrance, state, view, onHome }: {
   // gift is for, who is shown little of it; not about the sample; and not before a first answer is on the page.
   const feedbackNotes = useMemo(() => linkFeedbackNotes(linkId), [linkId]);
   const feedback = useParcelFeedback({
-    kind: sample || present || checking || offline || afterwards ? null
+    kind: sample || present || checking || offline || afterwards || placeholder ? null
       : !carrierKnown ? 'unknown' : automatic || moving ? 'found' : null,
     scan: scanIdentity(parcel),
     carrier: displayed.name,
@@ -479,7 +482,7 @@ function Parcel({ linkId, entrance, state, view, onHome }: {
         {opened && <GiftNote note={state.words.note} from={state.words.from} inside={state.words.name ?? state.name} />}
         {asked && <PostcodeAsked carrier={asked.carrier} onAdd={() => setAddingPostcode(true)} />}
         {owner && link.shared === false && <p className="peekp-shared"><Glyph name="info" />{t('share.stopped.owner')}</p>}
-        {!carrierKnown && <p className="peekp-keeppage">{t('link.unknown.keep')}</p>}
+        {!carrierKnown && !placeholder && <p className="peekp-keeppage">{t('link.unknown.keep')}</p>}
         {signedIn && !followed && link.canKeep && <AddToDeliveries busy={adding || pendingId === linkId} error={addError && t(addError)} onAdd={() => void add()} />}
         {!afterwards && <Actions name={name} ping={ping}
           onHave={key && delivered && link.kind === 'lookup' ? () => setForgetting('arrived') : undefined}

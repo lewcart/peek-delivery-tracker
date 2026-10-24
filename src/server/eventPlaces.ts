@@ -5,6 +5,7 @@ import { placesForEvents, type EventPoint } from 'universal-parcel-scraper/place
 import { clockDay, scanDay, UNWORDED_STEP } from './eventIdentity';
 import { DIRECT_HISTORY, providerCopies } from './providerCopies';
 import { relayCopies } from './relayCopies';
+import { PLACEHOLDER_NUMBER, placeholderNumber } from './trackingFailure';
 import { isRecord, type JsonObject } from './types';
 
 let reported = false;
@@ -65,11 +66,27 @@ function withoutServiceData(row: JsonObject): JsonObject {
   return { ...row, carrier_data: data };
 }
 
-/** The scans of a stored package row its timeline shows: without a provider's copies of its carrier's scans, then as `timeline` keeps them. */
+/**
+ * The scans of a stored package row its timeline shows: without a provider's copies of its carrier's scans, then as
+ * `timeline` keeps them. A placeholder number's scans are other people's shipments merged under it: only Peek's own
+ * rows are shown.
+ */
 export function shownEvents(row: JsonObject): JsonObject[] {
   const copied = providerCopies(row);
+  const placeholder = placeholderNumber(row);
   return timeline((Array.isArray(row.tracking_events) ? row.tracking_events.filter(isRecord) : [])
-    .filter((event) => !copied.has(String(event.id))));
+    .filter((event) => !copied.has(String(event.id)) && (!placeholder || isOwnRow(event))));
+}
+
+/**
+ * A parcel under a placeholder number is served as the owner's to correct, whatever was stored from it: what
+ * providers answered for it, its status line, estimate and carrier data included, belongs to other people's
+ * shipments.
+ */
+function withoutPlaceholderAnswers(row: JsonObject): JsonObject {
+  return placeholderNumber(row) ? {
+    ...row, sync_status: 'error', sync_error: PLACEHOLDER_NUMBER, last_status_text: null, expected_delivery: null, carrier_data: {},
+  } : row;
 }
 
 /** A stored package row with its events' sources left out, every row kept: the account's export. */
@@ -119,11 +136,12 @@ function relayLeads(events: readonly JsonObject[], relays: Map<string, string>):
  * included. A universal provider's copy of a confirmed carrier's scan is left
  * out (providerCopies.ts), so is Peek's own opening row once carrier scans
  * reach back to it (see `timeline`), and a row of a relay pair names the row it
- * is shown under (`relay_of`, see `relayLeads` and relayCopies.ts).
+ * is shown under (`relay_of`, see `relayLeads` and relayCopies.ts). A placeholder number's parcel is served
+ * without what was stored from it (`withoutPlaceholderAnswers`).
  */
 export function withEventPlaces(row: JsonObject): JsonObject {
   const stored = row;
-  row = withoutServiceData(row);
+  row = withoutPlaceholderAnswers(withoutServiceData(row));
   if (!Array.isArray(row.tracking_events) || !row.tracking_events.length) return row;
   const events = shownEvents(stored);
   const relays = relayLeads(events, relayCopies({ ...row, tracking_events: events }));

@@ -210,7 +210,7 @@ describe('what an alert announces', () => {
 
 describe('what an alert says', () => {
   it('opens the link\'s page and carries neither the parcel\'s name nor its number', () => {
-    const payload = alerts.payload(row({ label: 'Sneakers for Ada', tracking_number: 'TESTPARCEL123456', stage: 'delivered' }));
+    const payload = alerts.payload(row({ label: 'Sneakers for Ada', tracking_number: 'TESTPARCEL983456', stage: 'delivered' }));
     expect(payload).toEqual({
       title: 'It’s arrived',
       body: 'Delivered at 14:30\nExample Town',

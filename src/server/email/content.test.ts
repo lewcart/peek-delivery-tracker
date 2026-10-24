@@ -15,7 +15,7 @@ const drawn = vi.hoisted(() => ({ card: vi.fn() }));
 vi.mock('./card', () => ({ deliveryCard: drawn.card }));
 
 // Synthetic values only: no carrier issued this number and nobody lives there.
-const trackingNumber = 'TESTPARCEL123456';
+const trackingNumber = 'TESTPARCEL983456';
 const PRIVATE = /TESTPARCEL|Alex Example|Example Kiosk|Samplestrasse|9999|4711|Example Shop|Exampletown|Signed by/;
 
 const NOW = new Date('2026-10-03T15:00:00Z');

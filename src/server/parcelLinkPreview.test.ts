@@ -26,7 +26,7 @@ vi.mock('next/headers', () => ({
 
 // Synthetic identifiers only: no carrier issued any of these.
 const linkId = 'k7Qm2xHd9RtW';
-const trackingNumber = 'TESTPARCEL123456';
+const trackingNumber = 'TESTPARCEL983456';
 const NOW = Date.parse('2026-10-02T10:00:00Z');
 
 function stored(overrides: JsonObject = {}, events: JsonObject[] = [

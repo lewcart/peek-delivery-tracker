@@ -261,7 +261,7 @@ describe('lookup verification', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const retain = vi.spyOn(SupabaseServiceClient.prototype, 'recordTrackingSupportObservation').mockResolvedValue(undefined);
     const response = await detect(new NextRequest('https://peek.example/api/public/detect', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trackingNumber: 'TESTPARCEL123456' }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trackingNumber: 'TESTPARCEL983456' }),
     }), { params: Promise.resolve({}) });
     expect(response.status).toBe(403);
     expect(fetch).not.toHaveBeenCalled();

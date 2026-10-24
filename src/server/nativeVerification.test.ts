@@ -21,7 +21,7 @@ const keyID = Buffer.alloc(32, 7).toString('base64');
 const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
 const storedKey = publicKey.export({ type: 'spki', format: 'pem' }).toString();
 /** The body every assertion here signs, as the route reads it. */
-const signedBody = Buffer.from('{"trackingNumber":"TESTPARCEL123456"}');
+const signedBody = Buffer.from('{"trackingNumber":"TESTPARCEL983456"}');
 function request(path = '/api/public/parcels', body = signedBody.toString(), ip = '192.0.2.10') {
   return new NextRequest(`https://peek.example${path}`, { method: 'POST', body,
     headers: { 'Content-Type': 'application/json', host: 'peek.example', 'x-real-ip': ip } });

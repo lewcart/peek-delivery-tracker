@@ -126,6 +126,9 @@ export function localizedEventDescription(description: string, t: Translate): st
   return message ? t(message.key as MessageKey, message.variables) : description;
 }
 
+/** A placeholder number, such as 123456789: no carrier will ever know it, and only the owner can correct it. */
+export const PLACEHOLDER_NUMBER = 'carrier:placeholder_number';
+
 /** Only stable service codes select specific copy; diagnostics never reach the UI. */
 export function trackingFailureMessage(error: string | undefined, t: Translate): string {
   const kind = error?.startsWith('carrier:') ? error.slice('carrier:'.length) : '';

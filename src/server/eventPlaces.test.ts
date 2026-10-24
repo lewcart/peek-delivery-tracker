@@ -118,6 +118,29 @@ describe('withEventPlaces', () => {
     expect(served([added, scan('later', '2026-09-27T12:00:00+00:00')]).every((row) => !('provider_event_id' in row))).toBe(true);
   });
 
+  it('serves a placeholder number\'s parcel for its owner to correct, without what was stored from it', () => {
+    const added = { ...event('added', null, '2026-09-27T10:00:00+00:00'), stage: 'pending', description: 'Tracking added', provider_event_id: 'app:pending' };
+    const merged = (id: string, occurredAt: string) => ({ ...event(id, 'Lyon', occurredAt), stage: 'delivered', provider_event_id: `unknown:${id}` });
+    const row = {
+      id: 'parcel', carrier: 'unknown', tracking_number: '1234567890', sync_status: 'ok', sync_error: null,
+      last_status_text: 'Delivered', expected_delivery: '2026-09-28', current_stage: 'delivered',
+      carrier_data: { destination_country: 'FR', pickup_point: 'Relay', receiver_name: 'Someone', tracking_provider: 'ship24' },
+      tracking_events: [merged('other', '2026-09-28T09:00:00+00:00'), merged('earlier', '2026-09-26T09:00:00+00:00'), added],
+    };
+    const served = withEventPlaces(row) as Record<string, unknown> & { tracking_events: Record<string, unknown>[] };
+    // Other people's scans go, so Peek's own row opens the timeline again.
+    expect(served.tracking_events.map((scan) => scan.id)).toEqual(['added']);
+    expect(served).toMatchObject({
+      sync_status: 'error', sync_error: 'carrier:placeholder_number', last_status_text: null, expected_delivery: null, carrier_data: {},
+    });
+    // The stored row and its stage are left as they are.
+    expect(row.tracking_events).toHaveLength(3);
+    expect(served.current_stage).toBe('delivered');
+    // A parcel's own number is served as stored.
+    expect((withEventPlaces({ ...row, tracking_number: 'TEST1234' }) as typeof served).tracking_events.map((scan) => scan.id))
+      .toEqual(['other', 'earlier']);
+  });
+
   it('serves an earlier carrier\'s relay copy with the scan it repeats, and keeps both rows', () => {
     const scan = (id: string, source: string, stage: string, occurredAt: string, description: string) => ({
       ...event(id, null, occurredAt), stage, description, provider_event_id: `${source}:${id}`,

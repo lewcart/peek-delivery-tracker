@@ -45,7 +45,7 @@ function claim(number: number, changes: Partial<DeliveryEmailClaim> = {}): Deliv
 
 function parcel(packageId: string): JsonObject {
   return {
-    id: packageId, tracking_number: 'TESTPARCEL123456', label: 'Sneakers', carrier: 'dhl', carrier_data: {},
+    id: packageId, tracking_number: 'TESTPARCEL983456', label: 'Sneakers', carrier: 'dhl', carrier_data: {},
     tracking_events: [{
       id: 'event-1', package_id: packageId, stage: 'delivered', description: 'Delivered', location: 'Example Town',
       occurred_at: '2026-10-03T12:12:00+00:00', point: null,
@@ -344,7 +344,7 @@ describe('what is recorded about an email', () => {
     const recorded = everythingRecorded();
     expect(logged('delivery_email')).toHaveLength(5);
     for (const personal of [
-      'alex@example.com', 'example.com', 'Sneakers', 'Your Sneakers', 'Delivered today', 'TESTPARCEL123456', 'Example Town',
+      'alex@example.com', 'example.com', 'Sneakers', 'Your Sneakers', 'Delivered today', 'TESTPARCEL983456', 'Example Town',
       unsubscribeToken(alex), alex, settings.password!, 'hello@',
     ]) {
       expect(recorded).not.toContain(personal);

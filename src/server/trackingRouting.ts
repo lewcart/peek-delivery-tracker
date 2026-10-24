@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { trackingFailureCode, UNKNOWN_ITEM_REASONS } from './trackingFailure';
+import { refusedNumberCode, trackingFailureCode, UNKNOWN_ITEM_REASONS } from './trackingFailure';
 
 import { DateTime } from 'luxon';
 import { appInputField, detectCarrierMatch } from '../lib/carriers';
@@ -712,7 +712,7 @@ export class TrackingRouter {
       // but not a carrier whose adapter refuses the number.
       const identified = unnamed ? providerCarrier(value.result, number) : undefined;
       const providerNamed = identified && state.discovered_carrier === identified
-        && state.failures[identified]?.user_error !== 'carrier:invalid_input' ? identified : undefined;
+        && !refusedNumberCode(state.failures[identified]?.user_error) ? identified : undefined;
       // The carrier detection names, or else the one this provider names, answered
       // too, with local clocks only: a provider dating the progress files the
       // parcel under it, where a parcel added today would start, and links stay
@@ -821,7 +821,7 @@ export class TrackingRouter {
         value.result = normalizeCarrierResult(value.result);
         if (!usable(value.result)) throw Object.assign(new Error('No confirmed shipment progress'), { status: 404 });
         // It answers for the number, on local clocks too: a refusal an older release recorded no longer holds.
-        if (state.failures[carrier]?.user_error === 'carrier:invalid_input') delete state.failures[carrier];
+        if (refusedNumberCode(state.failures[carrier]?.user_error)) delete state.failures[carrier];
         // The carrier's own copy of a reused number's earlier parcel answers without history for
         // this one: it neither confirms the carrier nor serves the parcel, on local clocks either.
         if (oldLabel(parcel.created_at, value.result, value.earlierResult)) {

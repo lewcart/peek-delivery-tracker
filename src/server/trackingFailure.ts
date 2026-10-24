@@ -1,4 +1,5 @@
-import { CarrierError, carrierErrorKind } from 'universal-parcel-scraper';
+import { CarrierError, carrierErrorKind, isPlaceholderNumber } from 'universal-parcel-scraper';
+import { PLACEHOLDER_NUMBER } from '../lib/messages';
 
 /**
  * A carrier's own tracking that does not know the item yet: Ukrposhta's status API
@@ -13,6 +14,21 @@ export const UNKNOWN_ITEM_REASONS: ReadonlySet<string> = new Set([
   'status_api_not_found', 'portal_not_found', 'no_history', 'webtrack_no_history',
 ]);
 
+export { PLACEHOLDER_NUMBER } from '../lib/messages';
+
+/** A source's refusal of the number: one it does not issue, or a placeholder. A later release may take either. */
+export function refusedNumberCode(code: unknown): boolean {
+  return code === 'carrier:invalid_input' || code === PLACEHOLDER_NUMBER;
+}
+
+/**
+ * Whether a stored parcel's number is a placeholder the scraper refuses to look up, such as 123456789: providers
+ * merge other people's shipments under one. Such a parcel is served without what was stored from it (eventPlaces.ts).
+ */
+export function placeholderNumber(row: { tracking_number?: unknown }): boolean {
+  return typeof row.tracking_number === 'string' && isPlaceholderNumber(row.tracking_number);
+}
+
 /** Stable public copy codes. Full diagnostics remain in the tracking audit. */
 export function trackingFailureCode(error: unknown): string | null {
   // A number that names several parcels, such as an Australia Post consignment of
@@ -20,6 +36,7 @@ export function trackingFailureCode(error: unknown): string | null {
   let current = error;
   for (let depth = 0; current instanceof Error && !(current instanceof CarrierError) && depth < 8; depth++) current = current.cause;
   if (current instanceof CarrierError && current.reason === 'several_parcels') return 'carrier:several_parcels';
+  if (current instanceof CarrierError && current.reason === 'placeholder_number') return PLACEHOLDER_NUMBER;
   const kind = carrierErrorKind(error);
   return kind ? `carrier:${kind}` : null;
 }
@@ -29,6 +46,8 @@ export function deferredTrackingFailure(
   failures: Record<string, { user_error?: string; kind: string }>,
   configuredCarrier: string,
 ): string | null {
+  // The scraper refuses a placeholder number from every source alike: one refusal names it.
+  if (Object.values(failures).some(failure => failure?.user_error === PLACEHOLDER_NUMBER)) return PLACEHOLDER_NUMBER;
   // The parcel's own carrier needs an input, refuses the number or finds several parcels under it:
   // only the parcel's details can change that.
   const own = failures[configuredCarrier]?.user_error;

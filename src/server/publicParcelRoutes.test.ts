@@ -23,7 +23,7 @@ const linkId = 'k7Qm2xHd9RtW';
 const ownerKey = 'A'.repeat(43);
 const keyHash = createHash('sha256').update(ownerKey).digest('hex');
 const packageId = '51000000-0000-4000-a000-000000000001';
-const trackingNumber = 'TESTPARCEL123456';
+const trackingNumber = 'TESTPARCEL983456';
 const postcode = '9999';
 
 /** A package row as the database returns it to the server, with everything a link must not show. */
@@ -179,7 +179,7 @@ describe('looking up a parcel without an account', () => {
     const claim = allow();
     const create = store();
     const counted = vi.spyOn(metrics, 'recordPublicLookup');
-    const response = await lookup({ trackingNumber: 'test parcel-123456', carrier: 'dpd', dpdPostcode: postcode, label: 'Surprise for Ada' }, '198.51.100.7');
+    const response = await lookup({ trackingNumber: 'test parcel-983456', carrier: 'dpd', dpdPostcode: postcode, label: 'Surprise for Ada' }, '198.51.100.7');
     expect(response.status).toBe(201);
     expect(response.headers.get('cache-control')).toBe('no-store');
     const text = await response.text();

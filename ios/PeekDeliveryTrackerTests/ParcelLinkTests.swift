@@ -43,7 +43,7 @@ final class ParcelLinkTests: XCTestCase {
         XCTAssertTrue(looked.link.numberShown)
         XCTAssertTrue(looked.link.canKeep)
         XCTAssertEqual(looked.key.count, 43)
-        XCTAssertEqual(looked.package.trackingNumber, "TESTPARCEL123456")
+        XCTAssertEqual(looked.package.trackingNumber, "TESTPARCEL983456")
         XCTAssertNil(looked.package.numberHint)
         XCTAssertEqual(looked.package.carrierData, PublicPackageCarrierData())
     }
@@ -84,8 +84,8 @@ final class ParcelLinkTests: XCTestCase {
     func testAShownNumberIsTheAppsParcelNumber() throws {
         let parcel = Parcel(shared: try fixture().publicLookup.package)
 
-        XCTAssertEqual(parcel.trackingNumber, "TESTPARCEL123456")
-        XCTAssertEqual(parcel.trackingNumbers.map(\.number), ["TESTPARCEL123456"])
+        XCTAssertEqual(parcel.trackingNumber, "TESTPARCEL983456")
+        XCTAssertEqual(parcel.trackingNumbers.map(\.number), ["TESTPARCEL983456"])
         XCTAssertEqual(parcel.currentStage, .pending)
         XCTAssertTrue(parcel.displayStatus.syncing)
     }
@@ -404,7 +404,7 @@ final class ParcelLinkTests: XCTestCase {
             accessToken: "access", tokenType: "bearer", expiresIn: 3600,
             expiresAt: Int(Date().timeIntervalSince1970) + 3600, refreshToken: "refresh", user: user
         ))
-        let kept = Parcel(id: UUID(), trackingNumber: "TESTPARCEL123456", label: "Moon lamp", carrier: .dpd,
+        let kept = Parcel(id: UUID(), trackingNumber: "TESTPARCEL983456", label: "Moon lamp", carrier: .dpd,
                           createdAt: "2026-10-02T08:00:00Z", syncStatus: .pending, notificationsMuted: false)
         let list = try JSONEncoder.deliveryTracker.encode(PackageListResponse(packages: [kept]))
         nonisolated(unsafe) var claims: [(authorization: String?, body: String)] = []

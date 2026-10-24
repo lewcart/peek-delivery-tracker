@@ -121,8 +121,8 @@ describe('daily lookup allowances', () => {
 
 describe('what a link shows', () => {
   it('hints at a masked number with its end only, and shows less of a short one', () => {
-    expect(numberHint('TESTPARCEL123456')).toEqual({ head: '', tail: '3456' });
-    expect(numberHint('TESTPARCEL1234567890')).toEqual({ head: '', tail: '7890' });
+    expect(numberHint('TESTPARCEL983456')).toEqual({ head: '', tail: '3456' });
+    expect(numberHint('TESTPARCEL9834567890')).toEqual({ head: '', tail: '7890' });
     expect(numberHint('TEST12345678')).toEqual({ head: '', tail: '678' });
     expect(numberHint('TEST1234')).toEqual({ head: '', tail: '34' });
     expect(numberHint('T123')).toEqual({ head: '', tail: '3' });
@@ -150,7 +150,7 @@ describe('what a link shows', () => {
       : key === 'weight_kg' ? 2 : key === 'routing' ? { confirmed_postcode: '9999' } : `stored ${key}`]));
     const shown = (link: Record<string, unknown>) => publicParcelResponse({
       link: { id: 'k7Qm2xHd9RtW', created_at: '2026-10-02T08:00:00Z', forget_at: null, ...link },
-      package: { id: 'parcel', tracking_number: 'TESTPARCEL123456', carrier: 'unknown', sync_status: 'ok',
+      package: { id: 'parcel', tracking_number: 'TESTPARCEL983456', carrier: 'unknown', sync_status: 'ok',
         created_at: '2026-10-02T08:00:00Z', carrier_data: stored, tracking_events: [],
         // What its owner chose about alerts, and when the parcel joined an account, is the owner's alone.
         notifications_muted: true, email_muted: true, owned_since: '2026-10-01T08:00:00Z' },
@@ -180,7 +180,7 @@ describe('what a link shows', () => {
     const link = contract.components.schemas.ParcelLink;
     const shown = (stored: Record<string, unknown>) => publicParcelResponse({
       link: { id: 'k7Qm2xHd9RtW', created_at: '2026-10-02T08:00:00Z', forget_at: null, ...stored },
-      package: { id: 'parcel', tracking_number: 'TESTPARCEL123456', carrier: 'unknown', sync_status: 'ok',
+      package: { id: 'parcel', tracking_number: 'TESTPARCEL983456', carrier: 'unknown', sync_status: 'ok',
         created_at: '2026-10-02T08:00:00Z', carrier_data: {}, tracking_events: [] },
     }, alerts).link;
     // A gift's words and the postcode another carrier asks for come only when there are some.
@@ -205,7 +205,7 @@ describe('what a link shows', () => {
       occurred_at: '2026-10-02T08:00:00+00:00', provider_event_id: 'app:pending', point: null };
     const shown = (events: Record<string, unknown>[]) => publicParcelResponse({
       link: { id: 'k7Qm2xHd9RtW', created_at: '2026-10-02T08:00:00Z', forget_at: null },
-      package: { id: 'parcel', tracking_number: 'TESTPARCEL123456', carrier: 'swiss-post', sync_status: 'ok',
+      package: { id: 'parcel', tracking_number: 'TESTPARCEL983456', carrier: 'swiss-post', sync_status: 'ok',
         created_at: '2026-10-02T08:00:00Z', carrier_data: {}, tracking_events: events },
     }, alerts).package.tracking_events;
     expect(shown([added]).map((event) => event.id)).toEqual(['added']);
@@ -215,12 +215,31 @@ describe('what a link shows', () => {
     expect(JSON.stringify(shown([added]))).not.toContain('provider_event_id');
   });
 
+  it('asks the owner to correct a placeholder number, showing nothing of the shipments merged under it', () => {
+    const merged = { id: 'merged', package_id: 'parcel', stage: 'delivered', description: 'Delivered', location: 'Lyon',
+      occurred_at: '2026-10-02T07:00:00+00:00', provider_event_id: 'unknown:merged', point: null };
+    const added = { id: 'added', package_id: 'parcel', stage: 'pending', description: 'Tracking added', location: null,
+      occurred_at: '2026-10-02T08:00:00+00:00', provider_event_id: 'app:pending', point: null };
+    const { package: shown } = publicParcelResponse({
+      link: { id: 'k7Qm2xHd9RtW', owner: true, created_at: '2026-10-02T08:00:00Z', forget_at: null },
+      package: { id: 'parcel', tracking_number: '1234567890', carrier: 'unknown', sync_status: 'ok', sync_error: null,
+        last_status_text: 'Delivered in Lyon', expected_delivery: '2026-10-02', current_stage: 'delivered', created_at: '2026-10-02T08:00:00Z',
+        carrier_data: { destination_country: 'FR', sender_name: 'Shop', pickup_point: 'Relay' }, tracking_events: [merged, added] },
+    }, alerts);
+    expect(shown).toMatchObject({
+      sync_status: 'error', sync_error: 'carrier:placeholder_number', last_status_text: null, expected_delivery: null,
+      tracking_number: '1234567890',
+    });
+    expect(shown.tracking_events.map((event) => event.id)).toEqual(['added']);
+    expect(JSON.stringify(shown.carrier_data)).not.toMatch(/FR|Shop|Relay/);
+  });
+
   it('names the scan a relay copy repeats, as the apps fold it', () => {
     const scan = (id: string, source: string, occurred_at: string) => ({ id, package_id: 'parcel', stage: 'delivered', description: 'Delivered',
       location: null, occurred_at, provider_event_id: `${source}:${id}`, point: null });
     const shown = publicParcelResponse({
       link: { id: 'k7Qm2xHd9RtW', created_at: '2026-10-02T08:00:00Z', forget_at: null },
-      package: { id: 'parcel', tracking_number: 'TESTPARCEL123456', carrier: 'chronopost', sync_status: 'ok', created_at: '2026-10-02T08:00:00Z',
+      package: { id: 'parcel', tracking_number: 'TESTPARCEL983456', carrier: 'chronopost', sync_status: 'ok', created_at: '2026-10-02T08:00:00Z',
         carrier_data: { original_carrier: 'chronopost', active_tracking_carrier: 'dpd-de' },
         tracking_events: [scan('scan', 'dpd-de', '2026-10-02T07:00:00+00:00'), scan('copy', 'chronopost', '2026-10-02T07:00:30+00:00')] },
     }, alerts).package.tracking_events;
@@ -231,7 +250,7 @@ describe('what a link shows', () => {
   it('answers with the shapes the web and iPhone clients decode from the shared fixture', () => {
     const { publicParcel, publicLookup, publicGiftParcel } = contractFixture;
     const stored = {
-      id: publicParcel.package.id, user_id: null, one_off: true, tracking_number: 'TESTPARCEL123456', label: '',
+      id: publicParcel.package.id, user_id: null, one_off: true, tracking_number: 'TESTPARCEL983456', label: '',
       carrier: 'dpd', created_at: '2026-10-02T08:00:00+00:00', current_stage: 'in_transit', archived_at: null,
       notifications_muted: false, tracking_url: null, dpd_postcode: '9999',
     };
@@ -268,7 +287,7 @@ describe('what a link shows', () => {
       link: { id: publicGiftParcel.link.id, owner: false, shared: true, show_number: true, gift: true, stopped: false,
         created_at: '2026-10-01T08:00:00+00:00', forget_at: null },
       package: {
-        ...stored, id: publicGiftParcel.package.id, one_off: false, user_id: 'an-account', tracking_number: 'TESTGIFT23456789',
+        ...stored, id: publicGiftParcel.package.id, one_off: false, user_id: 'an-account', tracking_number: 'TESTGIFT23406789',
         label: 'A surprise', carrier: 'dhl', created_at: '2026-10-01T08:00:00+00:00', current_stage: 'out_for_delivery',
         expected_delivery: '2026-10-03', last_status_text: 'With the courier, sent from Hamburg',
         last_synced_at: '2026-10-02T08:05:00+00:00', sync_status: 'ok', sync_error: null,
@@ -290,7 +309,7 @@ describe('what a link shows', () => {
   it('drops a stored value of the wrong type instead of publishing it', () => {
     const { carrier_data: shown } = publicParcelResponse({
       link: { id: 'k7Qm2xHd9RtW', owner: true, created_at: '2026-10-02T08:00:00Z' },
-      package: { id: 'parcel', tracking_number: 'TESTPARCEL123456', carrier: 'unknown', sync_status: 'ok',
+      package: { id: 'parcel', tracking_number: 'TESTPARCEL983456', carrier: 'unknown', sync_status: 'ok',
         created_at: '2026-10-02T08:00:00Z', tracking_events: null,
         carrier_data: { sender_name: { name: 'nested' }, weight_kg: '2 kg', carrier_answered: 'yes', pickup_point: '', destination_country: 'CH' } },
     }, alerts).package;
@@ -312,7 +331,7 @@ describe('a gift on its way', () => {
     link: { id: 'k7Qm2xHd9RtW', owner: false, shared: true, show_number: true, gift: true, stopped: false,
       created_at: '2026-10-01T05:00:00Z', forget_at: null, ...link },
     package: {
-      id: packageId, tracking_number: 'TESTGIFT23456789', label: 'Sneakers for Ada', carrier: 'dhl', sync_status: 'ok',
+      id: packageId, tracking_number: 'TESTGIFT23406789', label: 'Sneakers for Ada', carrier: 'dhl', sync_status: 'ok',
       created_at: '2026-10-01T05:00:00Z', current_stage: 'in_transit', expected_delivery: '2026-10-03',
       last_status_text: 'Processed in Hamburg', last_synced_at: '2026-10-02T08:00:00Z', sync_error: null,
       carrier_data: { sender_name: 'Example Shop', weight_kg: 2, dimensions_text: '30 × 20 × 10 cm',
@@ -411,7 +430,7 @@ describe('a gift on its way', () => {
     }
     // Neither the sender, the number, the name, the origin's towns nor the carrier's wording for them.
     const text = JSON.stringify(answer);
-    for (const secret of ['Example Shop', 'Sneakers', 'TESTGIFT23456789', 'TESTDELIVERYLEG01', 'TESTORIGINLEG0001', 'Example Kiosk',
+    for (const secret of ['Example Shop', 'Sneakers', 'TESTGIFT23406789', 'TESTDELIVERYLEG01', 'TESTORIGINLEG0001', 'Example Kiosk',
       '30 × 20', 'weight_kg', 'Hamburg', 'Leipzig', 'Warsaw', 'Bern', 'Depot 12', 'Held at the sender', 'registered', '"point"']) {
       if (!onTheWay?.includes(secret)) expect(text).not.toContain(secret);
     }
@@ -433,7 +452,7 @@ describe('a gift on its way', () => {
     const plain = publicParcelResponse({ ...delivered, link: { ...delivered.link, gift: false } }, alerts);
     expect(answer).toEqual({ ...plain, link: { ...plain.link, gift: true } });
     expect(answer.link).toMatchObject({ gift: true, numberShown: true, canKeep: true });
-    expect(answer.package.tracking_number).toBe('TESTGIFT23456789');
+    expect(answer.package.tracking_number).toBe('TESTGIFT23406789');
     expect(answer.package.carrier_data).toMatchObject({ sender_name: 'Example Shop', weight_kg: 2, pickup_point: 'Example Kiosk' });
     expect(answer.package.last_status_text).toBe('Processed in Hamburg');
     expect(told(answer.package.tracking_events)).toEqual([
@@ -458,7 +477,7 @@ describe('a gift on its way', () => {
     const answer = publicParcelResponse(own, alerts);
     expect(isWrappedGift(own)).toBe(false);
     expect(answer.link).toMatchObject({ role: 'owner', gift: true, numberShown: true, canKeep: true });
-    expect(answer.package).toMatchObject({ tracking_number: 'TESTGIFT23456789', last_status_text: 'Processed in Hamburg' });
+    expect(answer.package).toMatchObject({ tracking_number: 'TESTGIFT23406789', last_status_text: 'Processed in Hamburg' });
     expect(answer.package.carrier_data).toMatchObject({ sender_name: 'Example Shop', active_tracking_number: 'TESTDELIVERYLEG01' });
     expect(told(answer.package.tracking_events)[0]).toBe(kept('registered', 'Hamburg, DE', 'city Hamburg'));
     expect(answer.package.tracking_events).toHaveLength(4);
@@ -476,7 +495,7 @@ describe('a gift on its way', () => {
     // No key, and not an opening.
     expect(read).toHaveBeenCalledExactlyOnceWith('k7Qm2xHd9RtW', null, false);
     expect(viewed).toMatchObject({ status: 'shown', wrappedGift: true });
-    expect(JSON.stringify(viewed)).not.toMatch(/Hamburg|Leipzig|Example Shop|Sneakers|TESTGIFT23456789/);
+    expect(JSON.stringify(viewed)).not.toMatch(/Hamburg|Leipzig|Example Shop|Sneakers|TESTGIFT23406789/);
 
     read.mockResolvedValue(stored(crossing(), { current_stage: 'delivered' }));
     expect(await viewerParcel(client, 'k7Qm2xHd9RtW')).toMatchObject({ status: 'shown', wrappedGift: false });
@@ -523,7 +542,7 @@ it('withholds stored gift words from viewers until delivery, including unknown a
   const words = { name: 'Trail shoes', note: 'Happy birthday!', from: 'Sam' };
   const found = {
     link: { id: 'k7Qm2xHd9RtW', gift: true, gift_words: words, created_at: '2026-10-02T08:00:00Z' },
-    package: { id: 'parcel', tracking_number: 'TESTPARCEL123456', carrier: 'unknown', sync_status: 'ok',
+    package: { id: 'parcel', tracking_number: 'TESTPARCEL983456', carrier: 'unknown', sync_status: 'ok',
       created_at: '2026-10-02T08:00:00Z', carrier_data: {}, tracking_events: [] },
   };
   for (const stage of [null, 'pending', 'in_transit', 'out_for_delivery', 'ready_for_pickup', 'returned']) {
