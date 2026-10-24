@@ -1,6 +1,6 @@
 import 'server-only';
 import { deferredTrackingFailure, PLACEHOLDER_NUMBER, trackingFailureCode } from './trackingFailure';
-import { CarrierError, carrierErrorKind, stageSource, resultStage, resultHasUpdate, CARRIER_DEFINITIONS, type CarrierId } from 'universal-parcel-scraper';
+import { CarrierError, carrierErrorKind, inferStage, stageSource, resultStage, resultHasUpdate, CARRIER_DEFINITIONS, type CarrierId } from 'universal-parcel-scraper';
 export { classifyStage, inferStage, stageSource, resultStage, resultHasUpdate } from 'universal-parcel-scraper';
 import { AMAZON_ACCOUNT_MESSAGE, AMAZON_HISTORY_EXPIRED, requiresAmazonAccount } from '../lib/amazon';
 import { normalizeTrackingNumber } from '../lib/carriers';
@@ -179,6 +179,26 @@ function previousDeliveryProbe(parcel: JsonObject, carrier: string, number: stri
   return { at: stored.at, origin_update: typeof stored.origin_update === 'string' ? stored.origin_update : null,
     ...(stored.announced === true ? { announced: true as const } : {}),
     ...(Number.isSafeInteger(stored.misses) && Number(stored.misses) > 0 ? { misses: Number(stored.misses) } : {}) };
+}
+
+/**
+ * The stage a delivery partner's answer shows: its summary's, else its newest dated scan's that
+ * declares a stage or whose wording reads as one. A partner can leave its newest scans unstaged,
+ * with no summary, while the scans before them show it holding the parcel; a scan no rule reads
+ * says nothing either way, so a pre-advice stays a pre-advice.
+ */
+function partnerStage(result: CarrierResult, carrierId: string): string | null {
+  const summary = resultStage(result);
+  if (summary) return summary;
+  const zone = resultTimezone(carrierId, result);
+  let newest: { time: number; stage: string } | null = null;
+  for (const event of result.events ?? []) {
+    const declared = String(event.stage ?? '');
+    const stage = VALID_STAGES.has(declared) ? declared : inferStage(String(event.description ?? ''), 'pending');
+    const time = Date.parse(eventTimestamp(event.time, zone) ?? '');
+    if (stage !== 'pending' && time > 0 && (!newest || time > newest.time)) newest = { time, stage };
+  }
+  return newest?.stage ?? null;
 }
 
 /** How many answers a check took from another copy of its number in the same run, when any. */
@@ -2389,20 +2409,21 @@ export class TrackingSyncService {
             Date.parse(routingState(parcel).last_event_at || '') || 0);
           const terminal = ['delivered', 'returned'].find((stage) => stage === resultStage(origin) || stage === parcel.current_stage);
           const deliveryTime = latestResultTime(delivery, candidate.carrier);
+          const deliveryStage = partnerStage(delivery, candidate.carrier);
           // Origin feeds sometimes re-stamp the partner's local completion
           // time with another offset. Explicit, same-day terminal agreement
           // confirms the route without rewriting either provider's timestamps.
           const sameCompletion = terminal && resultStage(origin) === terminal
-            && resultStage(delivery) === terminal && deliveryTime > 0 && originTime > 0
+            && deliveryStage === terminal && deliveryTime > 0 && originTime > 0
             && new Date(deliveryTime).toISOString().slice(0, 10) === new Date(originTime).toISOString().slice(0, 10)
             && new Date(watermark).toISOString().slice(0, 10) === new Date(originTime).toISOString().slice(0, 10);
-          const scanned = delivery.status !== 'pending' && !['pending', 'registered'].includes(resultStage(delivery) ?? 'pending');
+          const scanned = delivery.status !== 'pending' && !['pending', 'registered'].includes(deliveryStage ?? 'pending');
           // A partner relaying the origin's scans may keep only their minute (CTT's copy of Royal
           // Mail's departure): a time on a whole minute is compared to the minute.
           const fresh = deliveryTime >= (deliveryTime % 60_000 === 0 ? watermark - watermark % 60_000 : watermark);
           if (scanned && (candidate.basis !== 'destination' || deliveryTime > 0)
             && resultHasUpdate(delivery) && (fresh || sameCompletion)
-            && (!terminal || resultStage(delivery) === terminal)) {
+            && (!terminal || deliveryStage === terminal)) {
             // The local delivery hides the origin failure from the router, which reports every other one.
             if (originError && !isUnannouncedTrackingError(originError)) reportRoutingEvent('provider_failed', {
               carrier: carrierId, provider: carrierId, trackingNumber, category: routingFailure(originError).kind,

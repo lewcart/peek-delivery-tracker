@@ -576,7 +576,10 @@ A parcel often changes carrier at the border. The origin history is always kept.
 - The partner is only adopted once its own adapter (no required inputs) returns dated,
   fresh progress: a scan no older than the origin's newest. A partner's time on a whole
   minute is compared to the minute, since a partner relaying the origin's scans may keep
-  only their minute (CTT's copies of Royal Mail's). A partner whose only input is optional
+  only their minute (CTT's copies of Royal Mail's). Without a summary stage, its newest dated
+  scan that states a stage or whose wording reads as one tells whether it has the parcel: newer
+  scans no rule reads yet do not hide the progress before them, and do not turn a pre-advice
+  into a scan. A partner whose only input is optional
   (DPD's postcode) is asked without it, and only with a reference of its own number shape,
   never the origin's postal number.
   Failed confirmations wait 55 min, doubling with each miss up to 6 h, unless the origin

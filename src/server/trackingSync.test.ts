@@ -3975,6 +3975,34 @@ describe('TrackingSyncService', () => {
     }
   });
 
+  it.each([
+    // A partner can leave its newest scans unstaged, with no summary: the scans before them still show it has the parcel.
+    ['holds unstaged scans after a staged one', [['17:30', 'Admitted at the sorting centre', 'in_transit'], ['17:45', 'Code X12'], ['17:51', 'Status 63']], 'swiss-post', false],
+    ['holds scans only their wording stages', [['17:45', 'Leaving the sorting centre'], ['17:51', 'Code X12']], 'swiss-post', false],
+    // Not a scan: the parcel announced to it, read or not, is the next scan's to confirm.
+    ['holds only a pre-advice', [['17:51', 'Pre-advice', 'registered']], undefined, true],
+    ['holds a pre-advice and a newer scan no rule reads', [['17:40', 'Pre-advice', 'registered'], ['17:51', 'Code X12']], undefined, true],
+    // Older than what the origin already says: the freshness rule still holds for unstaged answers.
+    ['holds scans older than the origin’s news', [['2026-09-09T09:00', 'Admitted at the sorting centre', 'in_transit'], ['2026-09-09T10:00', 'Code X12']], undefined, false],
+    ['holds undated scans', [[null, 'Leaving the sorting centre']], undefined, false],
+  ] as const)('hands over to a partner without a summary stage only when it %s', async (_case, scans, active, announced) => {
+    const client = fakeClient();
+    const originUpdate = '2026-09-10T17:19:00+02:00';
+    const events = scans.map(([time, description, stage]) => ({
+      ...(time === null ? {} : { time: `${time.length === 5 ? `2026-09-10T${time}` : time}:00+02:00` }), description, ...(stage ? { stage } : {}),
+    }));
+    const adapter = { fetch: vi.fn(async (carrier: string): Promise<CarrierResult> => carrier === 'swiss-post'
+      ? { status: 'unknown', timezone: 'Europe/Zurich', events }
+      : { status: 'in_transit', destination_country: 'CH', last_update: originUpdate, timezone: 'Europe/Paris',
+        events: [{ time: originUpdate, description: 'Arrived in destination country', stage: 'in_transit' }] }) };
+    await new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date('2026-09-10T16:00:00Z'))
+      .syncPackage({ id: 'unstaged-partner', carrier: 'la-poste', tracking_number: 'CW123456785FR' }, { trigger: 'scheduled' });
+    expect(adapter.fetch.mock.calls.map((call) => call[0])).toEqual(['la-poste', 'swiss-post']);
+    const data = client.updatePackage.mock.calls.at(-1)![1].carrier_data;
+    expect(data.active_tracking_carrier).toBe(active);
+    if (!active) expect(Boolean(data.delivery_probe?.announced)).toBe(announced);
+  });
+
   it('asks an unconfirmed partner again on a refresh by hand, a few minutes apart', async () => {
     const client = fakeClient();
     let now = new Date('2026-09-10T10:00:00Z');
