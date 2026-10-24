@@ -129,7 +129,10 @@ A carrier's bot check comes and goes, so the next read often passes; a provider'
 refusal does not. A longer `Retry-After` is honoured, up to 7 days. The owner changing the postcode or link
 of the parcel's own carrier ends that carrier's wait, whatever the failure, since it answered
 for the old one, so the check that follows asks it again. A carrier often doesn't know a label
-before its first scan, hence its shorter not-found wait. When a universal provider shows
+before its first scan, hence its shorter not-found wait. While a number nobody has seen is
+checked hourly (Refresh cadence, below), a `no_history` or carrier not-found wait that would outlast
+those checks ends an hour before they do, half an hour after the ask at the soonest, so the
+last of them asks again. When a universal provider shows
 progress the parcel hasn't had yet and names a carrier that said not found, that carrier is
 asked again in the same check. A pending parcel, or one that only showed its label, whose failures
 are all not-found or `no_history` shows as waiting, not as an outage, unless its own carrier asks
@@ -496,7 +499,10 @@ the carriers checked. A failed request does not manufacture a queried-carrier li
 - **Retries.** Answers are kept in `routing.candidate_probes`, not with the carrier
   failures, so they decide neither the parcel's status, nor the filed carrier's retry, nor
   the health evidence of the check. The next check waits 1, 2, 4, then 6 hours, since a
-  parcel appears once it is handed over, and a day after six misses.
+  parcel appears once it is handed over, and a day after six misses. For a number nobody
+  has seen, a wait that would outlast its hourly checks ends an hour before they do, half
+  an hour after the ask at the soonest: the last of them asks the carriers again, those
+  ranked first among them, before the checks slow down or a lookup leaves the schedule.
 - **After a scraper release.** A parcel keeps a digest of the catalog that last routed it
   (`routing.rules`: the scraper release, each carrier's detection rules, names, whether it
   has an adapter of its own and whether that adapter's clocks are local), so every release

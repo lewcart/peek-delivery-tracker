@@ -915,6 +915,57 @@ describe('persistent tracking routing', () => {
       expect((third.result.routing as JsonObject & { candidate_probes: JsonObject }).candidate_probes)
         .toMatchObject({ dpd: { count: 2, retry_at: '2026-09-10T15:05:00.000Z' } });
     });
+    it('asks again by the last hourly check of a number nobody has seen', async () => {
+      // Added at 08:20 and checked hourly until 14:20; the carrier ranked first is among those asked.
+      const added = '2026-09-10T08:20:00Z';
+      const hourlyUntil = Date.parse('2026-09-10T14:20:00Z');
+      let saved: JsonObject | undefined;
+      const check = async (at: string, window: number | null = hourlyUntil) => {
+        const run = setup(new Date(at), window === null ? {} : { hourlyUntil: window });
+        const result = await run.router.fetch(parcel({ tracking_number: swissDpd, created_at: added,
+          ...(saved ? { carrier_data: { routing: saved } } : {}) }), false);
+        saved = result.result.routing as JsonObject;
+        return { asked: asked(run.recognize), probes: saved.candidate_probes };
+      };
+      expect(await check('2026-09-10T08:20:00Z')).toEqual({ asked: fourteen, probes: probes(1, '2026-09-10T09:20:00.000Z') });
+      expect((await check('2026-09-10T09:30:00Z')).probes).toEqual(probes(2, '2026-09-10T11:30:00.000Z'));
+      const before = saved;
+      // The third miss would wait 4 hours, past the hourly checks: it waits until their last hour.
+      expect((await check('2026-09-10T11:40:00Z')).probes).toEqual(probes(3, '2026-09-10T13:20:00.000Z'));
+      // In between, only carriers ranked lower are asked.
+      expect((await check('2026-09-10T12:40:00Z')).asked.filter((carrier) => fourteen.includes(carrier))).toEqual([]);
+      const last = await check('2026-09-10T13:40:00Z');
+      expect(last.asked).toEqual(fourteen);
+      // Asked in that last hour, the next wait is the usual one.
+      expect(last.probes).toMatchObject(probes(4, '2026-09-10T19:40:00.000Z'));
+      // A number someone has seen, or one past its hourly checks, keeps the usual waits.
+      saved = before;
+      expect((await check('2026-09-10T11:40:00Z', null)).probes).toEqual(probes(3, '2026-09-10T15:40:00.000Z'));
+      saved = before;
+      expect((await check('2026-09-10T14:40:00Z')).probes).toEqual(probes(3, '2026-09-10T18:40:00.000Z'));
+    });
+    it.each([
+      ['a provider without history', new NoHistoryError('ParcelsApp'), 'no_history', 4, '2026-09-10T13:20:00.000Z', '2026-09-10T15:40:00.000Z'],
+      // Asked an hour and a half before the end, the wait still lets the next hourly check ask.
+      ['a provider without history late', new NoHistoryError('ParcelsApp'), 'no_history', 4, '2026-09-10T13:20:00.000Z', '2026-09-10T16:50:00.000Z', '2026-09-10T12:50:00Z'],
+      // A provider's "not found" holds for a day: providers have quotas, and it seldom changes within hours.
+      ['a provider\'s not found', new NotFoundError('ParcelsApp'), 'not_found', 0, '2026-09-11T11:40:00.000Z', '2026-09-11T11:40:00.000Z'],
+      // A refusal is no sign the number is unseen.
+      ['a provider\'s refusal', new ChallengeError('ParcelsApp'), 'verification', 2, '2026-09-10T15:40:00.000Z', '2026-09-10T15:40:00.000Z'],
+    ])('ends the wait after %s by the last hourly check of a number nobody has seen', async (_label, error, kind, count, clamped, usual, at = '2026-09-10T11:40:00Z') => {
+      fixedPlan('ParcelsApp');
+      const retry = async (hourlyUntil?: number) => {
+        const run = setup(new Date(at), hourlyUntil === undefined ? {} : { hourlyUntil });
+        run.universal.mockRejectedValue(error);
+        const saved = state({ failures: count ? { ParcelsApp: { count, kind, retry_at: '2026-09-10T11:00:00Z' } } : {} });
+        const outcome = await run.router.fetch(parcel({ created_at: '2026-09-10T08:20:00Z', carrier_data: { routing: saved } }), false)
+          .catch((deferred: unknown) => deferred);
+        expect(outcome).toBeInstanceOf(RoutingDeferred);
+        return (outcome as RoutingDeferred).routing.failures.ParcelsApp;
+      };
+      expect(await retry(Date.parse('2026-09-10T14:20:00Z'))).toMatchObject({ kind, retry_at: clamped });
+      expect(await retry()).toMatchObject({ kind, retry_at: usual });
+    });
     it.each([
       ['a pre-advice only', { status: 'registered', current_stage: 'registered', last_update: '2026-09-10T11:00:00Z',
         events: [{ time: '2026-09-10T11:00:00Z', description: 'Order created', stage: 'registered' }] }],

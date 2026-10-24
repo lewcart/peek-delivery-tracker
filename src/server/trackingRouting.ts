@@ -534,6 +534,11 @@ export class TrackingRouter {
     withoutCopies?: (watermark: number, value: RoutedResult, provider?: CarrierResult) => number;
     /** How many of an answer's scans the parcel's stored rows lack; undefined when they were not loaded. */
     newScans?: (value: RoutedResult) => number | undefined;
+    /**
+     * For a number nobody has seen, when its hourly checks end (unseenLookup.ts), as epoch
+     * milliseconds: the waits it asks again after end by the last of those checks.
+     */
+    hourlyUntil?: number;
     now?: () => Date;
     /** Waits out a provider's spacing; tests replace the timer. */
     wait?: (ms: number, signal?: AbortSignal) => Promise<unknown>;
@@ -642,6 +647,15 @@ export class TrackingRouter {
     // The carrier confirmed for the number before the sync cleared it: confirming it again is no news.
     const confirmedBefore = (carrier: string) => state.cleared_confirmation?.carrier === carrier
       && state.cleared_confirmation.number === number;
+    // While a number nobody has seen is checked hourly, a wait after a carrier's "not found" or
+    // an answer without history that would outlast those checks ends an hour before they do,
+    // half an hour after the ask at the soonest: the last hourly check asks again before the
+    // checks slow down, or a lookup leaves the schedule.
+    const beforeHourlyEnd = (retryAt: number) => {
+      const end = this.options.hourlyUntil;
+      const at = now().getTime();
+      return end === undefined || at >= end - HOUR ? retryAt : Math.min(retryAt, Math.max(end - HOUR, at + HOUR / 2));
+    };
     const fail = (provider: string, error: unknown, universalSource = false): Failure => {
       const classified = routingFailure(error);
       const kind = classified.kind === 'transport' && answeredWithoutHistory(error, !universalSource)
@@ -657,7 +671,10 @@ export class TrackingRouter {
         && !(kind === 'verification' && !universalSource && carrierErrorKind(error) === 'challenge');
       const base = daily ? DAY : hourly ? HOUR : 15 * 60_000;
       const userError = trackingFailureCode(error);
-      const failure = { count, kind, ...(userError ? { user_error: userError } : {}), retry_at: iso(now().getTime() + Math.max(retryAfterMs, Math.min(daily ? DAY : 6 * HOUR, base * 2 ** (count - 1)))) };
+      const retryAt = now().getTime() + Math.max(retryAfterMs, Math.min(daily ? DAY : 6 * HOUR, base * 2 ** (count - 1)));
+      const unseen = kind === 'no_history' || (kind === 'not_found' && !daily);
+      const failure = { count, kind, ...(userError ? { user_error: userError } : {}),
+        retry_at: iso(unseen ? Math.max(now().getTime() + retryAfterMs, beforeHourlyEnd(retryAt)) : retryAt) };
       state.failures[provider] = failure;
       if (universalSource && kind === 'input_required') {
         // Counted when a parcel starts asking; a supplied postcode that is refused counts as still_required.
@@ -1128,12 +1145,13 @@ export class TrackingRouter {
         delete state.input_needed;
       }
       // Nothing adopted: ask again after 1, 2, 4, then 6 hours, since a parcel
-      // shows up once it is handed over, and daily after six misses. These
-      // answers decide neither the parcel's status nor the filed carrier's retry.
+      // shows up once it is handed over, and daily after six misses, but by the
+      // last hourly check of a number nobody has seen. These answers decide
+      // neither the parcel's status nor the filed carrier's retry.
       for (const carrier of new Set(outcomes.map((outcome) => outcome.carrier))) {
         const count = Math.min(20, (state.candidate_probes?.[carrier]?.count ?? 0) + 1);
         state.candidate_probes = { ...state.candidate_probes, [carrier]: {
-          count, retry_at: iso(now().getTime() + Math.min(count > 6 ? DAY : 6 * HOUR, HOUR * 2 ** (count - 1))),
+          count, retry_at: iso(beforeHourlyEnd(now().getTime() + Math.min(count > 6 ? DAY : 6 * HOUR, HOUR * 2 ** (count - 1)))),
         } };
       }
     }

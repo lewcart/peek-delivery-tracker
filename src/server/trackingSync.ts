@@ -1555,6 +1555,7 @@ export class TrackingSyncService {
       // that left the schedule, contacts one provider at most.
       const sparse = !askedForCheck(context.trigger)
         && (unseenRecheckDue(subject, now) !== undefined || sparseLookupRecheck(subject, now));
+      const unseen = unseenFor(subject, now);
       // Only a check someone asked for, or a lookup's, skips the scheduled cadence: a release's re-check keeps it.
       try {
         fetched = await audit.observeFetch(async () => this.adapter.fetchUniversal && carrierId !== 'amazon-shipping'
@@ -1565,6 +1566,7 @@ export class TrackingSyncService {
             ...(checks ? { reusedUniversal: (source: UniversalSource, number: string, postcode: string | null, timezone: string | null, carrier: string | null) =>
               checks.reuse<CarrierResult>(universalLookupKey(source, number, postcode, timezone, carrier)) } : {}),
             health: this.client, now: this.now,
+            ...(unseen !== null ? { hourlyUntil: now.getTime() - unseen + UNSEEN_HOURLY_MS } : {}),
             takePrefetchedUniversal: takePreflightHistory, preflightInputNeeded, refuses: refusesNumber,
             withoutCopies: (watermark: number, value: RoutedResult, provider?: CarrierResult) => watermarkWithoutCopies(parcel, watermark, value, provider, now.getTime()),
             newScans: (value: RoutedResult) => scansMissing(parcel, value),
