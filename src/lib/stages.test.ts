@@ -131,6 +131,17 @@ describe('currentStage / progressIndex', () => {
     expect(currentEvent([notice])).toBe(notice);
   });
 
+  it('keeps the newest scan in a stage current past a carrier notice in none', () => {
+    // The server stores a scan no rule gives a stage as pending where in transit would step back.
+    const notice = makeEvent({ id: 'notice', stage: 'pending', description: 'Carrier notice', occurredAt: '2026-06-03T15:08:00.000Z' });
+    for (const stage of ['delivered', 'exception', 'out_for_delivery', 'ready_for_pickup'] as const) {
+      const scan = makeEvent({ id: stage, stage, occurredAt: '2026-06-03T14:59:00.000Z' });
+      expect(latestEvent([scan, notice])).toBe(notice);
+      expect(currentEvent([scan, notice])).toBe(scan);
+      expect(currentStage([notice, scan])).toBe(stage);
+    }
+  });
+
   it('lets a new label start over after a problem, a return or a delivery', () => {
     const label = makeEvent({ id: 'label', stage: 'registered', occurredAt: '2026-06-04T08:00:00.000Z' });
     for (const stage of ['exception', 'returned', 'delivered'] as const) {

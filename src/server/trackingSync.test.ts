@@ -114,6 +114,59 @@ describe('tracking event normalization', () => {
     });
   });
 
+  it('reads a scan in no stage as in transit unless that steps back from the scan in a stage before it', () => {
+    // Synthetic notices that neither the carrier nor a wording rule gives a stage.
+    const notice = { time: '2026-09-10T15:08:00Z', description: 'Fixture notice 7' };
+    const stages = (...events: JsonObject[]) => buildEvents({ id: 'package-1', carrier: 'dpd' }, { status: 'unknown', events })
+      .map((row) => [row.description, row.stage]);
+    // After a label, an acceptance, in transit or at customs, it is news that the parcel moves.
+    for (const [description, stage] of [['Label created', 'registered'], ['Fixture pickup', 'accepted'],
+      ['Arrived at depot', 'in_transit'], ['Fixture customs check', 'customs']]) {
+      expect(stages(notice, { time: '2026-09-10T08:00:00Z', description, stage })).toEqual([
+        ['Fixture notice 7', 'in_transit'], [description, stage],
+      ]);
+    }
+    // After the round, a delivery, a pickup point, a missed attempt, a return or a problem, in
+    // transit would step back: it is pending, kept in the timeline in no stage.
+    for (const stage of ['out_for_delivery', 'delivered', 'ready_for_pickup', 'failed_attempt', 'returned', 'exception']) {
+      expect(stages(notice, { time: '2026-09-10T14:59:00Z', description: 'Fixture scan', stage })).toEqual([
+        ['Fixture notice 7', 'pending'], ['Fixture scan', stage],
+      ]);
+    }
+    // A stage the wording gives counts as much as a declared one, and so does the same instant.
+    expect(stages({ time: '2026-09-10T15:08:00Z', description: 'Return to origin' },
+      { time: '2026-09-10T14:00:00Z', description: 'Refused by the recipient' })).toEqual([
+      ['Return to origin', 'pending'], ['Refused by the recipient', 'exception'],
+    ]);
+    expect(stages(notice, { time: notice.time, description: 'Delivered' })).toEqual([
+      ['Fixture notice 7', 'pending'], ['Delivered', 'delivered'],
+    ]);
+    // Before means dated before, in whatever order the answer lists the scans: the notice listed
+    // after the delivery is dated after it, and the scan dated first has nothing in a stage before it.
+    expect(stages({ time: '2026-09-10T14:59:00Z', description: 'Delivered', stage: 'delivered' }, notice,
+      { time: '2026-09-09T08:00:00Z', description: 'Code ZZ9 recorded' })).toEqual([
+      ['Delivered', 'delivered'], ['Fixture notice 7', 'pending'], ['Code ZZ9 recorded', 'in_transit'],
+    ]);
+    // A later scan in transit lets a notice after it read as in transit again.
+    expect(stages(notice, { time: '2026-09-10T12:00:00Z', description: 'Parcel in transit' },
+      { time: '2026-09-10T08:00:00Z', description: 'Out for delivery', stage: 'out_for_delivery' })).toEqual([
+      ['Fixture notice 7', 'in_transit'], ['Parcel in transit', 'in_transit'], ['Out for delivery', 'out_for_delivery'],
+    ]);
+    // A scan a provider left pending is in no stage: the delivery before it still holds.
+    expect(stages(notice, { time: '2026-09-10T15:00:00Z', description: 'Unread provider line', stage: 'pending' },
+      { time: '2026-09-10T14:59:00Z', description: 'Delivered', stage: 'delivered' })).toEqual([
+      ['Fixture notice 7', 'pending'], ['Unread provider line', 'pending'], ['Delivered', 'delivered'],
+    ]);
+    // Not when the answer has only such scans, or a scan in a stage with no date, which is not
+    // stored: nothing else shows where the parcel is.
+    expect(stages(notice, { time: '2026-09-09T08:00:00Z', description: 'Code ZZ9 recorded' })).toEqual([
+      ['Fixture notice 7', 'in_transit'], ['Code ZZ9 recorded', 'in_transit'],
+    ]);
+    expect(stages(notice, { provider_time_text: 'Unreadable heading', description: 'Delivered', stage: 'delivered' })).toEqual([
+      ['Fixture notice 7', 'in_transit'],
+    ]);
+  });
+
   it('dates scans a carrier gives by their day alone at that day, in its order, with no observed row', () => {
     // NACEX heads its history with calendar days and gives no clock (synthetic scans).
     const rows = buildEvents({ id: 'package-1', carrier: 'nacex', current_stage: 'in_transit' }, {
@@ -1715,6 +1768,31 @@ describe('TrackingSyncService', () => {
     const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date('2026-09-10T12:00:00Z'));
     await service.syncPackage({ id: 'unread', carrier: 'dpd', tracking_number: 'TEST1234', current_stage: 'pending' });
     expect(client.updatePackage.mock.calls.at(-1)![1]).toMatchObject({ current_stage: 'registered' });
+  });
+
+  it('keeps a delivery or a refusal when a later scan is in no stage', async () => {
+    // Synthetic carrier notices no rule gives a stage: one after the delivery, one after a refusal.
+    const client = { ...fakeClient(),
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-09-10T18:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined),
+    };
+    const adapter = { fetch: vi.fn().mockResolvedValueOnce({ status: 'delivered', current_stage: 'delivered',
+      last_status_text: 'Delivered', last_update: '2026-09-10T14:59:00Z', events: [
+        { time: '2026-09-10T15:08:00Z', description: 'Fixture notice 7' },
+        { time: '2026-09-10T14:59:00Z', description: 'Delivered', stage: 'delivered' },
+      ] }).mockResolvedValueOnce({ status: 'unknown', events: [
+        { time: '2026-09-10T15:08:00Z', description: 'Return to origin' },
+        { time: '2026-09-10T14:00:00Z', description: 'Refused by the recipient' },
+      ] }) };
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date('2026-09-10T18:00:00Z'));
+    await service.syncPackage({ id: 'notice', carrier: 'dpd', tracking_number: 'TEST1234', current_stage: 'out_for_delivery' });
+    expect(client.updatePackage.mock.calls.at(-1)![1]).toMatchObject({ current_stage: 'delivered' });
+    // The notice is stored, in no stage, so no alert announces it.
+    expect(client.insertEvents.mock.calls.at(-1)![0].map((row: JsonObject) => [row.description, row.stage])).toEqual([
+      ['Fixture notice 7', 'pending'], ['Delivered', 'delivered'],
+    ]);
+    await service.syncPackage({ id: 'refused', carrier: 'dpd', tracking_number: 'TEST1234', current_stage: 'exception' });
+    expect(client.updatePackage.mock.calls.at(-1)![1]).toMatchObject({ current_stage: 'exception' });
   });
 
   it('does not regress a newer saved summary when a fallback returns older history', async () => {

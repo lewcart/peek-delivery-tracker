@@ -26,6 +26,15 @@ describe('guarded tracking writes', () => {
     expect(selected).toEqual(expect.arrayContaining(['sync_status', 'sync_error', 'last_synced_at', 'expected_delivery', 'carrier', 'created_at', 'carrier_data']));
   });
 
+  it('dates a parcel\'s news by its newest scan in a stage, before any scan in none', async () => {
+    const client = new SupabaseServiceClient('https://database.example', 'service-key');
+    const request = vi.spyOn(client, 'request').mockResolvedValue([{ occurred_at: '2026-01-05T09:00:00Z' }]);
+    await expect(client.latestScanTimes(['package-1'])).resolves.toEqual(new Map([['package-1', '2026-01-05T09:00:00Z']]));
+    const params = new URL(`https://database.example${request.mock.calls[0][0]}`).searchParams;
+    expect(params.get('stage')).toBe('neq.pending');
+    expect(params.get('or')).toBe('(provider_event_id.is.null,provider_event_id.not.like.app:*)');
+  });
+
   it('adds a parcel to an account through the function only the server can call', async () => {
     const client = new SupabaseServiceClient('https://database.example', 'service-key');
     const request = vi.spyOn(client, 'request').mockResolvedValue({ id: 'package-1' });

@@ -424,6 +424,14 @@ begin
   if pg_temp.sends(public.claim_delivery_emails(20, 20, 80)) <> array[parcel] then
     raise exception 'A delivery within an hour of the parcel''s newest scan was not claimed';
   end if;
+  -- A later scan in no stage, a carrier's notice no rule reads, is no newer news.
+  perform pg_temp.fresh();
+  parcel := pg_temp.parcel(alex, 'EMAILTEST1019', '9 hours');
+  perform pg_temp.scan(parcel, 'delivered', '5 hours', '2 hours');
+  perform pg_temp.scan(parcel, 'pending', '3 hours', '2 hours');
+  if pg_temp.sends(public.claim_delivery_emails(20, 20, 80)) <> array[parcel] then
+    raise exception 'A later scan in no stage held a delivery back';
+  end if;
 
   -- Two delivered scans are one delivery: the newest is told.
   perform pg_temp.fresh();

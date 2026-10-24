@@ -54,7 +54,7 @@ import { upuHistory } from './upuHistory';
 import { sparseLookupRecheck, UNSEEN_HOURLY_MS, unseenFor, unseenIntervalHours, unseenRecheckDue } from './unseenLookup';
 import { collectedPickupPoint } from './collectedPickupPoint';
 import { directHistoryNumber, directLocalHistory, directLocalSnapshotIsOlder, hasUnresolvedDirectCurrent, localClockCarrier } from './directLocalHistory';
-import { carrierMovedAt, eventStage, showsDelivery, UNCONFIRMED_DELIVERY_MS } from './disputedDelivery';
+import { carrierMovedAt, eventStage, scanStages, showsDelivery, UNCONFIRMED_DELIVERY_MS } from './disputedDelivery';
 import { DIRECT_HISTORY, directHistory } from './providerCopies';
 import { earlierCarrier } from './relayCopies';
 import { eventTimestamp, latestResultTime, resultTimezone, statusMapAnswer, SWISS_POST_GLOBAL_STATUSES } from 'universal-parcel-scraper/app';
@@ -631,6 +631,7 @@ export function buildEvents(
     instants[index] = start ? at.toUTC().toISO({ suppressMilliseconds: true }) : timed;
     older = at;
   }
+  const stages = scanStages(scans, instants);
   for (const [index, raw] of scans.entries()) {
     const description = String(raw.description ?? UNWORDED_STEP).trim();
     const location = String(raw.location ?? '').trim();
@@ -643,7 +644,7 @@ export function buildEvents(
     rows.push({
       package_id: parcel.id,
       // Historical scans must not inherit the shipment's current/final stage.
-      stage: eventStage(raw),
+      stage: stages[index],
       description,
       location: location || null,
       occurred_at: occurredAt,
@@ -686,7 +687,7 @@ export function buildEvents(
     && (current !== previousStage || newUpuMilestone)
     && !currentAlreadyTimed
   ) {
-    const matchingEvent = (result.events ?? []).find((raw) => eventStage(raw) === current);
+    const matchingEvent = scans.find((_, index) => stages[index] === current);
     const description = String(
       matchingEvent?.description ?? result.last_status_text ?? UNWORDED_STEP,
     ).trim() || UNWORDED_STEP;

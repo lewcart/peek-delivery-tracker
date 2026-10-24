@@ -1,4 +1,4 @@
-import { inferStage, resultStage, type CarrierResult } from 'universal-parcel-scraper';
+import { classifyStage, inferStage, resultStage, type CarrierResult } from 'universal-parcel-scraper';
 import { eventTimestamp, resultTimezone } from 'universal-parcel-scraper/app';
 import { STAGES } from '../generated/apiContract';
 import { isRecord, type JsonObject } from './types';
@@ -16,6 +16,42 @@ const VALID_STAGES = new Set<string>(STAGES);
 export function eventStage(event: JsonObject): string {
   const declared = String(event.stage ?? '');
   return VALID_STAGES.has(declared) ? declared : inferStage(String(event.description ?? ''));
+}
+
+/** The stages a scan read as in transit would step back from. */
+const PAST_TRANSIT = new Set(['out_for_delivery', 'delivered', 'ready_for_pickup', 'failed_attempt', 'returned', 'exception']);
+
+/**
+ * The stage each scan of one answer is stored in, given the instant each is dated at (null for
+ * a scan with no date): `eventStage`, except for a dated scan neither its carrier nor a wording
+ * rule gives a stage. That one reads as in transit, news that the parcel moves, unless in
+ * transit is a step back from the newest dated scan in a stage at or before it (out for
+ * delivery, a delivery, a pickup point, a missed attempt, a return or a problem). It is then
+ * pending: it stays in the timeline as the carrier's news but moves the parcel neither back nor
+ * on (a carrier's notice after the delivery). A scan left pending is in no stage.
+ */
+export function scanStages(events: readonly JsonObject[], instants: readonly (string | null)[]): string[] {
+  const read = events.map((event) => {
+    const declared = String(event.stage ?? '');
+    if (VALID_STAGES.has(declared)) return declared;
+    const wording = classifyStage(String(event.description ?? ''));
+    return wording.source === 'none' ? null : wording.stage;
+  });
+  const times = events.map((_, index) => Date.parse(instants[index] ?? ''));
+  return read.map((stage, index) => {
+    if (stage !== null) return stage;
+    const at = times[index];
+    if (!Number.isFinite(at)) return 'in_transit';
+    let newest = Number.NEGATIVE_INFINITY;
+    let past = false;
+    for (const [other, otherStage] of read.entries()) {
+      const time = times[other];
+      if (otherStage === null || otherStage === 'pending' || !Number.isFinite(time) || time > at || time < newest) continue;
+      past = (time === newest && past) || PAST_TRANSIT.has(otherStage);
+      newest = time;
+    }
+    return past ? 'pending' : 'in_transit';
+  });
 }
 
 function scanTime(event: JsonObject, zone: string): number {

@@ -645,7 +645,8 @@ export class SupabaseClient {
 
   /**
    * Each package's newest scan instant up to now, ignoring the app's own
-   * placeholder rows and future-dated scans (forecasts, clocks read ahead).
+   * placeholder rows, future-dated scans (forecasts, clocks read ahead) and
+   * scans in no stage, which no alert announces.
    */
   async latestScanTimes(packageIds: string[]): Promise<Map<string, string>> {
     const latest = new Map<string, string>();
@@ -655,6 +656,7 @@ export class SupabaseClient {
         ['package_id', `eq.${packageId}`],
         ['or', '(provider_event_id.is.null,provider_event_id.not.like.app:*)'],
         ['occurred_at', `lte.${now}`],
+        ['stage', 'neq.pending'],
         ['select', 'occurred_at'],
         ['order', 'occurred_at.desc'],
         ['limit', '1'],

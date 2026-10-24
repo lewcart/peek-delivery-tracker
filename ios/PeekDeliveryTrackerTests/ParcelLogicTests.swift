@@ -901,6 +901,20 @@ final class ParcelLogicTests: XCTestCase {
         XCTAssertEqual(parcel.currentStage, .delivered)
     }
 
+    func testCarrierNoticeInNoStageLeavesTheNewestScanInAStageCurrent() {
+        // The server stores a scan no rule gives a stage as pending where in transit would step back.
+        let id = UUID()
+        let notice = event(id, .pending, "2026-08-10T15:08:00Z")
+        for stage in [TrackingStage.delivered, .exception, .outForDelivery, .readyForPickup] {
+            let scan = event(id, stage, "2026-08-10T14:59:00Z")
+            let parcel = makeParcel(id: id, events: [scan, notice])
+            // The notice stays in the timeline, newest first.
+            XCTAssertEqual(parcel.sortedEvents.first?.id, notice.id)
+            XCTAssertEqual(parcel.currentEvent?.id, scan.id)
+            XCTAssertEqual(parcel.currentStage, stage)
+        }
+    }
+
     func testRepeatedTimestampParsingPreservesFormatsAndInvalidValues() throws {
         let expected = try XCTUnwrap(DateParser.date("2026-08-08T10:00:00Z"))
         for _ in 0..<3 {

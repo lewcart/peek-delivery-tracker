@@ -377,7 +377,8 @@ current stage only when the newest milestone changes.
 
 Each event records its stage source in `tracking_events.raw_data.stage_source`:
 `carrier_map` (explicit carrier vocabulary or provider-code mapping), `wording:<rule>`
-(classifier rule that matched), or `none` (fallback). The sync preserves the scraper's
+(classifier rule that matched), or `none` (fallback: in transit, or `pending` where in
+transit steps back from an earlier scan, see [ARCHITECTURE.md](ARCHITECTURE.md)). The sync preserves the scraper's
 source, including on unresolved `pending` scans and observed milestones. Local-clock
 wording is recorded without a sample timeline event when its instant is unresolved. It
 never creates a timestamped scan just to populate the review queue.
