@@ -4123,12 +4123,13 @@ describe('TrackingSyncService', () => {
     const answer = (...events: CarrierResult['events'] & object): CarrierResult => ({
       status: events[0]!.stage as CarrierResult['status'], current_stage: events[0]!.stage, last_status_text: events[0]!.description,
       last_update: events[0]!.time, events });
-    const tracked = async () => {
+    const tracked = async (carrierData: JsonObject = {}) => {
       const store = eventStore();
       const adapter = { fetch: vi.fn() };
       let now = new Date('2026-10-21T12:00:00Z');
       const service = new TrackingSyncService(store.client as unknown as SupabaseServiceClient, adapter, null, () => now);
-      let parcel: JsonObject = { id: 'fewer-scans', carrier: 'dhl', tracking_number: 'TEST1234', current_stage: 'pending' };
+      let parcel: JsonObject = { id: 'fewer-scans', carrier: 'dhl', tracking_number: 'TEST1234', current_stage: 'pending',
+        carrier_data: carrierData };
       const check = async (result: CarrierResult) => {
         now = new Date(now.getTime() + 60 * 60 * 1_000);
         adapter.fetch.mockResolvedValue(structuredClone(result));
@@ -4166,6 +4167,13 @@ describe('TrackingSyncService', () => {
       const again = await check(answer(relabel, label));
       expect(again.attempt).toMatchObject({ outcome: 'unchanged', anomaly_codes: [] });
       expect(again.refresh).toMatchObject({ healthy: true });
+    });
+
+    it('counts a signal stored before it was kept per source as its own carrier’s', async () => {
+      const { check } = await tracked({ scans_withdrawn_at: '2026-10-20T12:00:00.000Z' });
+      const checked = await check(answer(relabel, label));
+      expect(checked.attempt).toMatchObject({ outcome: 'unchanged', anomaly_codes: [] });
+      expect(checked.parcel).toMatchObject({ carrier_data: { scans_withdrawn_at: '2026-10-20T12:00:00.000Z' } });
     });
 
     it.each([

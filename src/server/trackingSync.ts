@@ -901,9 +901,14 @@ function partnerStartsLeg(parcel: JsonObject, carrierData: JsonObject, sourceCar
       && stageRank(String(row.stage ?? '')) >= stageRank(keptStage));
 }
 
-/** The sources whose first answer without scans they had was signalled, with when (`scans_withdrawn`). */
-function withdrawals(carrierData: unknown): JsonObject {
-  return isRecord(carrierData) && isRecord(carrierData.scans_withdrawn) ? carrierData.scans_withdrawn : {};
+/**
+ * The sources whose first answer without scans they had was signalled, with when (`scans_withdrawn`).
+ * A parcel signalled before the signal was kept per source was signalled for its own carrier.
+ */
+function withdrawals(parcel: JsonObject): JsonObject {
+  const data = isRecord(parcel.carrier_data) ? parcel.carrier_data : {};
+  return { ...(typeof data.scans_withdrawn_at === 'string' ? { [String(parcel.carrier)]: data.scans_withdrawn_at } : {}),
+    ...(isRecord(data.scans_withdrawn) ? data.scans_withdrawn : {}) };
 }
 
 export function detectSyncAnomalies(
@@ -1601,7 +1606,7 @@ export class TrackingSyncService {
           if (error instanceof RoutingDeferred) error.routing.consecutive_failures = 0;
           // A parcel that showed its label first answering without it is a review signal, as when
           // its carrier lists fewer of its scans (`scans_withdrawn`, below).
-          const withdrawn = previousStage === 'registered' && withdrawals(parcel.carrier_data)[carrierId] == null;
+          const withdrawn = previousStage === 'registered' && withdrawals(parcel)[carrierId] == null;
           audit.record('fetch', 'succeeded', performance.now() - fetchStartedAt, {
             disposition: 'unannounced', ...sharedAnswers(checks),
           });
@@ -1616,7 +1621,7 @@ export class TrackingSyncService {
               ...(error instanceof RoutingDeferred || withdrawn ? { carrier_data: {
                 ...(isRecord(parcel.carrier_data) ? parcel.carrier_data : {}),
                 ...(error instanceof RoutingDeferred ? { routing: error.routing } : {}),
-                ...(withdrawn ? { scans_withdrawn: { ...withdrawals(parcel.carrier_data), [carrierId]: now.toISOString() } } : {}),
+                ...(withdrawn ? { scans_withdrawn: { ...withdrawals(parcel), [carrierId]: now.toISOString() } } : {}),
               } } : {}),
             });
           });
@@ -1859,7 +1864,7 @@ export class TrackingSyncService {
       // Linked journey identity, the postcode the owner gave a provider, and the delivery partner's probe belong to the
       // parcel, not an individual carrier response: a provider answering while the origin is down keeps the probe's gap.
       if (isRecord(parcel.carrier_data)) {
-        for (const key of ['lookup_country_hint', 'universal_input', 'original_carrier', 'original_tracking_number', 'original_tracking_url', 'original_package_id', 'active_tracking_carrier', 'active_tracking_number', 'original_canonical_tracking_number', 'auto_changed_from', 'auto_changed_to', 'auto_changed_at', 'handed_over_at', 'earlier_checked_at', 'delivery_probe', 'scans_withdrawn', DIRECT_HISTORY]) {
+        for (const key of ['lookup_country_hint', 'universal_input', 'original_carrier', 'original_tracking_number', 'original_tracking_url', 'original_package_id', 'active_tracking_carrier', 'active_tracking_number', 'original_canonical_tracking_number', 'auto_changed_from', 'auto_changed_to', 'auto_changed_at', 'handed_over_at', 'earlier_checked_at', 'delivery_probe', 'scans_withdrawn', 'scans_withdrawn_at', DIRECT_HISTORY]) {
           if (parcel.carrier_data[key] != null && carrierData[key] == null) carrierData[key] = parcel.carrier_data[key];
         }
       }
@@ -1989,7 +1994,7 @@ export class TrackingSyncService {
       // The first answer of each source with fewer of its stored scans, the parcel's own carrier or a
       // delivery partner, is a review signal (`scans_withdrawn`), not an error: a scraper that drops
       // scans across many parcels still shows.
-      const withdrawn = withdrawals(previousData);
+      const withdrawn = withdrawals(parcel);
       if ((fewerStoredScans || partnerWithdrew) && withdrawn[sourceCarrierId] == null) {
         anomalies = [...anomalies, 'scans_withdrawn'];
         values.carrier_data = { ...(isRecord(values.carrier_data) ? values.carrier_data : previousData),
