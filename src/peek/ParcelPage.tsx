@@ -14,7 +14,7 @@ import { trackAction, trackScreen } from '../lib/analytics';
 import { carrierBrand } from '../lib/carrierBrand';
 import { activeTrackingCarrierId, carrierInfo, deliveringCarrierId, displayedCarrierId, formatTrackingNumber, tracksAutomatically } from '../lib/carriers';
 import { LANDING_PATH } from '../lib/experience';
-import { PLACEHOLDER_NUMBER } from '../lib/messages';
+import { numberToCheck } from '../lib/messages';
 import { captureCardOrigin } from '../lib/cardTransition';
 import { useCardDialog } from '../lib/cardDialog';
 import { focusClickedButton } from '../lib/modal';
@@ -231,8 +231,9 @@ function Parcel({ linkId, entrance, state, view, onHome }: {
   const moving = parcelHasCarrierUpdate(parcel);
   // No carrier has been found for the number yet: the card stays neutral.
   const carrierKnown = parcel.carrier !== 'unknown' || moving;
-  // A placeholder number, such as 123456789: no carrier will ever know it, so the page asks for the right one instead.
-  const placeholder = parcel.syncError === PLACEHOLDER_NUMBER;
+  // A placeholder number, such as 123456789, or one the chosen carrier does not issue: no carrier will answer for it, so
+  // the page asks for the right number or carrier instead.
+  const placeholder = numberToCheck(parcel.syncError);
   const number = parcel.trackingNumber ? formatTrackingNumber(parcel.trackingNumber, parcel.carrier)
     : numberHint ? maskedNumber(numberHint) : null;
   const headline = wrapped ? t('share.gift.headline') : opened ? t('share.gift.here') : parcelHeadline(parcel, t);
@@ -240,7 +241,7 @@ function Parcel({ linkId, entrance, state, view, onHome }: {
   const offline = useOffline() || trouble?.kind === 'offline';
   const failing = trouble && !offline ? trouble : null;
   // A number no carrier knows yet says so in its headline already.
-  const flag = (carrierKnown ? parcelFlag(parcel, now) : null) ?? (failing ? 'sync_error' : null);
+  const flag = (carrierKnown && !placeholder ? parcelFlag(parcel, now) : null) ?? (failing ? 'sync_error' : null);
   const freshness = parcelFreshness({ parcel, checking, offline, trouble: !!failing, seenAt }, wording);
   // The carrier's own page would tell a gift's recipient where it comes from.
   const links = wrapped ? [] : carrierLinks(view, locale);

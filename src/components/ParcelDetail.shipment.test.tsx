@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ParcelDetail } from './ParcelDetail';
@@ -148,6 +148,15 @@ describe('shipment details', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Update tracking details' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.queryByText('carrier:input_required')).not.toBeInTheDocument();
+  });
+
+  it('says the carrier does not issue the number, and opens the carrier editor', async () => {
+    show({ syncStatus: 'error', syncError: 'carrier:refused_number' });
+    expect(screen.getByText('Check the tracking number')).toBeInTheDocument();
+    expect(screen.queryByText('Update unavailable')).not.toBeInTheDocument();
+    const box = screen.getByText('This carrier doesn’t issue tracking numbers like this one. Check the number, or choose another carrier.').closest('.detail__sync-error')!;
+    await userEvent.click(within(box as HTMLElement).getByRole('button', { name: 'Change carrier' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('says when DPD rejected the postcode and opens the editor to change it', async () => {

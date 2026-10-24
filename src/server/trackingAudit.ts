@@ -43,6 +43,8 @@ export type SyncStep =
  * `unchanged`: the carrier answered with the progress already saved.
  */
 export type SyncAuditOutcome = 'updated' | 'unchanged' | 'waiting' | 'error' | 'unsupported' | 'superseded';
+/** `refused`: a failed check whose carrier answered with what only the owner can correct. */
+type RecordedOutcome = SyncAuditOutcome | 'refused';
 export type SyncAnomalyCode =
   | 'delivered_status_conflict'
   | 'early_stage_regression'
@@ -347,15 +349,26 @@ export class TrackingSyncAudit {
     // A check that shutdown interrupted has ended, whatever its carrier answers afterwards.
     if (this.#ended) return;
     this.#ended = true;
+    const failedFetch = this.#steps.some(step => step.step === 'fetch' && step.status === 'failed');
+    // A number the carrier does not issue is the owner's to correct. Like a missing input, the
+    // refresh was answered, and it says nothing about the carrier's health, whether the check
+    // ended as an error or still waits for the carrier's first scan.
+    // So is a number the carrier's own lookup filed with the missing inputs, such as an
+    // Australia Post consignment of several articles: the owner has to give one parcel's number.
+    const ownAnswer = this.#healthSamples.get(`provider:${this.configuredCarrier}`);
+    const refused = (completion.outcome === 'error' || failedFetch) && (refusedNumber(completion, this.configuredCarrier)
+      || (ownAnswer?.healthy === true && ownAnswer.details.category === 'input_required'));
+    // Such a check failed for its parcel, not for its carrier: error rates leave it out.
+    const outcome: RecordedOutcome = refused && completion.outcome === 'error' ? 'refused' : completion.outcome;
     if (!this.#steps.some((step) => step.step === 'complete')) {
       this.record('complete', 'succeeded', elapsedMilliseconds(this.#startedAt), {
-        outcome: completion.outcome,
+        outcome,
         ...completion.supportEvidence,
       });
     }
     const completedAt = new Date();
     const values: JsonObject = {
-      outcome: completion.outcome,
+      outcome,
       source_carrier: completion.sourceCarrier ?? null,
       provider_status: completion.providerStatus ?? null,
       reported_stage: completion.reportedStage ?? null,
@@ -370,7 +383,7 @@ export class TrackingSyncAudit {
       duration_ms: Math.round(elapsedMilliseconds(this.#startedAt)),
     };
     // Telemetry must never change a tracking result.
-    try { recordRefresh(this.configuredCarrier, completion.sourceCarrier, completion.outcome); } catch { /* metrics only */ }
+    try { recordRefresh(this.configuredCarrier, completion.sourceCarrier, outcome); } catch { /* metrics only */ }
     await this.writeAudit('complete_attempt', async () => {
       const completed = await this.client.completeSyncAttempt(
         this.attemptId,
@@ -386,15 +399,6 @@ export class TrackingSyncAudit {
     }
     if (this.context.trigger === 'scheduled' && !this.context.signal?.aborted && completion.evaluateHealth !== false
       && ['updated', 'unchanged', 'waiting', 'error'].includes(completion.outcome)) {
-      const failedFetch = this.#steps.some(step => step.step === 'fetch' && step.status === 'failed');
-      // A number the carrier does not issue is the owner's to correct. Like a missing input, the
-      // refresh was answered, and it says nothing about the carrier's health, whether the check
-      // ended as an error or still waits for the carrier's first scan.
-      // So is a number the carrier's own lookup filed with the missing inputs, such as an
-      // Australia Post consignment of several articles: the owner has to give one parcel's number.
-      const ownAnswer = this.#healthSamples.get(`provider:${this.configuredCarrier}`);
-      const refused = (completion.outcome === 'error' || failedFetch) && (refusedNumber(completion, this.configuredCarrier)
-        || (ownAnswer?.healthy === true && ownAnswer.details.category === 'input_required'));
       // A carrier whose own lookup answered normally, repeating the thin answer of the parcel's previous
       // scheduled check, works: it withdrew scans it had shown, and only it can add them back. Like a
       // missing input, the refresh answered. The first such answer still fails, so a scraper that drops
@@ -427,7 +431,7 @@ export class TrackingSyncAudit {
     }
     logOperationalEvent('tracking_sync_completed', {
       ...this.logContext(),
-      outcome: completion.outcome,
+      outcome,
       duration_ms: values.duration_ms,
       source_carrier: completion.sourceCarrier ?? null,
       provider_status: completion.providerStatus ?? null,
@@ -438,7 +442,7 @@ export class TrackingSyncAudit {
       events_new: values.events_new,
       anomaly_count: (completion.anomalyCodes ?? []).length,
       error_type: values.error_type,
-    }, completion.outcome === 'error' ? 'error' : 'info');
+    }, outcome === 'error' ? 'error' : 'info');
   }
 
   /**

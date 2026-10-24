@@ -1033,6 +1033,7 @@
   "detail.nextCheckAfter": "Next check after {{date}}",
   "status.noHistory": "No tracking history yet",
   "status.inputNeeded": "Delivery postcode needed",
+  "status.checkNumber": "Check the tracking number",
   "feedback.pip.question": "Did I get this one right?",
   "feedback.yes": "Yes",
   "feedback.no": "No",

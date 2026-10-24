@@ -1033,6 +1033,7 @@
   "detail.nextCheckAfter": "Nächste Prüfung nach {{date}}",
   "status.noHistory": "Noch kein Sendungsverlauf",
   "status.inputNeeded": "Zustellpostleitzahl erforderlich",
+  "status.checkNumber": "Sendungsnummer prüfen",
   "feedback.pip.question": "Liege ich hier richtig?",
   "feedback.yes": "Ja",
   "feedback.no": "Nein",

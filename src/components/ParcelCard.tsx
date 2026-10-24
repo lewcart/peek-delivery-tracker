@@ -2,6 +2,7 @@ import { AutoCarrierNotice } from './AutoCarrierNotice';
 import { useEffect, useRef, useState } from 'react';
 import { deliveringCarrierId, displayedCarrierId, carrierInfo } from '../lib/carriers';
 import { localizedDatePhrase, localizedExpectedDelivery, useI18n } from '../i18n';
+import { numberToCheck } from '../lib/messages';
 import { localizedParcelCompletionDate, parcelDeliveryEstimate, parcelDisplayStatusKey, parcelHasCarrierUpdate } from '../lib/parcelStatus';
 import { pickupPoint } from '../lib/pickupPoint';
 import { currentEvent } from '../lib/stages';
@@ -43,7 +44,9 @@ export function ParcelCard({ parcel, onOpen, onArchive, notice, variant = 'regul
   // Customs and a pickup say all they need in the status line; after a missed delivery or a problem, the carrier waits on the reader.
   const carrierIssue = ['customs', 'ready_for_pickup'].includes(current?.stage ?? '');
   const actionNeeded = ['failed_attempt', 'exception'].includes(current?.stage ?? '');
-  const flag = (notice && !carrierIssue ? notice : null) ?? (parcel.syncStatus === 'error' ? t('attention.sync_error') : null);
+  // A number to check says so in the status line: no update was missed.
+  const flag = (notice && !carrierIssue ? notice : null)
+    ?? (parcel.syncStatus === 'error' && !numberToCheck(parcel.syncError) ? t('attention.sync_error') : null);
   const flagIcon = notice && actionNeeded ? <Glyph name="warning" /> : <Icon name={parcel.syncStatus === 'error' ? 'refresh' : 'clock'} />;
   const flagChip = flag && <span className="parcel-card__notice">{flagIcon}{flag}</span>;
   const row = useRef<HTMLDivElement>(null);

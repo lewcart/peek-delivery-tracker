@@ -39,6 +39,16 @@ describe('parcelDisplayStatus', () => {
     expect(parcelDisplayStatus(parcel('unsupported')).label).toBe("Check tracking website");
   });
 
+  it.each(['carrier:refused_number', 'carrier:placeholder_number'])('asks to check a number no carrier will answer for (%s)', (syncError) => {
+    for (const carrier of ['swiss-post', 'unknown'] as const) {
+      const refused = { ...parcel('error'), carrier, syncError };
+      expect(parcelDisplayStatusKey(refused)).toBe('status.checkNumber');
+      expect(en[parcelDisplayStatusKey(refused)]).toBe(parcelDisplayStatus(refused).label);
+    }
+    // Scans already shown keep their stage.
+    expect(parcelDisplayStatusKey({ ...parcel('error', 'in_transit'), syncError })).toBe('stage.in_transit');
+  });
+
   it('checks universal-backed carriers automatically before their first result', () => {
     for (const carrier of ['fedex', 'asendia'] as const) {
       const saved = { ...parcel('pending'), carrier };

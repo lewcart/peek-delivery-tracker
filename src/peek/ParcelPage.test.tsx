@@ -294,8 +294,21 @@ describe('ParcelPage stages and troubles', () => {
     expect(screen.queryByText('Tracking history')).toBeNull();
   });
 
+  it('says plainly that the chosen carrier does not issue the number, once and without a failed update', async () => {
+    await shown(view([scan('pending', 60, 'Tracking added')], { syncStatus: 'error', syncError: 'carrier:refused_number' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Check the tracking number' })).toBeVisible();
+    const refusal = 'This carrier doesn’t issue tracking numbers like this one. Check the number, or choose another carrier.';
+    expect(within(card()).getByText(refusal)).toBeVisible();
+    expect(screen.getAllByText(refusal)).toHaveLength(1);
+    expect(card().querySelector('.peekp-card__flag')).toBeNull();
+    expect(screen.queryByText('Couldn’t get the latest update')).toBeNull();
+    // The carrier will never answer for it: there is nothing to be told about.
+    expect(screen.queryByRole('button', { name: /^Notify me/ })).toBeNull();
+  });
+
   it('asks for the right number instead of waiting for a carrier when the number is a placeholder', async () => {
     await shown(view([scan('pending', 60, 'Tracking added')], { carrier: 'unknown', syncStatus: 'error', syncError: 'carrier:placeholder_number' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Check the tracking number' })).toBeVisible();
     expect(within(card()).getByText('This doesn’t look like a real tracking number. Check the number in your order and add the parcel again.')).toBeVisible();
     expect(screen.queryByText(/^No carrier knows/)).toBeNull();
     expect(screen.queryByText(/^Keep this page/)).toBeNull();

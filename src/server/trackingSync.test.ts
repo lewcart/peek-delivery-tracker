@@ -4854,6 +4854,8 @@ describe('TrackingSyncService', () => {
     // The number itself is refused: it has its own copy.
     expect(client.updatePackage.mock.calls.at(-1)![1]).toMatchObject({ sync_status: 'error', sync_error: 'carrier:refused_number',
       carrier_data: { routing: { failures: { 'nz-couriers': { kind: 'invalid_input', user_error: 'carrier:invalid_input' } } } } });
+    // The parcel failed, not its carrier.
+    expect(client.completeSyncAttempt.mock.calls.at(-1)![1]).toMatchObject({ outcome: 'refused' });
 
     // A parcel the providers already followed keeps its scans in view, as before.
     await expect(service.syncPackage({ ...parcel, id: 'followed', current_stage: 'in_transit' }, { trigger: 'package' }))
@@ -4866,6 +4868,7 @@ describe('TrackingSyncService', () => {
       carrier_data: { routing: { ...parcel.carrier_data.routing, configured_carrier: 'heppner' } } };
     await expect(service.syncPackage(postcode, { trigger: 'package' })).resolves.toMatchObject({ waiting: 0, errors: 1 });
     expect(client.updatePackage.mock.calls.at(-1)![1]).toMatchObject({ sync_status: 'error', sync_error: 'carrier:invalid_input' });
+    expect(client.completeSyncAttempt.mock.calls.at(-1)![1]).toMatchObject({ outcome: 'refused' });
   });
 
   it('asks the owner to correct a placeholder number every source refuses, whatever the parcel showed before', async () => {

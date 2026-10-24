@@ -1033,6 +1033,7 @@
   "detail.nextCheckAfter": "Prochaine vérification après {{date}}",
   "status.noHistory": "Aucun historique de suivi pour le moment",
   "status.inputNeeded": "Code postal de livraison requis",
+  "status.checkNumber": "Numéro de suivi à vérifier",
   "feedback.pip.question": "J’ai tout bon pour ce colis ?",
   "feedback.yes": "Oui",
   "feedback.no": "Non",

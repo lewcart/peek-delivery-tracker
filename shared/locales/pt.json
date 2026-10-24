@@ -1033,6 +1033,7 @@
   "detail.nextCheckAfter": "Próxima verificação após {{date}}",
   "status.noHistory": "Ainda sem histórico de seguimento",
   "status.inputNeeded": "Código postal de entrega necessário",
+  "status.checkNumber": "Verifica o número de seguimento",
   "feedback.pip.question": "Acertei nesta?",
   "feedback.yes": "Sim",
   "feedback.no": "Não",

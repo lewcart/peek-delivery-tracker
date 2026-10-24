@@ -1033,6 +1033,7 @@
   "detail.nextCheckAfter": "Następne sprawdzenie po {{date}}",
   "status.noHistory": "Brak historii śledzenia",
   "status.inputNeeded": "Wymagany kod pocztowy dostawy",
+  "status.checkNumber": "Sprawdź numer śledzenia",
   "feedback.pip.question": "Dobrze to odczytałem?",
   "feedback.yes": "Tak",
   "feedback.no": "Nie",

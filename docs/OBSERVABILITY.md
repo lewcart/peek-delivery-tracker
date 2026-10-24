@@ -97,8 +97,11 @@ All tables and views here are service-role only.
   scans whose receipts it dropped, and `reannouncement_failed` when that failed (also
   reported to Sentry as `reopen_announcements`). A not-yet-announced number
   is a successful `fetch` with disposition `unannounced`, and the attempt ends as
-  `waiting`. Real failures end as `error`. A successful `fetch` names the source that served
-  the parcel (`source_carrier`, `unknown` for a universal provider) and has `carrier_answered`
+  `waiting`. Real failures end as `error`. A check that failed on what only the owner can
+  correct, a number its carrier does not issue, one for several parcels, a placeholder, or an
+  input it lacks or refuses, ends `refused`: the carrier answered, so its error counts
+  (`error_percent`, `metrics.health`, `carrier_refresh_total`) leave it out. A successful
+  `fetch` names the source that served the parcel (`source_carrier`, `unknown` for a universal provider) and has `carrier_answered`
   when the carrier answered too, on local clocks or in part. A `fetch` that reused answers another copy of
   its number got earlier in the same scheduled run counts them in `shared_answers`, as it
   does the failure of a carrier whose own browser already failed in the run.
@@ -856,7 +859,7 @@ or a carrier's tracking that does not know the item, is `no_history` rather than
 | `carrier_fallback_total` (from_step, to_step, reason) | How often recovery is needed |
 | `carrier_status_mapping_total` (carrier, stage_source) | Share of events mapped explicitly, by wording, or not at all |
 | `carrier_detection_total` (result) | Detection confidence served to clients |
-| `carrier_refresh_total` (carrier, served_by, outcome) | Who served each refresh: `adapter`, `other_adapter`, `provider` or `none`, and how it ended: `updated` (a new scan or stage), `unchanged`, `waiting`, `error` or `superseded` |
+| `carrier_refresh_total` (carrier, served_by, outcome) | Who served each refresh: `adapter`, `other_adapter`, `provider` or `none`, and how it ended: `updated` (a new scan or stage), `unchanged`, `waiting`, `error`, `refused` (the number or its details are the owner's to correct) or `superseded` |
 | `tracking_routing_signal_total` (signal, carrier, subject) | Routing signals for the review: `subject` is the carrier the signal is about, `uncatalogued` for a name a provider gave |
 | `tracking_sync_anomaly_total` (carrier, anomaly) | Suspicious decisions of checks, by anomaly code |
 | `tracking_health_incident_total` (kind, subject, state) | Health incidents that opened or still fail six hours on (`open`), `recovered`, or `closed` with no sample left or a direct step the carrier has not run for six hours |

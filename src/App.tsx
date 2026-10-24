@@ -39,6 +39,7 @@ import {
   prioritizeActiveParcels,
   type ParcelAttention,
 } from './lib/parcelPriority';
+import { numberToCheck } from './lib/messages';
 import {
   parcelComparator,
   sortPastParcels,
@@ -462,7 +463,8 @@ export default function App({
   // A card held where it stood is flagged for what its parcel needs now, which may be nothing.
   const noticeFor = (parcel: ParcelWithEvents, reason: ParcelAttention) => {
     const now = listed === parcels ? reason : parcelAttention(parcel, viewNow);
-    return now ? t(ATTENTION_LABELS[now]) : undefined;
+    // A number to check says so in its status line: no update was missed.
+    return now && !(now === 'sync_error' && numberToCheck(parcel.syncError)) ? t(ATTENTION_LABELS[now]) : undefined;
   };
   const remainingDeliveries = [...prioritized.arrivingToday, ...prioritized.onTheWay];
   const allArrived = !hasCustomView && listed.length > 0

@@ -1,5 +1,5 @@
 import { scanDate } from './format';
-import { localizedDeliveryDate, type MessageKey, type Translate } from './messages';
+import { localizedDeliveryDate, numberToCheck, type MessageKey, type Translate } from './messages';
 import type { ParcelWithEvents } from '../types';
 import { currentEvent, stageMeta } from './stages';
 import { activeTrackingCarrierId, tracksAutomatically } from './carriers';
@@ -40,6 +40,9 @@ export function parcelDisplayStatus(parcel: ParcelWithEvents): ParcelDisplayStat
   const current = currentEvent(parcel.events);
   const hasCarrierUpdate = parcelHasCarrierUpdate(parcel);
 
+  if (!hasCarrierUpdate && parcel.syncStatus === 'error' && numberToCheck(parcel.syncError)) {
+    return { label: 'Check the tracking number', tone: 'warn', syncing: false };
+  }
   if (!hasCarrierUpdate && !tracksAutomatically(activeTrackingCarrierId(parcel))) {
     return { label: 'Check tracking website', tone: 'warn', syncing: false };
   }
@@ -72,6 +75,8 @@ export function parcelDisplayStatus(parcel: ParcelWithEvents): ParcelDisplayStat
 export function parcelDisplayStatusKey(parcel: ParcelWithEvents): MessageKey {
   const current = currentEvent(parcel.events);
   const hasCarrierUpdate = parcelHasCarrierUpdate(parcel);
+  // No carrier will answer for this number until its owner corrects it.
+  if (!hasCarrierUpdate && parcel.syncStatus === 'error' && numberToCheck(parcel.syncError)) return 'status.checkNumber';
   if (!hasCarrierUpdate && !tracksAutomatically(activeTrackingCarrierId(parcel))) {
     return 'status.unsupported';
   }

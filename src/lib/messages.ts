@@ -128,6 +128,13 @@ export function localizedEventDescription(description: string, t: Translate): st
 
 /** A placeholder number, such as 123456789: no carrier will ever know it, and only the owner can correct it. */
 export const PLACEHOLDER_NUMBER = 'carrier:placeholder_number';
+/** A number the parcel's carrier does not issue, such as one whose carrier was chosen by hand. */
+export const REFUSED_NUMBER = 'carrier:refused_number';
+
+/** Whether only the owner can make the number trackable: a placeholder, or one its carrier does not issue. */
+export function numberToCheck(error: string | null | undefined): boolean {
+  return error === PLACEHOLDER_NUMBER || error === REFUSED_NUMBER;
+}
 
 /** Only stable service codes select specific copy; diagnostics never reach the UI. */
 export function trackingFailureMessage(error: string | undefined, t: Translate): string {

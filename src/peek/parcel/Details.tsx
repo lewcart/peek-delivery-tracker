@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { Icon } from '../../components/Icon';
 import { trackingFailureMessage, useI18n, type MessageKey } from '../../i18n';
 import { AMAZON_HISTORY_EXPIRED } from '../../lib/amazon';
+import { numberToCheck } from '../../lib/messages';
 import { trackAction } from '../../lib/analytics';
 import {
   activeTrackingCarrierId,
@@ -142,7 +143,8 @@ export function Notes({ view, stage, flag, trouble, carrier }: {
       id: 'manual', icon: <Glyph name="info" />,
       body: t((expired ? 'add.amazonHistoryExpired' : carrierTrackingHintKey(active.id)) as MessageKey, { carrier: carrier.name }),
     });
-  } else if (parcel.syncError) {
+  } else if (parcel.syncError && !numberToCheck(parcel.syncError)) {
+    // A number to check says so on the card.
     notes.push({ id: 'sync', icon: <Glyph name="info" />, body: trackingFailureMessage(parcel.syncError, t) });
   }
   if (flag === 'stalled') notes.push({ id: 'quiet', icon: <Icon name="hourglass" />, body: t('link.quiet', { carrier: carrier.name }) });

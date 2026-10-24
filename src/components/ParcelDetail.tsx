@@ -26,6 +26,7 @@ import {
   localizedScanAge,
   useI18n,
 } from '../i18n';
+import { REFUSED_NUMBER } from '../lib/messages';
 import {
   localizedParcelCompletionDate,
   parcelDeliveryEstimate,
@@ -646,6 +647,9 @@ export function ParcelDetail({
             <p>{trackingFailureMessage(parcel.syncError, t)}</p>
             {parcel.syncError === 'carrier:input_required' && carrier.id === parcel.carrier && carrierRequirements(parcel.carrier, parcel.trackingNumber).length > 0 && (
               <button type="button" className="button button--secondary" onClick={() => setEditingCarrier(true)}>{t('detail.updateTrackingDetails')}</button>
+            )}
+            {parcel.syncError === REFUSED_NUMBER && (
+              <button type="button" className="button button--secondary" onClick={() => setEditingCarrier(true)}>{t('detail.changeCarrier')}</button>
             )}
           </div>
         )}

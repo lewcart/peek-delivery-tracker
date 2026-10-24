@@ -248,7 +248,15 @@ extension Parcel {
         return CarrierCatalog.supportsSwissPostHandoff(trackingNumber) ? .aliexpress : carrier
     }
 
+    /// Whether only the owner can make the number trackable: a placeholder, or one its carrier does not issue.
+    var numberToCheck: Bool {
+        syncError == "carrier:placeholder_number" || syncError == "carrier:refused_number"
+    }
+
     var displayStatus: ParcelDisplayStatus {
+        if !hasCarrierUpdate && syncStatus == .error && numberToCheck {
+            return ParcelDisplayStatus(key: "status.checkNumber", tone: .warning, syncing: false)
+        }
         if !hasCarrierUpdate && !CarrierCatalog.shared.tracksAutomatically(activeTrackingCarrier) {
             return ParcelDisplayStatus(key: "status.unsupported", tone: .warning, syncing: false)
         }

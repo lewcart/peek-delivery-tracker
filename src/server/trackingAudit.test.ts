@@ -162,6 +162,30 @@ describe('a check of a number its carrier does not issue', () => {
       [expect.objectContaining({ kind: 'refresh', subject: 'seur', healthy: false })]);
   });
 
+  it('ends refused, which no error count of the carrier includes', async () => {
+    const client = { completeSyncAttempt: vi.fn().mockResolvedValue(true),
+      recordTrackingHealth: vi.fn().mockResolvedValue([]), ackTrackingHealth: vi.fn() };
+    const failures = { nacex: { kind: 'schema', count: 1, user_error: 'carrier:invalid_input' } };
+    const audit = new TrackingSyncAudit(client as unknown as SupabaseServiceClient,
+      'synthetic-package', 'TEST1234', 'nacex', 'pending', { trigger: 'added' });
+    await audit.finish({ outcome: 'error', sourceCarrier: 'nacex', providerFailures: failures });
+    expect(client.completeSyncAttempt).toHaveBeenLastCalledWith(audit.attemptId,
+      expect.objectContaining({ outcome: 'refused' }), [expect.objectContaining({ step: 'complete', details: { outcome: 'refused' } })]);
+    expect(recordRefresh).toHaveBeenLastCalledWith('nacex', 'nacex', 'refused');
+    expect(logOperationalEvent).toHaveBeenLastCalledWith('tracking_sync_completed', expect.objectContaining({ outcome: 'refused' }), 'info');
+    // Another carrier's refusal leaves this one's failed check an error.
+    const other = new TrackingSyncAudit(client as unknown as SupabaseServiceClient,
+      'synthetic-package', 'TEST1234', 'seur', 'pending', { trigger: 'added' });
+    await other.finish({ outcome: 'error', sourceCarrier: 'seur', providerFailures: failures });
+    expect(client.completeSyncAttempt).toHaveBeenLastCalledWith(other.attemptId, expect.objectContaining({ outcome: 'error' }), expect.any(Array));
+    expect(recordRefresh).toHaveBeenLastCalledWith('seur', 'seur', 'error');
+    // A parcel that still waits keeps waiting.
+    const waiting = new TrackingSyncAudit(client as unknown as SupabaseServiceClient,
+      'synthetic-package', 'TEST1234', 'nacex', 'in_transit', { trigger: 'added' });
+    await waiting.finish({ outcome: 'waiting', sourceCarrier: 'nacex', providerFailures: failures });
+    expect(recordRefresh).toHaveBeenLastCalledWith('nacex', 'nacex', 'waiting');
+  });
+
   it('is an answer too while the parcel still waits, or when the carrier refused it outside routing', async () => {
     const client = { completeSyncAttempt: vi.fn().mockResolvedValue(true),
       recordTrackingHealth: vi.fn().mockResolvedValue([]), ackTrackingHealth: vi.fn() };
