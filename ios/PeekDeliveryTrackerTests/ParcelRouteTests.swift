@@ -56,6 +56,9 @@ final class ParcelRouteTests: XCTestCase {
         // Once something follows the delivery, only that newest scan says where the parcel is.
         XCTAssertFalse(ParcelRoute(events: [event(10, .inTransit, zurich), event(12, .delivered, bern), event(13, .returned, nil)],
                                    countryName: { $0 }).latestLocated)
+        // Scans of one second read as the journal reads them, by delivery progress.
+        let sameSecond = ParcelRoute(events: [event(10, .inTransit, zurich), event(10, .accepted, bern)], countryName: { $0 })
+        XCTAssertEqual(sameSecond.stops.map(\.place.name), ["Bern", "Zürich"])
     }
 
     func testADeliveryWithNoPlaceIsAtTheLastStopInTheDestinationCountry() {

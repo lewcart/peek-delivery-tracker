@@ -160,9 +160,7 @@ extension Parcel {
 
     /// The country code of the first place the parcel was scanned, which is where it was posted.
     var stampOrigin: String? {
-        trackingEvents.filter { $0.place != nil }
-            .min { (DateParser.date($0.occurredAt) ?? .distantFuture) < (DateParser.date($1.occurredAt) ?? .distantFuture) }?
-            .place?.country
+        sortedEvents.last { $0.place != nil }?.place?.country
     }
 
     /// The day and month the parcel was delivered, as a postmark shows it: 28.09.
@@ -185,7 +183,8 @@ extension Parcel {
         }
     }
 
-    fileprivate static func eventPrecedes(_ lhs: TrackingEvent, _ rhs: TrackingEvent) -> Bool {
+    /// Newest first; scans of one instant by delivery progress, then by id.
+    static func eventPrecedes(_ lhs: TrackingEvent, _ rhs: TrackingEvent) -> Bool {
         let left = DateParser.date(lhs.occurredAt)?.timeIntervalSince1970 ?? 0
         let right = DateParser.date(rhs.occurredAt)?.timeIntervalSince1970 ?? 0
         if left == right {

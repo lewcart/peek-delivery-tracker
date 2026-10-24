@@ -100,6 +100,9 @@ describe('parcel link model', () => {
     // The run a–c keeps its newest; e and f differ in place, so both stay. The order the journal got is kept.
     expect(collapseGiftRows(events).map((event) => event.id)).toEqual(['c', 'd', 'e', 'f']);
     expect(collapseGiftRows([])).toEqual([]);
+    // Scans of one second follow one another as the journal shows them: by delivery progress.
+    const accepted = { ...scan('g', 9, 'Left the sender', 'DE'), stage: 'accepted' as const };
+    expect(collapseGiftRows([scan('h', 9, 'Left the sender', 'DE'), accepted]).map((event) => event.id)).toEqual(['h']);
   });
 
   it('shows the same end of a masked number as the server, and cleans the words a link carries', () => {

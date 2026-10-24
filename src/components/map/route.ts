@@ -1,4 +1,5 @@
 import { geoDistance } from 'd3-geo';
+import { sortEventsDesc } from '../../lib/stages';
 import type { EventPlace, Stage, TrackingEvent } from '../../types';
 import type { Coordinate } from './geography';
 
@@ -157,8 +158,7 @@ export function buildRoute(scans: readonly Scan[], destination?: Place): Route {
 
 /** A parcel's scans, oldest first, as a route; country-only places take the reader's name for the country. */
 export function routeFromEvents(events: readonly TrackingEvent[], destination?: Place, countryName?: (code: string) => string): Route {
-  const scans = [...events]
-    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+  const scans = sortEventsDesc(events).reverse()
     .map((event) => {
       const place = event.place ? placeFromEvent(event.place) : undefined;
       if (place?.precision === 'country' && countryName) place.name = countryName(place.country);

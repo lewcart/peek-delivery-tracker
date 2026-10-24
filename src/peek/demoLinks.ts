@@ -1,6 +1,6 @@
 import { carrierBrandFamily } from '../brand';
 import { normalizeTrackingNumber, parseTrackingInput, validTrackingNumber } from '../lib/carriers';
-import { currentEvent, isFinal, latestEvent } from '../lib/stages';
+import { currentEvent, isFinal, latestEvent, sortEventsDesc } from '../lib/stages';
 import { uid } from '../lib/uid';
 import { browserStorage } from '../store/apiRepo';
 import { nextStage, seedParcels, SIMULATED_UPDATES } from '../store/demoRepo';
@@ -102,7 +102,7 @@ function simulated(parcelId: string, stage: TrackingEvent['stage'], occurredAt: 
  * `accepted` scans do.
  */
 export function wrappedGiftEvents(events: readonly TrackingEvent[], destinationCountry: string | null): TrackingEvent[] {
-  const journey = [...events].sort((a, b) => (Date.parse(a.occurredAt) || 0) - (Date.parse(b.occurredAt) || 0));
+  const journey = sortEventsDesc(events).reverse();
   const origin = journey.find((event) => event.place)?.place?.country ?? null;
   const abroad = origin === null ? -1 : journey.findIndex((event) => event.place && event.place.country !== origin);
   const leavesOrigin = origin !== null && (abroad !== -1 || (destinationCountry !== null && destinationCountry !== origin));

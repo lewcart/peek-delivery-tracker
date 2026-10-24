@@ -4,6 +4,7 @@ import { CarrierError, carrierErrorKind, stageSource, resultStage, resultHasUpda
 export { classifyStage, inferStage, stageSource, resultStage, resultHasUpdate } from 'universal-parcel-scraper';
 import { AMAZON_ACCOUNT_MESSAGE, AMAZON_HISTORY_EXPIRED, requiresAmazonAccount } from '../lib/amazon';
 import { normalizeTrackingNumber } from '../lib/carriers';
+import { EVENT_STAGE_ORDER } from '../lib/stages';
 
 import { createHash } from 'node:crypto';
 import { DateTime } from 'luxon';
@@ -1746,8 +1747,10 @@ export class TrackingSyncService {
       const normalized = await audit.step('normalize', () => {
         const normalizedEvents = buildEvents(parcel, result!, sourceCarrierId!, now);
         const normalizedReportedStage = resultStage(result!);
+        // Scans of one instant read by delivery progress, then in the carrier's order.
         const newestEvents = [...normalizedEvents].sort(
-          (left, right) => String(right.occurred_at).localeCompare(String(left.occurred_at)),
+          (left, right) => String(right.occurred_at).localeCompare(String(left.occurred_at))
+            || EVENT_STAGE_ORDER.indexOf(String(right.stage)) - EVENT_STAGE_ORDER.indexOf(String(left.stage)),
         );
         // A scan no rule reads yet is pending; it does not undo the progress
         // of the scans before it.

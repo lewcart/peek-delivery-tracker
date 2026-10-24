@@ -189,17 +189,15 @@ struct ParcelRoute: Sendable {
         self.near = near
     }
 
-    /// A parcel's scans, in time order. Country-only places take the reader's name for the country.
+    /// A parcel's scans, in the journal's order. Country-only places take the reader's name for the country.
     init(events: [TrackingEvent], destination: RoutePlace? = nil, countryName: (String) -> String) {
-        let ordered = events.sorted {
-            (DateParser.date($0.occurredAt) ?? .distantPast) < (DateParser.date($1.occurredAt) ?? .distantPast)
-        }
-        self.init(places: ordered.map { event in
+        let newestFirst = events.sorted(by: Parcel.eventPrecedes)
+        self.init(places: newestFirst.reversed().map { event in
             guard let place = event.place else { return nil }
             var located = RoutePlace(place)
             if located.isCountry { located.name = countryName(located.country) }
             return located
-        }, deliveries: ordered.reversed().prefix { $0.stage == .delivered }.count, destination: destination)
+        }, deliveries: newestFirst.prefix { $0.stage == .delivered }.count, destination: destination)
     }
 
     /// Both views only make sense when part of the journey, travelled or still to go, lies outside the close-up.

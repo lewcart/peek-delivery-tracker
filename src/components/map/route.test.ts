@@ -113,6 +113,16 @@ describe('routeFromEvents', () => {
     expect(routeFromEvents([event('2026-09-20T08:00:00Z', place('China', 32.5, 106.34, 'CN', 'country'))]).stops[0].place.name).toBe('China');
   });
 
+  it('orders scans of one second by delivery progress, as the journal does', () => {
+    const at = '2026-09-28T08:00:00Z';
+    const route = routeFromEvents([
+      { ...event(at, place('Zürich', 47.37, 8.55, 'CH')), id: 'a' },
+      { ...event(at, place('Bern', 46.95, 7.45, 'CH')), id: 'b', stage: 'accepted' },
+    ]);
+    expect(route.stops.map((stop) => stop.place.name)).toEqual(['Bern', 'Zürich']);
+    expect(route.current?.place.name).toBe('Zürich');
+  });
+
   it('calls a facility by its town on a card and by its own name on the opened map', () => {
     const centre = placeFromEvent({ ...place('Zürich', 47.3959, 8.4695, 'CH'), site: 'Zürich-Mülligen' });
     expect([placeName(centre, false), placeName(centre, true)]).toEqual(['Zürich', 'Zürich-Mülligen']);

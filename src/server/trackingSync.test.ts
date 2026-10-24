@@ -1592,6 +1592,23 @@ describe('TrackingSyncService', () => {
       expect.objectContaining({ anomaly_codes: [] }), expect.any(Array));
   });
 
+  it('reads scans of one second by delivery progress when the summary waits', async () => {
+    // Accepted and moved on within one second (synthetic wording and times),
+    // the acceptance listed first: the parcel is in transit.
+    const client = { ...fakeClient(),
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-09-10T12:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined),
+    };
+    const adapter = { fetch: vi.fn().mockResolvedValue({ status: 'pending', last_update: '2026-09-09T23:20:58Z',
+      events: [
+        { time: '2026-09-09T23:20:58Z', description: 'Parcel received', stage: 'accepted' },
+        { time: '2026-09-09T23:20:58Z', description: 'At the distribution centre', stage: 'in_transit' },
+      ] }) };
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date('2026-09-10T12:00:00Z'));
+    await service.syncPackage({ id: 'same-second', carrier: 'dhl', tracking_number: 'TEST1234', current_stage: 'pending' });
+    expect(client.updatePackage.mock.calls.at(-1)![1]).toMatchObject({ current_stage: 'in_transit' });
+  });
+
   it('follows the carrier once no scan the parcel keeps shows the stage it was held at', async () => {
     // A scraper fix re-reads the scan that moved the parcel as a booked
     // collection (synthetic wording and times): no scan is in transit any more.

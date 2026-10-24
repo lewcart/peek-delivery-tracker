@@ -11,7 +11,7 @@ import type {
   ApiPublicParcelResponse,
 } from '../generated/apiContract';
 import type { Locale, MessageKey } from '../i18n';
-import { currentEvent } from '../lib/stages';
+import { currentEvent, sortEventsDesc } from '../lib/stages';
 import { userErrorKey } from '../lib/userMessages';
 import { toParcel } from '../store/apiRepo';
 import type { CarrierId, ParcelWithEvents, TrackingEvent } from '../types';
@@ -254,12 +254,11 @@ export function isWrappedGift(view: ParcelLinkView): boolean {
  * then read the same. The newest of each run stays.
  */
 export function collapseGiftRows(events: readonly TrackingEvent[]): TrackingEvent[] {
-  const journey = events.map((event, index) => ({ event, index }))
-    .sort((a, b) => (Date.parse(a.event.occurredAt) || 0) - (Date.parse(b.event.occurredAt) || 0) || a.index - b.index);
+  const journey = sortEventsDesc(events).reverse();
   const blurred = (event: TrackingEvent) => event.description === GIFT_ORIGIN_DESCRIPTION;
   const dropped = new Set<TrackingEvent>();
-  journey.forEach(({ event }, position) => {
-    const next = journey[position + 1]?.event;
+  journey.forEach((event, position) => {
+    const next = journey[position + 1];
     if (next && blurred(event) && blurred(next) && (event.location ?? '') === (next.location ?? '')) dropped.add(event);
   });
   return events.filter((event) => !dropped.has(event));

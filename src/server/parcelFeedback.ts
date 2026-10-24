@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { EVENT_STAGE_ORDER } from '../lib/stages';
 import { shownEvents, withoutPlaceholderAnswers } from './eventPlaces';
 import { recordParcelFeedback } from './metrics';
 import { logOperationalEvent } from './observability';
@@ -31,7 +32,8 @@ function cut(value: unknown, limit: number): string | null {
  */
 export function shownParcel(row: JsonObject): JsonObject {
   const events = shownEvents(row)
-    .sort((a, b) => Date.parse(String(b.occurred_at)) - Date.parse(String(a.occurred_at)));
+    .sort((a, b) => Date.parse(String(b.occurred_at)) - Date.parse(String(a.occurred_at))
+      || EVENT_STAGE_ORDER.indexOf(String(b.stage)) - EVENT_STAGE_ORDER.indexOf(String(a.stage)));
   row = withoutPlaceholderAnswers(row);
   const carrierData = isRecord(row.carrier_data) ? row.carrier_data : {};
   return {
