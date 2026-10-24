@@ -1442,7 +1442,7 @@ describe('TrackingSyncService', () => {
     expect(adapter.fetchUniversal).not.toHaveBeenCalled();
   });
 
-  it.each(['pending', 'in_transit'])('persists a missed-check streak for an hourly DPD parcel at %s', async (stage) => {
+  it.each(['pending', 'registered', 'in_transit'])('persists a missed-check streak for an hourly DPD parcel at %s', async (stage) => {
     const parcel: JsonObject = { id: 'hourly-dpd', carrier: 'dpd', tracking_number: '06080000000001',
       current_stage: stage, last_status_text: 'Saved tracking', sync_status: stage === 'pending' ? 'waiting' : 'ok',
       last_synced_at: '2026-09-10T10:00:00Z', carrier_data: { last_status_text: 'Saved tracking',
@@ -4621,6 +4621,28 @@ describe('TrackingSyncService', () => {
       expect(client.recordTrackingHealth).toHaveBeenLastCalledWith(expect.any(String), 'label-only',
         expect.arrayContaining([expect.objectContaining({ kind: 'refresh', healthy: waiting })]));
     });
+
+  it('signals the first check of a labelled parcel whose every source answers without history, once', async () => {
+    const client = { ...fakeClient(),
+      acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '2026-09-10T12:01:30Z' }),
+      finishTrackingProvider: vi.fn().mockResolvedValue(undefined),
+    };
+    const adapter = { fetch: vi.fn(), fetchUniversal: vi.fn(async (source: string) => {
+      throw source === 'Ship24' ? new NotFoundError(source) : new IndeterminateError(source, `${source} has no usable shipment history`);
+    }) };
+    let parcel: JsonObject = { id: 'label-only', carrier: 'unknown', tracking_number: 'TEST1234', current_stage: 'registered',
+      carrier_data: { routing: { version: 1, configured_carrier: 'unknown', consecutive_failures: 1, probe_cursor: 0, discovery_cursor: 0 } } };
+    client.updatePackage.mockImplementation(async (_id: string, values: JsonObject) => { parcel = { ...parcel, ...values }; });
+    let now = new Date('2026-09-10T12:00:00Z');
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => now);
+    await expect(service.syncPackage(parcel, { trigger: 'scheduled' })).resolves.toMatchObject({ waiting: 1, errors: 0 });
+    expect(client.completeSyncAttempt.mock.lastCall![1]).toMatchObject({ outcome: 'waiting', anomaly_codes: ['scans_withdrawn'] });
+    expect(parcel).toMatchObject({ sync_status: 'waiting', carrier_data: { scans_withdrawn_at: '2026-09-10T12:00:00.000Z' } });
+    now = new Date('2026-09-10T18:00:00Z');
+    await expect(service.syncPackage(parcel, { trigger: 'scheduled' })).resolves.toMatchObject({ waiting: 1, errors: 0 });
+    expect(client.completeSyncAttempt.mock.lastCall![1]).toMatchObject({ outcome: 'waiting', anomaly_codes: [] });
+    expect(parcel).toMatchObject({ carrier_data: { scans_withdrawn_at: '2026-09-10T12:00:00.000Z' } });
+  });
 
   it('keeps a number nobody has seen waiting while one provider rests on a rate limit', async () => {
     const client = { ...fakeClient(),

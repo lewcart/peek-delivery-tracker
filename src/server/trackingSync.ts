@@ -1594,6 +1594,10 @@ export class TrackingSyncService {
         if (!hasProgress && (isUnannouncedTrackingError(error) || routingUnannounced)) {
           // A carrier saying the label has no scans is an answer, not a missed check.
           if (error instanceof RoutingDeferred) error.routing.consecutive_failures = 0;
+          // A parcel that showed its label first answering without it is a review signal, as when
+          // its carrier lists fewer of its scans (`scans_withdrawn`, below).
+          const withdrawn = previousStage === 'registered'
+            && !(isRecord(parcel.carrier_data) && parcel.carrier_data.scans_withdrawn_at != null);
           audit.record('fetch', 'succeeded', performance.now() - fetchStartedAt, {
             disposition: 'unannounced', ...sharedAnswers(checks),
           });
@@ -1605,17 +1609,22 @@ export class TrackingSyncService {
               last_synced_at: this.now().toISOString(),
               sync_status: 'waiting',
               sync_error: null,
-              ...(error instanceof RoutingDeferred ? { carrier_data: {
-                ...(isRecord(parcel.carrier_data) ? parcel.carrier_data : {}), routing: error.routing,
+              ...(error instanceof RoutingDeferred || withdrawn ? { carrier_data: {
+                ...(isRecord(parcel.carrier_data) ? parcel.carrier_data : {}),
+                ...(error instanceof RoutingDeferred ? { routing: error.routing } : {}),
+                ...(withdrawn ? { scans_withdrawn_at: now.toISOString() } : {}),
               } } : {}),
             });
           });
-          await audit.finish({
+          const completion = {
             outcome: 'waiting',
             sourceCarrier: carrierId,
             eventsReceived: 0,
             eventsNormalized: 0,
-          });
+            ...(withdrawn ? { anomalyCodes: ['scans_withdrawn' as const] } : {}),
+          } as const;
+          await audit.finish(completion);
+          if (withdrawn) audit.reportAnomalies(['scans_withdrawn'], completion);
           return 'waiting';
         }
         audit.record('fetch', 'failed', performance.now() - fetchStartedAt,

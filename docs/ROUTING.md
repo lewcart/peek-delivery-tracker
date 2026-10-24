@@ -131,9 +131,10 @@ of the parcel's own carrier ends that carrier's wait, whatever the failure, sinc
 for the old one, so the check that follows asks it again. A carrier often doesn't know a label
 before its first scan, hence its shorter not-found wait. When a universal provider shows
 progress the parcel hasn't had yet and names a carrier that said not found, that carrier is
-asked again in the same check. A pending parcel whose failures are all not-found or
-`no_history` shows as waiting, not as an outage, unless its own carrier asks for an input:
-the missed checks then show that request. A provider resting on a rate limit was
+asked again in the same check. A pending parcel, or one that only showed its label, whose failures
+are all not-found or `no_history` shows as waiting, not as an outage, unless its own carrier asks
+for an input: the missed checks then show that request. The first such check of a parcel that
+showed its label carries the `scans_withdrawn` signal ([OBSERVABILITY.md](OBSERVABILITY.md)). A provider resting on a rate limit was
 not asked, and a universal provider that failed (transport, verification, an unreadable
 answer) did not answer, so neither changes that; a carrier's own adapter failing does. When a failed direct adapter recovers, it
 takes over from the universal provider again.
