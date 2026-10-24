@@ -7210,7 +7210,8 @@ export const CARRIER_CAPABILITIES = {
     "timezone": "Europe/Budapest",
     "tracking": {
       "mode": "automatic",
-      "adapter": "magyar-posta"
+      "adapter": "magyar-posta",
+      "browserRecognitionRank": 400
     },
     "linkRules": [
       {
