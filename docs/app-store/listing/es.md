@@ -71,6 +71,11 @@ rastrear,rastreo,rastreador,localizar,seguir,paquete,envíos,pedido,pedidos,entr
 ## What's new
 
 ```text
-• En iPad, la primera pantalla de Peek ahora muestra todo el recorrido de un paquete a pantalla completa, con el campo del número de seguimiento encima. Toca el mapa para abrir un paquete de ejemplo.
+• Peek ya funciona en iPad: el paquete que abres aparece junto a la lista, con funciones rápidas de teclado y barra de menús.
+• En iPad, la primera pantalla de Peek muestra todo el recorrido de un paquete a pantalla completa, con el campo del número de seguimiento encima. Toca el mapa para abrir un paquete de ejemplo.
+• Un enlace de paquete compartido se abre en Peek. Síguelo sin cuenta y Peek te avisará hasta que se entregue.
+• Mantén pulsado un paquete de la lista para ver sus acciones, o arrastra a la lista un número de seguimiento desde otra app para añadirlo.
+• Peek se adapta a los tamaños de texto más grandes y, si el sistema cierra la app, vuelve a abrir el paquete que estabas viendo.
+• Un número de solo seis cifras suele ser un código de recogida, así que Peek ahora pide el número de seguimiento. También reconoce los números de pedido de Shein.
 • Peek reconoce los números de seguimiento de Correos de Cuba.
 ```

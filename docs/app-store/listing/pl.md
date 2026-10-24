@@ -71,6 +71,11 @@ paczka,paczki,paczek,przesyłka,przesyłki,kurier,poczta,tracking,status,dostawa
 ## What's new
 
 ```text
-• Na iPadzie pierwszy ekran Peek pokazuje teraz całą trasę przesyłki na pełnym ekranie, z polem numeru przesyłki nad nią. Stuknij mapę, aby otworzyć przykładową przesyłkę.
+• Peek działa teraz na iPadzie: otwarta przesyłka wyświetla się obok listy. Są też skróty klawiszowe i pasek menu.
+• Na iPadzie pierwszy ekran Peek pokazuje całą trasę przesyłki na pełnym ekranie, z polem numeru przesyłki nad nią. Stuknij mapę, aby otworzyć przykładową przesyłkę.
+• Udostępniony link do przesyłki otwiera się w Peek. Śledź ją bez konta, a Peek będzie Cię powiadamiać, dopóki nie zostanie doręczona.
+• Przytrzymaj przesyłkę na liście, aby zobaczyć jej opcje, albo przeciągnij na listę numer śledzenia z innej aplikacji, aby go dodać.
+• Peek dopasowuje się do największych rozmiarów tekstu i po zamknięciu aplikacji przez system ponownie otwiera ostatnio oglądaną przesyłkę.
+• Numer złożony tylko z sześciu cyfr to zwykle kod odbioru, więc Peek prosi teraz o numer śledzenia. Rozpoznaje też numery zamówień Shein.
 • Peek rozpoznaje numery przesyłek Correos de Cuba.
 ```

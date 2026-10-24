@@ -71,6 +71,11 @@ seguir,rastrear,rastreio,tracking,localizar,entrega,entregas,envio,envios,correi
 ## What's new
 
 ```text
-• No iPad, o primeiro ecrã do Peek mostra agora toda a viagem de uma encomenda em ecrã inteiro, com o campo do número de seguimento por cima. Toca no mapa para abrir uma encomenda de exemplo.
+• O Peek já funciona no iPad: a encomenda que abres aparece ao lado da lista, com atalhos de teclado e barra de menus.
+• No iPad, o primeiro ecrã do Peek mostra toda a viagem de uma encomenda em ecrã inteiro, com o campo do número de seguimento por cima. Toca no mapa para abrir uma encomenda de exemplo.
+• Uma ligação de encomenda partilhada abre-se no Peek. Segue-a sem conta e o Peek envia-te notificações até ser entregue.
+• Mantém premida uma encomenda na lista para ver as suas ações, ou arrasta para a lista um número de seguimento de outra app para o adicionar.
+• O Peek adapta-se aos maiores tamanhos de texto e volta a abrir a encomenda que estavas a ver depois de o sistema fechar a app.
+• Um número de apenas seis dígitos costuma ser um código de levantamento, por isso o Peek pede agora o número de seguimento. Também reconhece os números de encomenda da Shein.
 • O Peek reconhece os números de seguimento dos Correos de Cuba.
 ```
