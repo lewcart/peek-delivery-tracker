@@ -173,8 +173,16 @@ describe('map summary', () => {
     const returned = sheet(buildRoute([scan(tokyo)], countryPlace('CH', 'Switzerland', [7.46, 46.72])), 'returned');
     expect(screen.queryByText(/to go/)).not.toBeInTheDocument();
     returned.unmount();
-    sheet(buildRoute([scan(tokyo), scan(bern), scan()]));
+    const unplaced = sheet(buildRoute([scan(tokyo), scan(bern), scan()]));
     expect(screen.getByText('Last seen').nextElementSibling).toHaveTextContent('Bern');
+    unplaced.unmount();
+    // A delivery somewhere the map can't place isn't a delivery at the last stop it can.
+    const elsewhere = sheet(buildRoute([scan(tokyo), scan(bern), scan()]), 'delivered');
+    expect(screen.queryByText('Delivered')).not.toBeInTheDocument();
+    expect(screen.getByText('Last seen').nextElementSibling).toHaveTextContent('Bern');
+    elsewhere.unmount();
+    sheet(buildRoute([scan(tokyo), scan()], countryPlace('CH', 'Switzerland', [7.46, 46.72])), 'delivered');
+    expect(screen.getByText('Delivered').nextElementSibling).toHaveTextContent('Switzerland');
   });
 
   it('shows a single place on its own', () => {

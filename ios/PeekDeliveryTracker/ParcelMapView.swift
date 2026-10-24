@@ -207,7 +207,9 @@ struct ParcelMapScreen: View {
             // A finished journey has a length, not a distance "so far".
             let finished = delivered || stage == .returned
             let end = route.destination ?? current.place
-            let endLabel = delivered ? "map.delivered" : route.destination != nil ? "map.to" : route.latestLocated ? "map.now" : "map.lastSeen"
+            // A delivery scan with no place didn't happen at the last stop, so that stop is only where the parcel was last seen.
+            let endLabel = delivered && (route.latestLocated || route.destination != nil) ? "map.delivered"
+                : route.destination != nil ? "map.to" : route.latestLocated ? "map.now" : "map.lastSeen"
             let single = route.stops.count == 1 && route.destination == nil
             // At the largest text sizes the two places stand one under the other.
             let stacked = dynamicTypeSize.isAccessibilitySize
