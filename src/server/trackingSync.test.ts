@@ -4102,11 +4102,23 @@ describe('TrackingSyncService', () => {
       const rows = structuredClone([...store.rows.values()]);
       const checked = await check(answer(...events));
       expect(checked.counts).toMatchObject({ unchanged: 1, errors: 0 });
-      expect(checked.attempt).toMatchObject({ outcome: 'unchanged', anomaly_codes: [], error_type: null });
+      // The first such answer is a review signal, never an error.
+      expect(checked.attempt).toMatchObject({ outcome: 'unchanged', anomaly_codes: ['scans_withdrawn'], error_type: null });
       expect(checked.parcel).toMatchObject({ current_stage: 'in_transit', last_status_text: departed.description,
-        sync_status: 'ok', sync_error: null });
+        sync_status: 'ok', sync_error: null, carrier_data: { scans_withdrawn_at: '2026-10-21T14:00:00.000Z' } });
       expect(checked.refresh).toMatchObject({ healthy: true });
       expect([...store.rows.values()]).toEqual(rows);
+    });
+
+    it('signals the first such answer of a parcel only, even after the carrier showed every scan again', async () => {
+      const { check } = await tracked();
+      await check(answer(relabel, label));
+      expect((await check(answer(relabel, label))).attempt).toMatchObject({ outcome: 'unchanged', anomaly_codes: [] });
+      const full = await check(answer(departed, accepted, relabel, label));
+      expect(full.parcel).toMatchObject({ carrier_data: { scans_withdrawn_at: '2026-10-21T14:00:00.000Z' } });
+      const again = await check(answer(relabel, label));
+      expect(again.attempt).toMatchObject({ outcome: 'unchanged', anomaly_codes: [] });
+      expect(again.refresh).toMatchObject({ healthy: true });
     });
 
     it.each([

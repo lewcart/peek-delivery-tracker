@@ -52,6 +52,7 @@ export type SyncAnomalyCode =
   | 'observed_without_timestamp'
   | 'progress_disappeared'
   | 'provider_clock_offset'
+  | 'scans_withdrawn'
   | 'terminal_stage_regression';
 
 export interface SyncRunContext {

@@ -1838,7 +1838,7 @@ export class TrackingSyncService {
       // Linked journey identity, the postcode the owner gave a provider, and the delivery partner's probe belong to the
       // parcel, not an individual carrier response: a provider answering while the origin is down keeps the probe's gap.
       if (isRecord(parcel.carrier_data)) {
-        for (const key of ['lookup_country_hint', 'universal_input', 'original_carrier', 'original_tracking_number', 'original_tracking_url', 'original_package_id', 'active_tracking_carrier', 'active_tracking_number', 'original_canonical_tracking_number', 'auto_changed_from', 'auto_changed_to', 'auto_changed_at', 'handed_over_at', 'earlier_checked_at', 'delivery_probe', DIRECT_HISTORY]) {
+        for (const key of ['lookup_country_hint', 'universal_input', 'original_carrier', 'original_tracking_number', 'original_tracking_url', 'original_package_id', 'active_tracking_carrier', 'active_tracking_number', 'original_canonical_tracking_number', 'auto_changed_from', 'auto_changed_to', 'auto_changed_at', 'handed_over_at', 'earlier_checked_at', 'delivery_probe', 'scans_withdrawn_at', DIRECT_HISTORY]) {
           if (parcel.carrier_data[key] != null && carrierData[key] == null) carrierData[key] = parcel.carrier_data[key];
         }
       }
@@ -1960,6 +1960,12 @@ export class TrackingSyncService {
       if (preserveSummary && !keepSaved && !fetched.correction && typeof result.destination_country === 'string') {
         const kept = isRecord(values.carrier_data) ? values.carrier_data : previousData;
         if (kept.destination_country == null) values.carrier_data = { ...kept, destination_country: result.destination_country };
+      }
+      // The first answer of the parcel's own carrier with fewer of its stored scans is a review signal
+      // (`scans_withdrawn`), not an error: a scraper that drops scans across many parcels still shows.
+      if (fewerStoredScans && previousData.scans_withdrawn_at == null) {
+        anomalies = [...anomalies, 'scans_withdrawn'];
+        values.carrier_data = { ...(isRecord(values.carrier_data) ? values.carrier_data : previousData), scans_withdrawn_at: now.toISOString() };
       }
       // A provider naming an unknown parcel's carrier identifies the number, however old its
       // copy of the history looks: the parcel is filed under it and keeps the newer summary.
