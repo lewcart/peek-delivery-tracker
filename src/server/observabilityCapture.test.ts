@@ -272,6 +272,9 @@ it('names a parcel by the shape of its number and cuts addresses down in reports
   // Breadcrumbs gather across parcels: another parcel's log line, and a request about it.
   const line = JSON.stringify({ event: 'tracking_sync_started', tracking_number: 'TEST9012', error_message: 'No parcel test9012' });
   Sentry.addBreadcrumb({ category: 'console', level: 'log', message: line, data: { arguments: [line], logger: 'console' } });
+  // A check's last step names the number it looked up, a handoff's other than the parcel's.
+  const step = JSON.stringify({ event: 'tracking_sync_step', step: 'complete', tracking_number: 'TEST9012', support_lookup_number: 'HAND7305' });
+  Sentry.addBreadcrumb({ category: 'console', level: 'log', message: step, data: { arguments: [step], logger: 'console' } });
   Sentry.addBreadcrumb({ category: 'http', type: 'http', data: { url: 'https://carrier.example/v1/track/TEST9012/events',
     'http.method': 'GET', 'http.query': 'number=TEST9012', status_code: 404 } });
 
@@ -300,7 +303,9 @@ it('names a parcel by the shape of its number and cuts addresses down in reports
   // Another parcel's log line names it by the shape of its number too.
   const logLine = report.breadcrumbs?.find((crumb) => crumb.category === 'console' && crumb.message?.includes('tracking_sync_started'));
   expect(JSON.parse(logLine!.message!)).toMatchObject({ tracking_number: '4 letters + 4 digits', error_message: 'No parcel 4 letters + 4 digits' });
-  expect(withoutSource(report)).not.toMatch(/test5678|test9012/i);
+  const stepLine = report.breadcrumbs?.find((crumb) => crumb.category === 'console' && crumb.message?.includes('tracking_sync_step'));
+  expect(JSON.parse(stepLine!.message!)).toMatchObject({ tracking_number: '4 letters + 4 digits', support_lookup_number: '4 letters + 4 digits' });
+  expect(withoutSource(report)).not.toMatch(/test5678|test9012|hand7305/i);
   expect(logLine!.data).toEqual({ logger: 'console' });
   const call = report.breadcrumbs?.find((crumb) => crumb.category === 'http' && crumb.data?.status_code === 404);
   expect(call!.data).toEqual({ url: 'https://carrier.example/v1/track/:id/events', 'http.method': 'GET', status_code: 404 });

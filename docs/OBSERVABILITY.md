@@ -746,7 +746,8 @@ Request IDs and excerpts don't affect grouping.
 
 A report names its parcel by the shape of its number, in the `number_pattern` tag and the
 operation context. The number itself is replaced by that shape wherever it appears in the
-report, in any case, and so is the number of any log line among its breadcrumbs. Find a
+report, in any case, and so are the numbers of any log line among its breadcrumbs: its
+`tracking_number` and the `support_lookup_number` its check looked up. Find a
 parcel's reports through its `attempt_id` or `job_id`.
 
 - **Addresses** anywhere in a report or breadcrumb, the request's and the transaction's

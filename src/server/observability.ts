@@ -276,15 +276,18 @@ export function scrubSentryBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
   return { ...breadcrumb, ...(breadcrumb.message ? { message: logLineWithoutNumber(scrubText(breadcrumb.message)) } : {}), ...(data ? { data } : {}) };
 }
 
-/** A log line, which names its parcel, keeps only the shape of the number in a report. */
+/** The fields of a log line that hold a whole number: the parcel's, and the one its check looked up (a handoff's). */
+const LOG_NUMBER_FIELDS = ['tracking_number', 'support_lookup_number'];
+
+/** A log line, which names its parcel, keeps only the shape of each number in a report. */
 function logLineWithoutNumber(message: string): string {
-  if (!message.startsWith('{') || !message.includes('"tracking_number"')) return message;
+  if (!message.startsWith('{') || !LOG_NUMBER_FIELDS.some((field) => message.includes(`"${field}"`))) return message;
   try {
     const line = JSON.parse(message) as Record<string, unknown>;
-    if (typeof line.tracking_number !== 'string') return message;
-    const number = line.tracking_number;
-    line.tracking_number = numberPattern(number);
-    return withoutNumber(JSON.stringify(line), number);
+    const numbers = LOG_NUMBER_FIELDS.map((field) => line[field]).filter((value): value is string => typeof value === 'string');
+    if (!numbers.length) return message;
+    for (const field of LOG_NUMBER_FIELDS) if (typeof line[field] === 'string') line[field] = numberPattern(line[field]);
+    return numbers.reduce((text, number) => withoutNumber(text, number), JSON.stringify(line));
   } catch {
     return message;
   }
