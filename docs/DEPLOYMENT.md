@@ -164,10 +164,11 @@ SQL-only changes do not deploy the web image. The iPhone app is tested in its ow
 and does not hold a deploy back.
 
 Every deploy restarts the server, and pushes often come a few minutes apart. So a handed
-over commit waits while CI tests a newer one ([deploy-gate.mjs](../scripts/deploy-gate.mjs)).
-If the newer one passes, its deploy replaces this one and includes it; if it fails, this
-one deploys. A commit pushed on its own deploys as soon as it passes, and none waits more
-than 30 minutes. GitHub's list of CI's runs sometimes leaves a run out, so the commit's own
+over commit waits while CI tests a newer one pushed before the oldest commit still waiting
+was handed over ([deploy-gate.mjs](../scripts/deploy-gate.mjs)): a burst deploys once, and
+pushes after it do not hold it back. If the newer one passes, this one's run stands down at
+its next look and the newer one's deploy includes it; if it fails, this one deploys. A commit
+pushed on its own deploys as soon as it passes, and none waits more than 30 minutes. GitHub's list of CI's runs sometimes leaves a run out, so the commit's own
 runs are read from the repository's list too. To deploy the newest tested commit at once, run
 `gh workflow run deploy.yml`.
 

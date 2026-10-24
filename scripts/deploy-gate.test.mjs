@@ -58,6 +58,16 @@ describe('deciding a deploy', () => {
     assert.match(decision.reason, new RegExp(sha('3')));
   });
 
+  it('waits only for newer commits pushed before the oldest waiting one was handed over', async () => {
+    // Commit 1 was handed over at minute 8: commit 3, pushed at minute 9, does not hold it back.
+    const later = [run('3', 9, 'in_progress', 'none'), run('1', 0)];
+    const decision = await decide({ ...base, commit: sha('1'), runs: later });
+    assert.equal(decision.action, 'deploy');
+    assert.match(decision.reason, /pushed after/);
+    const burst = [run('3', 9, 'in_progress', 'none'), run('2', 7, 'in_progress', 'none'), run('1', 0)];
+    assert.match((await decide({ ...base, commit: sha('1'), runs: burst })).reason, new RegExp(sha('2')));
+  });
+
   it('leaves the deploy to a newer commit that passed', async () => {
     const runs = [run('3', 7, 'in_progress', 'none'), run('2', 5), run('1', 0)];
     assert.equal((await decide({ ...base, commit: sha('1'), runs })).action, 'stand-down');

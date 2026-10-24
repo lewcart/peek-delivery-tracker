@@ -51,12 +51,13 @@ it('hands a tested commit on main to the Deploy workflow, which alone deploys', 
   assert.doesNotMatch(ci, /secrets\.DEPLOY_SSH|group: production-deploy/);
 });
 
-it('waits in a job a newer commit replaces, and deploys in one that is never cut off', () => {
+it('waits in a job a newer commit queues behind, and deploys in one that is never cut off', () => {
   const workflow = read('.github/workflows/deploy.yml');
   assert.match(workflow, /\non:\n {2}workflow_dispatch:\n/);
   assert.doesNotMatch(workflow, /\n {2}(push|pull_request|workflow_run):/);
   const settle = job(workflow, 'settle');
-  assert.match(settle, /concurrency:\n {6}group: production-deploy-wait\n {6}cancel-in-progress: true\n/);
+  // The waiting run stands down by itself once the newer commit passed, rather than being cancelled.
+  assert.match(settle, /concurrency:\n {6}group: production-deploy-wait\n {6}cancel-in-progress: false\n/);
   assert.match(settle, /run: node scripts\/deploy-gate\.mjs "--commit=\$COMMIT"/);
   const minutes = Number(settle.match(/timeout-minutes: (\d+)/)[1]);
   assert.ok(minutes * 60_000 > MAX_WAIT_MS + 5 * 60_000, 'the wait ends before the job times out');

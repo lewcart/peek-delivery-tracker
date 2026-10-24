@@ -1,7 +1,8 @@
 // Decides when a commit that CI tested on main goes to production (deploy.yml). Every deploy
 // restarts the server, and pushes come in bursts: a tested commit waits while CI tests a newer
-// one, and stands down when that one passes, since its deploy includes this commit. A newer
-// commit that fails CI does not hold this one back.
+// one pushed before the oldest commit still waiting was handed over, and stands down when that
+// one passes, since its deploy includes this commit. A newer commit that fails CI, or one pushed
+// later, does not hold this one back.
 import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';
@@ -68,7 +69,10 @@ export async function waitingSince(deployRuns, selfId, deployed) {
 /**
  * What the deploy of `commit` does now: `deploy`, `wait`, `stand-down` (a newer tested commit
  * deploys it) or `refuse` (CI did not pass it). `runs` are CI's runs of pushes to main,
- * newest first; `handoff` reads one's hand-over. Without `wait` it does not wait for CI.
+ * newest first; `handoff` reads one's hand-over. It waits only for CI runs that started by
+ * `since`, when the oldest commit still waiting was handed over: a stream of later pushes
+ * would otherwise hold every deploy back until the longest wait. Without `wait` it does not
+ * wait for CI.
  */
 export async function decide({ commit, runs, handoff, now, since, wait, maxWaitMs = MAX_WAIT_MS }) {
   const own = runs.find(run => run.head_sha === commit);
@@ -84,9 +88,10 @@ export async function decide({ commit, runs, handoff, now, since, wait, maxWaitM
   if (since !== null && now - since >= maxWaitMs) {
     return { action: 'deploy', reason: `Tested commits have waited ${Math.round(maxWaitMs / 60_000)} minutes for newer ones.` };
   }
-  const testing = newer.find(run => !completed(run));
+  const testing = newer.find(run => !completed(run) && (since === null || time(run.created_at) <= since));
   if (testing) return { action: 'wait', reason: `CI has yet to finish ${testing.head_sha}, whose deploy would replace this one.` };
-  return { action: 'deploy', reason: 'CI is testing no newer commit.' };
+  return { action: 'deploy', reason: newer.some(run => !completed(run))
+    ? 'CI is testing only commits pushed after the oldest waiting one was handed over.' : 'CI is testing no newer commit.' };
 }
 
 function github(endpoint) {

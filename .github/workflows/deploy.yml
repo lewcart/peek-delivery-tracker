@@ -2,8 +2,8 @@ name: Deploy
 
 # Puts a commit that CI tested on main into production. CI hands each one over; run by hand,
 # it deploys the newest tested commit at once. Every deploy restarts the server, so a commit
-# waits while CI tests a newer one, and leaves the deploy to it if it passes
-# (scripts/deploy-gate.mjs, docs/DEPLOYMENT.md).
+# waits while CI tests a newer one pushed before it was handed over, and leaves the deploy to
+# it if it passes (scripts/deploy-gate.mjs, docs/DEPLOYMENT.md).
 
 on:
   workflow_dispatch:
@@ -23,7 +23,9 @@ defaults:
     shell: bash
 
 jobs:
-  # A newer commit handed over replaces the one waiting here; a deploy under way is never cut off.
+  # A newer commit handed over waits until the one here stands down, which it does at its next
+  # look once the newer one passed CI, so its run says why rather than showing as cancelled.
+  # A deploy under way is never cut off.
   settle:
     name: Wait for newer commits
     if: vars.DEPLOY_ENABLED == 'true'
@@ -31,7 +33,7 @@ jobs:
     timeout-minutes: 45
     concurrency:
       group: production-deploy-wait
-      cancel-in-progress: true
+      cancel-in-progress: false
     outputs:
       deploy: ${{ steps.gate.outputs.deploy }}
       commit: ${{ steps.gate.outputs.commit }}
