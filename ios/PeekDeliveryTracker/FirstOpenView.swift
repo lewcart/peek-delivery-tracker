@@ -137,9 +137,10 @@ enum FirstOpenJourney {
 }
 
 /// The first screen of an iPhone nobody has followed a parcel on: a sample parcel crossing the
-/// world on its map, scan by scan, over the question and the field that answers it. On an iPad the
-/// journey fills the screen and the question stands over it, as on the landing. It stands over the
-/// deliveries and leaves once the first parcel is in.
+/// world on its map, scan by scan, over the question and the field that answers it. On an iPad or an
+/// open iPhone Duo the journey fills the screen and the question stands over it, as on the landing;
+/// a Duo standing half open gives each its own side of the fold. It stands over the deliveries and
+/// leaves once the first parcel is in.
 struct FirstOpenView: View {
     /// A sheet covers the screen: the journey waits.
     let covered: Bool
@@ -190,14 +191,20 @@ struct FirstOpenView: View {
                         .offset(y: appeared ? 0 : 14)
                         .opacity(appeared ? 1 : 0)
                 }
-                // A screen too short for the map and the question, a phone on its side, scrolls; any other holds still.
-                ViewThatFits(in: .vertical) {
-                    // An iPad, or a large window on one, has room for the question over the whole journey.
-                    if window.size.width >= 700 && screen >= 700 {
-                        poster(size: CGSize(width: window.size.width, height: screen), top: top)
+                Group {
+                    if let fold = window.fold {
+                        spread(fold: fold, screen: screen, top: top, bottom: window.safeAreaInsets.bottom)
+                    } else {
+                        // A screen too short for the map and the question, a phone on its side, scrolls; any other holds still.
+                        ViewThatFits(in: .vertical) {
+                            // An iPad, an open iPhone Duo or a large window has room for the question over the whole journey.
+                            if min(window.size.width, screen) >= 600 {
+                                poster(size: CGSize(width: window.size.width, height: screen), top: top)
+                            }
+                            page.frame(maxHeight: .infinity, alignment: .top)
+                            ScrollView { page }.scrollIndicators(.hidden)
+                        }
                     }
-                    page.frame(maxHeight: .infinity, alignment: .top)
-                    ScrollView { page }.scrollIndicators(.hidden)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .ignoresSafeArea(edges: .top)
@@ -229,8 +236,12 @@ struct FirstOpenView: View {
 
     // MARK: - The sample parcel on its map
 
-    private func hero(height: CGFloat, top: CGFloat) -> some View {
+    /// `beside` stands it as a page beside the question, its trailing corners rounded, over the whole height.
+    private func hero(height: CGFloat, top: CGFloat, beside: Bool = false) -> some View {
         let parcel = FirstOpenJourney.parcel(step: step, name: FirstOpenJourney.name(localizer))
+        let corners = beside
+            ? UnevenRoundedRectangle(bottomTrailingRadius: 38, topTrailingRadius: 38, style: .continuous)
+            : UnevenRoundedRectangle(bottomLeadingRadius: 38, bottomTrailingRadius: 38, style: .continuous)
         return Button(action: openSample) {
             ZStack(alignment: .bottom) {
                 identity.surface
@@ -260,7 +271,7 @@ struct FirstOpenView: View {
                 .padding(.bottom, 24)
             }
             .frame(height: height)
-            .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 38, bottomTrailingRadius: 38, style: .continuous))
+            .clipShape(corners)
             .contentShape(Rectangle())
             .matchedTransitionSource(id: FirstOpenJourney.parcelID, in: transition)
         }
@@ -280,6 +291,29 @@ struct FirstOpenView: View {
             .padding(.horizontal, 24)
             .padding(.top, top + 10)
         }
+    }
+
+    // MARK: - An iPhone Duo standing half open
+
+    /// The fold parts the screen in two: the journey takes the first part, as it leads a phone's screen, and the
+    /// question the second, so nothing lies across the fold.
+    private func spread(fold: CGRect, screen: CGFloat, top: CGFloat, bottom: CGFloat) -> some View {
+        let beside = fold.height > fold.width
+        let layout = beside ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
+        return layout {
+            hero(height: beside ? screen : fold.minY + top, top: top, beside: beside)
+                .frame(width: beside ? fold.minX : nil)
+                .offset(x: beside && !appeared ? -18 : 0, y: !beside && !appeared ? -18 : 0)
+                .opacity(appeared ? 1 : 0)
+            Color.clear.frame(width: beside ? fold.width : nil, height: beside ? nil : fold.height)
+            ask(roomy: true, centred: true)
+                .padding(.top, beside ? top : 0)
+                .padding(.bottom, bottom)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .offset(y: appeared ? 0 : 14)
+                .opacity(appeared ? 1 : 0)
+        }
+        .ignoresSafeArea(edges: .bottom)
     }
 
     // MARK: - An iPad's whole screen
@@ -317,7 +351,8 @@ struct FirstOpenView: View {
             }
             .buttonStyle(FirstOpenHeroStyle())
             .accessibilityLabel(localizer.text("landing.pip.open"))
-            .ignoresSafeArea(edges: .bottom)
+            // It runs under an open iPhone Duo's status bar at the side, as a phone's map runs under its bar at the top.
+            .ignoresSafeArea(edges: [.bottom, .horizontal])
 
             VStack(spacing: 0) {
                 masthead
@@ -407,8 +442,10 @@ struct FirstOpenView: View {
 
     // MARK: - The question
 
-    @ViewBuilder private func ask(roomy: Bool) -> some View {
+    /// `centred` stands the question in the middle of its room rather than under the picture.
+    @ViewBuilder private func ask(roomy: Bool, centred: Bool = false) -> some View {
         VStack(spacing: 0) {
+            if centred { Spacer(minLength: 0) }
             Text(localizer.text("peek.title"))
                 .font(.system(.largeTitle, design: .rounded, weight: .bold))
                 .tracking(-1.2)

@@ -98,6 +98,11 @@ struct ParcelMapScreen: View {
 
     var body: some View {
         GeometryReader { proxy in
+            let safe = proxy.safeAreaInsets
+            // An iPhone Duo standing half open keeps the route on the first part of the screen and the summary on the
+            // second, as Apple's own arrangements do, so neither lies across the fold.
+            let fold = proxy.fold
+            let beside = fold.map { $0.height > $0.width } ?? false
             ZStack(alignment: .bottom) {
                 // The route is framed in the space the summary leaves.
                 WorldMapView(
@@ -105,8 +110,12 @@ struct ParcelMapScreen: View {
                     live: stage != .delivered && stage != .returned,
                     // Pip came along from the card. Here he keeps clear of what lies over the map: the summary and the button that closes it.
                     pip: PipMood(stage: stage).map { PipRequest(mood: $0, inset: true) },
-                    insets: EdgeInsets(top: proxy.safeAreaInsets.top + 52, leading: 0,
-                                       bottom: proxy.safeAreaInsets.bottom + barHeight + 24, trailing: 0),
+                    insets: EdgeInsets(
+                        top: safe.top + 52, leading: 0,
+                        bottom: fold.map { beside ? safe.bottom + 24 : proxy.size.height + safe.bottom - $0.minY + 24 }
+                            ?? safe.bottom + barHeight + 24,
+                        trailing: fold.map { beside ? proxy.size.width + safe.trailing - $0.minX + 24 : 0 } ?? 0
+                    ),
                     recenter: recenter, language: localizer.language,
                     detail: tiles.pack.map { MapDetail(pack: $0, tiles: tiles.tiles, need: tiles.need) },
                     onFreeChange: { free = $0 }
@@ -116,11 +125,13 @@ struct ParcelMapScreen: View {
                 .accessibilityLabel(label)
                 .accessibilityAddTraits(.isImage)
 
-                // Over a large screen the summary keeps to about a phone's width, centred.
-                bar(maxHeight: proxy.size.height / 2)
+                // Over a large screen the summary keeps to about a phone's width, centred, or on its own side of the fold.
+                bar(maxHeight: fold.map { beside ? proxy.size.height / 2 : proxy.size.height - $0.maxY - 24 } ?? proxy.size.height / 2)
                     .frame(maxWidth: 420)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
+                    .frame(width: fold.flatMap { beside ? proxy.size.width - $0.maxX : nil })
+                    .frame(maxWidth: .infinity, alignment: beside ? .trailing : .center)
             }
             .overlay(alignment: .topTrailing) {
                 Button { dismiss() } label: {

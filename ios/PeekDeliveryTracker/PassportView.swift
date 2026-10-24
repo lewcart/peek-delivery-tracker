@@ -18,20 +18,37 @@ struct PassportView: View {
     var body: some View {
         let stats = statistics
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    passport(stats)
-                    stamps(stats)
-                    deliveryTimes(stats)
-                    if !stats.originCountries.isEmpty { countries(stats) }
+            GeometryReader { proxy in
+                ScrollView {
+                    // An iPhone Duo standing half open shows two pages, one each side of the fold: the passport and its
+                    // stamps, then the times and the countries.
+                    if let fold = proxy.fold, fold.height > fold.width {
+                        HStack(alignment: .top, spacing: 0) {
+                            page {
+                                passport(stats)
+                                stamps(stats)
+                            }
+                            .frame(width: fold.minX)
+                            Color.clear.frame(width: fold.width, height: 0)
+                            page {
+                                deliveryTimes(stats)
+                                if !stats.originCountries.isEmpty { countries(stats) }
+                            }
+                            .frame(width: proxy.size.width - fold.maxX)
+                        }
+                    } else {
+                        page {
+                            passport(stats)
+                            stamps(stats)
+                            deliveryTimes(stats)
+                            if !stats.originCountries.isEmpty { countries(stats) }
+                        }
+                        .frame(maxWidth: 480)
+                        .frame(maxWidth: .infinity)
+                    }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 36)
-                .frame(maxWidth: 480)
-                .frame(maxWidth: .infinity)
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
             .background(Brand.background)
             .safeAreaInset(edge: .top, spacing: 0) { DemoModeBar() }
             .navigationTitle(copy.passport)
@@ -44,6 +61,13 @@ struct PassportView: View {
         }
         .sheet(isPresented: $showingAccount) { AccountView().formOnPad() }
         .sensoryFeedback(.impact(weight: .light, intensity: 0.65), trigger: touchCount)
+    }
+
+    private func page(@ViewBuilder _ content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 28, content: content)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 36)
     }
 
     private func passport(_ stats: PassportStatistics) -> some View {

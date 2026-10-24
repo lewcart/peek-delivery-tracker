@@ -183,6 +183,15 @@ extension Color {
     }
 }
 
+extension GeometryProxy {
+    /// Where an iPhone Duo folds while it stands half open, in this reader's space: nil when it lies flat or closed,
+    /// and on any other device.
+    var fold: CGRect? {
+        guard #available(iOS 27.1, *) else { return nil }
+        return reservedRegions(kind: .division).first?.frame
+    }
+}
+
 extension View {
     /// What scrolls up under the buttons at the top fades away, rather than passing under a bar that appears for it.
     @ViewBuilder

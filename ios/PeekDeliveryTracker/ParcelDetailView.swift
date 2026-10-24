@@ -560,39 +560,55 @@ struct ParcelDetailView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityElement(children: .combine)
             }
-            // At the largest text sizes each button takes the card's width.
-            let buttons = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
-            buttons {
-                Button {
-                    DeliveryAnalytics.shared.action("parcel-pickup-directions")
-                    if let url = point.mapsURL { openURL(url) }
-                } label: {
-                    Label(localizer.text(point.address == nil ? "detail.pickupShowOnMap" : "detail.pickupDirections"),
-                          systemImage: point.address == nil ? "magnifyingglass" : "location.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(identity.surface)
-                        .background(identity.ink, in: RoundedRectangle(cornerRadius: 12))
-                        .contentShape(RoundedRectangle(cornerRadius: 12))
+            // Side by side while each label reads on one line; otherwise, as at the largest text sizes, one under the
+            // other, each across the card.
+            ViewThatFits(in: .horizontal) {
+                if !typeSize.isAccessibilitySize {
+                    HStack(spacing: 8) { pickupButtons(point, identity: identity, oneLine: true) }
                 }
-                .buttonStyle(TactileButtonStyle())
-                if point.address != nil {
-                    Button { copyPickupPoint(point) } label: {
-                        Label(localizer.text(copiedPickupPoint ? "detail.copied" : "detail.pickupCopyAddress"),
-                              systemImage: copiedPickupPoint ? "checkmark" : "doc.on.doc")
-                            .font(.subheadline)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .foregroundStyle(.primary)
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.secondary.opacity(0.3)))
-                            .contentShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(TactileButtonStyle())
-                }
+                VStack(spacing: 8) { pickupButtons(point, identity: identity, oneLine: false) }
             }
         }
         .padding(16)
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(identity.ink.opacity(0.18)))
         .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder private func pickupButtons(_ point: PickupPoint, identity: CarrierVisualIdentity, oneLine: Bool) -> some View {
+        Button {
+            DeliveryAnalytics.shared.action("parcel-pickup-directions")
+            if let url = point.mapsURL { openURL(url) }
+        } label: {
+            Label(localizer.text(point.address == nil ? "detail.pickupShowOnMap" : "detail.pickupDirections"),
+                  systemImage: point.address == nil ? "magnifyingglass" : "location.fill")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(oneLine ? 1 : nil)
+                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .foregroundStyle(identity.surface)
+                .background(identity.ink, in: RoundedRectangle(cornerRadius: 12))
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(TactileButtonStyle())
+        if point.address != nil {
+            Button { copyPickupPoint(point) } label: {
+                // It keeps the size of its own words while it says it copied them, so the buttons stay where they are.
+                Label(localizer.text("detail.pickupCopyAddress"), systemImage: "doc.on.doc")
+                    .opacity(copiedPickupPoint ? 0 : 1)
+                    .overlay {
+                        if copiedPickupPoint { Label(localizer.text("detail.copied"), systemImage: "checkmark").fixedSize() }
+                    }
+                    .font(.subheadline)
+                    .lineLimit(oneLine ? 1 : nil)
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .foregroundStyle(.primary)
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.secondary.opacity(0.3)))
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(TactileButtonStyle())
+            .accessibilityLabel(localizer.text(copiedPickupPoint ? "detail.copied" : "detail.pickupCopyAddress"))
+        }
     }
 
     private func copyPickupPoint(_ point: PickupPoint) {
