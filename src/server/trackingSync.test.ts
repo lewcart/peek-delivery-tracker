@@ -3153,11 +3153,21 @@ describe('TrackingSyncService', () => {
     now = new Date('2026-01-12T12:30:00Z');
     parcel = { ...parcel, [STORED_EVENT_IDENTITIES]: [row('la-poste', moved), row('posti', posted)] };
     expect(await sync()).toEqual({ stage: 'in_transit', anomalies: [] });
-    // A partner back at acceptance after a scan of its own in transit has stepped back.
+    // A partner listing its acceptance without its later scan in transit brings nothing after it.
     const sorted = { time: '2026-01-12T11:00:00Z', description: 'Sorted', stage: 'in_transit' };
     now = new Date('2026-01-12T13:30:00Z');
     parcel = { ...parcel, [STORED_EVENT_IDENTITIES]: [row('la-poste', moved), row('posti', posted), row('posti', sorted)] };
+    expect(await sync()).toEqual({ stage: 'in_transit', anomalies: [] });
+    // A partner back at acceptance after a scan of its own in transit has stepped back, at the check
+    // that brings the scan, and not again while its answers repeat it.
+    const reposted = { time: '2026-01-12T12:00:00Z', description: 'Item posted again', stage: 'accepted' };
+    adapter.fetch.mockImplementation(async (carrier: string) => carrier === 'posti'
+      ? { ...delivery, last_update: reposted.time, events: [reposted, sorted, posted] } : origin);
+    now = new Date('2026-01-12T14:30:00Z');
     expect(await sync()).toEqual({ stage: 'in_transit', anomalies: ['early_stage_regression'] });
+    now = new Date('2026-01-12T15:30:00Z');
+    parcel = { ...parcel, [STORED_EVENT_IDENTITIES]: [row('la-poste', moved), row('posti', posted), row('posti', sorted), row('posti', reposted)] };
+    expect(await sync()).toEqual({ stage: 'in_transit', anomalies: [] });
   });
 
   it('does not let a Swiss issuer suffix bypass an explicitly selected Posti adapter', async () => {

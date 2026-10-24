@@ -1933,7 +1933,11 @@ export class TrackingSyncService {
             && !deleteDescriptions.includes(String(row.description))), ...persistedEvents];
           // A carrier the router swapped to may rightly know less than a mistaken one did.
           values.current_stage = fetched.correction ? selectedStage : stageToSave(heldStage(parcel, previousStage, rows), selectedStage);
-          if (values.current_stage !== selectedStage
+          // Only the check that brings such a scan, dated after the stored progress, flags it: not the
+          // later checks that repeat it, nor an answer that only lacks the later scans.
+          const cameAfter = persistedEvents.some((event) => !storedIds.has(String(event.provider_event_id))
+            && ['registered', 'accepted'].includes(String(event.stage)) && Date.parse(String(event.occurred_at ?? '')) > progressAt);
+          if (values.current_stage !== selectedStage && cameAfter
             && !partnerStartsLeg(parcel, carrierData, sourceCarrierId, selectedStage, String(values.current_stage), rows)) {
             anomalies = [...anomalies, 'early_stage_regression'];
           }
