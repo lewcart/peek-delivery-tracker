@@ -1220,19 +1220,20 @@ struct ChangeCarrierView: View {
         refusalQuestion != nil && refusedQuestion == refusalQuestion
     }
 
-    /// After automatic detection, the parcel's own carrier when no longer offered and not
-    /// filed automatically, then the carriers its number fits, then the ones used before.
+    /// After automatic detection, the parcel's own carrier unless it is filed automatically or
+    /// among the carriers its number fits, which come next, then the ones used before. So the
+    /// carrier it has is in view without scrolling, and one no longer offered is there at all.
     private var pickerSections: [CarrierPickerView.PickerSection] {
         let match = catalog.detect(parcel.trackingNumber)
         let fitting = (match.confidence == .high ? [match.carrier] : match.candidates)
             .filter { catalog.info(for: $0).selectable }
+        let own = (automaticCarrier != nil && unfiled) || fitting.contains(parcel.carrier) ? [] : [parcel.carrier]
         return [
-            .init(id: "current", title: localizer.text("picker.section.current"),
-                  carriers: catalog.info(for: parcel.carrier).selectable || (automaticCarrier != nil && unfiled) ? [] : [parcel.carrier]),
+            .init(id: "current", title: localizer.text("picker.section.current"), carriers: own),
             .init(id: "fits", title: localizer.text(match.confidence == .high ? "picker.section.detected" : "picker.section.fits"),
                   carriers: fitting),
             .init(id: "used", title: localizer.text("picker.section.used"),
-                  carriers: CarrierPickerSearch.usedCarriers(store.parcels, catalog: catalog).filter { !fitting.contains($0) }),
+                  carriers: CarrierPickerSearch.usedCarriers(store.parcels, catalog: catalog).filter { !fitting.contains($0) && !own.contains($0) }),
         ]
     }
 
