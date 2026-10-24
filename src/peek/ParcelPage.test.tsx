@@ -674,6 +674,19 @@ describe('ParcelPage actions', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'In transit' })).toBeVisible();
   });
 
+  it('asks the owner for the postcode the parcel’s own carrier needs to find it', async () => {
+    const asked = testView({ parcel: { carrier: 'spring-gds' } });
+    asked.link = { ...asked.link, inputNeeded: { carrier: 'spring-gds', field: 'dpdPostcode' } };
+    rememberParcel({ id: LINK_ID, key: OWNER_KEY, view: asked });
+    mocks.read.mockResolvedValue(asked);
+    const user = userEvent.setup();
+    open();
+    const prompt = await screen.findByText('PostNL needs the delivery postcode to find this parcel.');
+    await user.click(within(prompt.parentElement!).getByRole('button', { name: 'Add postcode' }));
+    expect(screen.getByRole('dialog', { name: 'Add postcode' })).toHaveTextContent('PostNL needs the delivery postcode to find this parcel.');
+    expect(screen.queryByText('PostNL has this parcel. Add the delivery postcode to track it.')).toBeNull();
+  });
+
   it('asks nobody but the holder of the owner key for a postcode', async () => {
     const asked = testView();
     asked.link = { ...asked.link, inputNeeded: { carrier: 'dhl', field: 'dpdPostcode' } };

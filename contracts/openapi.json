@@ -36691,7 +36691,7 @@
           "inputNeeded": {
             "type": "object",
             "additionalProperties": false,
-            "description": "Another carrier holds the parcel and asks for its delivery postcode, which the owner adds with addPublicParcelPostcode. Sent to the owner of a lookup only.",
+            "description": "Another carrier holds the parcel and asks for its delivery postcode, or the parcel's own carrier needs one the lookup lacks. The owner adds it with addPublicParcelPostcode. Sent to the owner of a lookup only.",
             "required": [
               "carrier",
               "field"

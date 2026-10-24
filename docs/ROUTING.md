@@ -482,7 +482,7 @@ the carriers checked. A failed request does not manufacture a queried-carrier li
   its adapter needs a postcode it lists for the number and the parcel has none (PostNL's for a
   3S barcode sent within the Netherlands): the providers keep serving the parcel at its usual
   pace, a check the carrier answers drops the request, and with no source serving the parcel
-  the sync error asks instead. Links don't show this one. A lookup without an account shows the request
+  the sync error asks instead. A lookup without an account shows the request
   to whoever holds the link's owner key, and to no viewer
   ([`postcode/route.ts`](../app/api/public/parcels/[linkId]/postcode/route.ts)). The server
   asks that carrier's own tracking with the postcode before anything is saved or shown. A

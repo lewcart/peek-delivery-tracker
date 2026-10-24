@@ -737,7 +737,10 @@ describe('the postcode another carrier asks for', () => {
     const viewer = await (await open()).text();
     expect(viewer).not.toContain('inputNeeded');
     expect(viewer).not.toContain('dhl');
-    // Not once the parcel is filed under that carrier, nor once it is over, nor for another input.
+    // Its own carrier asks too while the lookup has no postcode.
+    find({ owner: true }, { carrier: 'dhl', dpd_postcode: null });
+    expect((await (await open(linkId, ownerKey)).json()).link.inputNeeded).toEqual({ carrier: 'dhl', field: 'dpdPostcode' });
+    // Not once the parcel is filed under that carrier with a postcode, nor once it is over, nor for another input.
     for (const parcel of [{ carrier: 'dhl' }, { current_stage: 'delivered' }, { current_stage: 'returned' },
       { carrier_data: { routing: { input_needed: { carrier: 'dhl', field: 'trackingUrl' } } } }]) {
       find({ owner: true }, parcel);

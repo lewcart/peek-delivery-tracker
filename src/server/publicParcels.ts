@@ -352,15 +352,17 @@ function isoTime(value: unknown): string | null {
 }
 
 /**
- * The delivery postcode another carrier holding a lookup's parcel asks for,
- * which its owner may add (`routing.input_needed`). The carrier's name and the
- * input it needs, nothing it told about the parcel.
+ * The delivery postcode another carrier holding a lookup's parcel asks for, or
+ * its own carrier when the lookup has none, which its owner may add
+ * (`routing.input_needed`). The carrier's name and the input it needs, nothing
+ * it told about the parcel.
  */
 function postcodeAsked(row: JsonObject): Pick<ApiParcelLink, 'inputNeeded'> {
   const routing = isRecord(row.carrier_data) && isRecord(row.carrier_data.routing) ? row.carrier_data.routing : {};
   const needed = routing.input_needed;
   return row.one_off === true && isRecord(needed) && needed.field === 'dpdPostcode' && typeof needed.carrier === 'string'
-    && needed.carrier !== row.carrier && row.current_stage !== 'delivered' && row.current_stage !== 'returned'
+    && (needed.carrier !== row.carrier || !String(row.dpd_postcode ?? '').trim())
+    && row.current_stage !== 'delivered' && row.current_stage !== 'returned'
     ? { inputNeeded: { carrier: needed.carrier as ApiCarrierId, field: 'dpdPostcode' } } : {};
 }
 

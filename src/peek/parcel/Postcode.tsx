@@ -9,11 +9,19 @@ import { Sheet } from './Sheet';
 /** The longest postcode a carrier is sent. */
 const MAX_POSTCODE_LENGTH = 32;
 
-/** Another carrier holds the parcel and asks its owner for the delivery postcode, as a parcel in the deliveries does. */
-export function PostcodeAsked({ carrier, onAdd }: { carrier: CarrierId; onAdd: () => void }) {
+/** The words asking for the postcode: another carrier holds the parcel, or its own `carrier` can't find it without one. */
+function askedKey(own: boolean): MessageKey {
+  return own ? 'detail.carrierInputNeeded' : 'detail.inputNeeded';
+}
+
+/**
+ * Another carrier holds the parcel, or its own carrier (`own`) needs the postcode it has none of, and asks its owner
+ * for it, as a parcel in the deliveries does.
+ */
+export function PostcodeAsked({ carrier, own, onAdd }: { carrier: CarrierId; own: boolean; onAdd: () => void }) {
   const { t, locale } = useI18n();
   return <div className="detail__input-needed peekp-asked" role="status">
-    <p>{t('detail.inputNeeded', { carrier: carrierInfo(carrier, locale).name })}</p>
+    <p>{t(askedKey(own), { carrier: carrierInfo(carrier, locale).name })}</p>
     <button type="button" className="text-button" onClick={onAdd}>{t('detail.inputNeededAction')}</button>
   </div>;
 }
@@ -23,10 +31,11 @@ export function PostcodeAsked({ carrier, onAdd }: { carrier: CarrierId; onAdd: (
  * it accepts files the parcel under that carrier and checks it at once, and
  * the page shows the answer; one it refuses shows nothing of the parcel.
  */
-export function PostcodeSheet({ linkId, ownerKey, carrier, onAdded, onClose }: {
+export function PostcodeSheet({ linkId, ownerKey, carrier, own, onAdded, onClose }: {
   linkId: string;
   ownerKey: string;
   carrier: CarrierId;
+  own: boolean;
   onAdded: (view: ParcelLinkView) => void;
   onClose: () => void;
 }) {
@@ -70,7 +79,7 @@ export function PostcodeSheet({ linkId, ownerKey, carrier, onAdded, onClose }: {
     }
   }
 
-  return <Sheet title={t('detail.inputNeededAction')} intro={t('detail.inputNeeded', { carrier: name })} onClose={onClose}>
+  return <Sheet title={t('detail.inputNeededAction')} intro={t(askedKey(own), { carrier: name })} onClose={onClose}>
     {(dismiss) => <form onSubmit={(event) => void add(event, dismiss)} noValidate>
       <div className="peeks-gift">
         <label htmlFor={field}>{t('add.requirement.dpdPostcode')}</label>
