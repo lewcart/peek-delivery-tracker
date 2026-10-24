@@ -1285,6 +1285,7 @@ export const CARRIER_DECALS: Record<string, CarrierDecal> = {
   "yunda": "yunda",
   "yunexpress": "yunexpress",
   "yurtici-kargo": "yurtici-kargo",
+  "ywe": "ywe",
   "zajil": "zajil",
   "zeleris": "zeleris",
   "zheldor": "zheldor",
@@ -14647,6 +14648,20 @@ export const CARRIER_TRUCK: TruckGeometry = {
       {
         "type": "polygon",
         "d": "M18.4 5.91L12.67 13.39L12.36 9.79L11.31 9.87L10.28 10.07L9.2 10.38L8.02 10.84L6.71 11.46L5.58 12.08L4.58 12.69L3.6 13.36L4.19 12.69L5.12 11.77L6.17 10.84L7.4 9.92L8.84 8.99L10.59 8.07L12.41 7.3L14.29 6.68L16.27 6.22L17.58 6.01Z",
+        "fill": "accent"
+      }
+    ],
+    "ywe": [
+      {
+        "type": "polygon",
+        "d": "M7.13 7.02L9.98 7.01L11.13 8.72L14.26 5.74L14.25 7.24L11.8 9.62L11.77 10.29L13.01 9.14L13.16 10.33L15.63 7.98L15.64 9.31L13.11 11.8L12.96 10.61L10.71 12.77L10.64 10.8L7.84 13.58L6.36 13.6L10.96 8.9L8.28 8.87Z",
+        "fill": "accent"
+      },
+      {
+        "type": "circle",
+        "cx": 11.5,
+        "cy": 5.92,
+        "r": 1.12,
         "fill": "accent"
       }
     ]
