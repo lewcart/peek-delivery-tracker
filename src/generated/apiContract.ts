@@ -247,6 +247,10 @@ export const CARRIER_CAPABILITIES = {
         "confidence": "low"
       },
       {
+        "pattern": "^GFUS\\d{14}$",
+        "confidence": "low"
+      },
+      {
         "pattern": "^ECSC00AARO\\d{8}$",
         "confidence": "low"
       },
@@ -3517,7 +3521,8 @@ export const CARRIER_CAPABILITIES = {
     "timezone": "UTC",
     "tracking": {
       "mode": "automatic",
-      "adapter": "gofo"
+      "adapter": "gofo",
+      "recognitionRank": 475
     },
     "linkRules": [
       {
@@ -3541,7 +3546,7 @@ export const CARRIER_CAPABILITIES = {
     "detectionRules": [
       {
         "pattern": "^GFUS\\d{14}$",
-        "confidence": "high"
+        "confidence": "low"
       },
       {
         "pattern": "^GF\\d{13}$",
