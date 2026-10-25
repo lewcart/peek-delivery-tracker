@@ -1071,6 +1071,21 @@ function FlatPack() {
   </>;
 }
 
+function Bag() {
+  return <>
+    <path d="M40 248H600" stroke={line} strokeWidth="4" strokeLinecap="round" />
+    <Truck x={40} y={172} tone="rose" scale={4} />
+    <path d="M190 150C216 116 248 106 276 114" stroke="var(--rose)" strokeWidth="4" strokeLinecap="round" strokeDasharray="3 12" />
+    {/* A paper shopping bag with rope handles, and Pip peeking out of it. */}
+    <path d="M326 150C326 64 444 64 444 150" stroke="var(--rose)" strokeWidth="6" strokeLinecap="round" />
+    <Pip x={385} ground={176} width={108} mood="eager" side={-1} />
+    <rect x="292" y="155" width="186" height="96" rx="6" fill={ink} opacity=".07" />
+    <rect x="292" y="152" width="186" height="96" rx="6" fill={paper} />
+    <path d="M292 152l14 14M478 152l-14 14" stroke={line} strokeWidth="2" strokeLinecap="round" />
+    <rect x="292" y="206" width="186" height="14" fill="var(--rose)" opacity=".85" />
+  </>;
+}
+
 const SCENES: Record<string, { tone: string; draw: () => ReactNode }> = {
   'tracking-number-formats': { tone: 'blue', draw: Formats },
   'tracking-statuses': { tone: 'green', draw: Statuses },
@@ -1097,6 +1112,7 @@ const SCENES: Record<string, { tone: string; draw: () => ReactNode }> = {
   'worten-orders': { tone: 'rose', draw: Appliance },
   'galaxus-orders': { tone: 'lilac', draw: Shelves },
   'ikea-orders': { tone: 'blue', draw: FlatPack },
+  'zara-orders': { tone: 'rose', draw: Bag },
   'find-tracking-number': { tone: 'ochre', draw: FindNumber },
   'universal-tracker': { tone: 'green', draw: Universal },
   'christmas-posting-dates': { tone: 'blue', draw: Christmas },

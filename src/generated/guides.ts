@@ -132,6 +132,11 @@ export const GUIDE_LINKS: Record<Locale, readonly GuideLink[]> = {
       "title": "IKEA order tracking: parcels, truck delivery and problems"
     },
     {
+      "id": "zara-orders",
+      "slug": "zara-order-tracking",
+      "title": "Zara order tracking: delivery, returns and problems"
+    },
+    {
       "id": "find-tracking-number",
       "slug": "how-to-find-tracking-number",
       "title": "How to find your tracking number, or track without one"
@@ -322,6 +327,11 @@ export const GUIDE_LINKS: Record<Locale, readonly GuideLink[]> = {
       "id": "ikea-orders",
       "slug": "ikea-sendungsverfolgung",
       "title": "IKEA Sendungsverfolgung: Paket, Spedition und Probleme"
+    },
+    {
+      "id": "zara-orders",
+      "slug": "zara-sendungsverfolgung",
+      "title": "Zara Sendungsverfolgung: Lieferung, Rückgabe, Probleme"
     },
     {
       "id": "find-tracking-number",
@@ -516,6 +526,11 @@ export const GUIDE_LINKS: Record<Locale, readonly GuideLink[]> = {
       "title": "Suivi de commande IKEA\u00a0: colis, camion et problèmes"
     },
     {
+      "id": "zara-orders",
+      "slug": "suivi-commande-zara",
+      "title": "Suivi de commande Zara\u00a0: livraison, retours et problèmes"
+    },
+    {
       "id": "find-tracking-number",
       "slug": "ou-trouver-numero-de-suivi",
       "title": "Où trouver son numéro de suivi, et comment faire sans"
@@ -706,6 +721,11 @@ export const GUIDE_LINKS: Record<Locale, readonly GuideLink[]> = {
       "id": "ikea-orders",
       "slug": "tracciamento-ordine-ikea",
       "title": "Tracciamento ordine IKEA: pacchi, camion e problemi"
+    },
+    {
+      "id": "zara-orders",
+      "slug": "tracciamento-ordine-zara",
+      "title": "Tracciamento ordine Zara: spedizione, consegna e problemi"
     },
     {
       "id": "find-tracking-number",
@@ -900,6 +920,11 @@ export const GUIDE_LINKS: Record<Locale, readonly GuideLink[]> = {
       "title": "Seguimiento de pedidos IKEA: paquetes, camión y problemas"
     },
     {
+      "id": "zara-orders",
+      "slug": "seguimiento-pedido-zara",
+      "title": "Seguimiento de pedidos Zara: envío, entrega y problemas"
+    },
+    {
       "id": "find-tracking-number",
       "slug": "localizar-paquete-sin-numero-de-seguimiento",
       "title": "Cómo localizar un paquete sin número de seguimiento"
@@ -1092,6 +1117,11 @@ export const GUIDE_LINKS: Record<Locale, readonly GuideLink[]> = {
       "title": "Seguimento da encomenda IKEA: DPD, camião e problemas"
     },
     {
+      "id": "zara-orders",
+      "slug": "seguimento-encomenda-zara",
+      "title": "Seguimento da encomenda Zara: envio, entrega e problemas"
+    },
+    {
       "id": "find-tracking-number",
       "slug": "onde-encontrar-numero-de-seguimento",
       "title": "Onde encontrar o número de seguimento da encomenda"
@@ -1282,6 +1312,11 @@ export const GUIDE_LINKS: Record<Locale, readonly GuideLink[]> = {
       "id": "ikea-orders",
       "slug": "sledzenie-zamowienia-ikea",
       "title": "Śledzenie zamówienia IKEA: GLS, InPost, transport i problemy"
+    },
+    {
+      "id": "zara-orders",
+      "slug": "sledzenie-zamowienia-zara",
+      "title": "Śledzenie zamówienia Zara: dostawa, zwroty i problemy"
     },
     {
       "id": "find-tracking-number",
