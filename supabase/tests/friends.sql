@@ -36,8 +36,8 @@ begin
  exception when invalid_parameter_value then null; end;
  perform public.friends_action('save_profile','A friend',true,false);
  view := public.friends_snapshot();
- -- The server fills in a shared card's counts and stamps.
- if view#>'{ownCard,stats}' <> '{"deliveredCount":0,"averageDays":null,"stamps":[]}' or view#>'{ownCard,arrivedThisWeek}' <> 'null' then raise exception 'Incorrect private summary: %',view; end if;
+ -- The server works out a shared card's counts and stamps.
+ if view#>'{ownCard,sharesStats}' is distinct from 'true' or view->'ownCard' ? 'stats' or view#>'{ownCard,arrivedThisWeek}' <> 'null' then raise exception 'Incorrect private summary: %',view; end if;
  code := public.friends_action('create_invite')->>'inviteCode';
  begin
    perform public.friends_action('accept_invite',p_code=>code);
@@ -72,11 +72,11 @@ begin
  perform set_config('request.jwt.claim.sub',b::text,true);
  if jsonb_array_length(public.friends_snapshot()->'friends') <> 1 then raise exception 'Stranger removed another connection'; end if;
  perform set_config('request.jwt.claim.sub',a::text,true);
- if public.friends_snapshot()#>'{friends,0,stats}' <> 'null' then raise exception 'Opted-out stats leaked'; end if;
+ if public.friends_snapshot()#>'{friends,0,sharesStats}' is distinct from 'false' then raise exception 'Opted-out stats leaked'; end if;
  perform public.friends_action('save_profile','A friend',false,true);
  perform set_config('request.jwt.claim.sub',b::text,true);
  view := public.friends_snapshot();
- if view#>'{friends,0,stats}' <> 'null' then raise exception 'Privacy preference ignored'; end if;
+ if view#>'{friends,0,sharesStats}' is distinct from 'false' then raise exception 'Privacy preference ignored'; end if;
  if jsonb_typeof(view#>'{friends,0,arrivedThisWeek}') <> 'boolean' then raise exception 'Arrival signal is not coarse'; end if;
  perform public.friends_action('remove_friend',p_friend_id=>friend_id);
  if public.friends_snapshot()->'friends' <> '[]' then raise exception 'Removal did not revoke access'; end if;
@@ -102,7 +102,7 @@ begin
     or view#>'{profile,shareArrival}' <> 'false' then raise exception 'Friends could not be enabled again'; end if;
  view := public.friends_action('accept_invite',p_code=>code)->'snapshot';
  if jsonb_array_length(view->'friends') <> 1 or view#>>'{friends,0,nickname}' <> 'B friend'
-    or view#>'{ownCard,stats}' <> 'null' then raise exception 'Re-enabled user could not accept privately: %',view; end if;
+    or view#>'{ownCard,sharesStats}' is distinct from 'false' then raise exception 'Re-enabled user could not accept privately: %',view; end if;
 end $$;
 reset role;
 

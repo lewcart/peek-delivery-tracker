@@ -14,7 +14,7 @@ import type { ApiPackageRow } from '../generated/apiContract';
 const id = '11000000-0000-4000-8000-000000000001';
 const card = { id, nickname: 'Mila', stats: { deliveredCount: 12, averageDays: 3, stamps: ['first', 'ten'] }, arrivedThisWeek: null };
 const snapshot = { profile: { nickname: 'Alex', shareStats: true, shareArrival: false }, ownCard: card, friends: [card] };
-/** The card and snapshot as the server reads them, before it works out the shared stats. */
+/** The card and snapshot as the database gives them: the server works out the shared stats. */
 const storedCard = { id, nickname: 'Mila', sharesStats: true, arrivedThisWeek: null };
 const storedSnapshot = { ...snapshot, ownCard: storedCard, friends: [storedCard] };
 const owner = '11000000-0000-4000-8000-0000000000aa';
@@ -41,18 +41,15 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe('Friends privacy boundary', () => {
-  it('reads whether a card shares stats from its flag, or from the stats object the database gave before it', () => {
+  it('reads only whether a card shares stats, never stats the database gives', () => {
     expect(friendCard(storedCard)).toEqual(storedCard);
     expect(friendCard({ ...storedCard, sharesStats: false })).toEqual({ ...storedCard, sharesStats: false });
-    expect(friendsSnapshot(snapshot)).toEqual(storedSnapshot);
-    expect(friendCard({ ...card, stats: null })).toEqual({ ...storedCard, sharesStats: false });
+    expect(friendsSnapshot({ ...storedSnapshot, ownCard: { ...storedCard, stats: card.stats } })).toEqual(storedSnapshot);
   });
 
   it('works out a shared card with the app\'s Passport rules over its owner\'s parcels, and sends only its counts and stamps', async () => {
     const hidden = '11000000-0000-4000-8000-000000000002', stopped = '11000000-0000-4000-8000-000000000003';
-    // The database's own stamps for the card are not the app's: the server's replace them.
-    const sql = { ...card, stats: { deliveredCount: 1, averageDays: 9, stamps: ['first', 'express'] } };
-    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ ...snapshot, ownCard: sql, friends: [sql, { ...card, id: hidden, stats: null }, { ...card, id: stopped }] });
+    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ ...storedSnapshot, friends: [storedCard, { ...storedCard, id: hidden, sharesStats: false }, { ...storedCard, id: stopped }] });
     const sharers = vi.mocked(SupabaseServiceClient.prototype.passportSharers);
     const read = vi.mocked(SupabaseServiceClient.prototype.listAccountPackages);
     const response = await call();
@@ -67,13 +64,12 @@ describe('Friends privacy boundary', () => {
     expect(JSON.stringify(body)).not.toMatch(/PRIVATE|Private/);
     expect(JSON.stringify(body)).not.toContain(owner);
     // An accepted friend's card is worked out the same way.
-    // So is one the database gives with only its flag.
     vi.mocked(SupabaseUserClient.prototype.request).mockResolvedValue({ snapshot: storedSnapshot, acceptedFriend: storedCard });
     expect(await (await call({ action: 'accept_invite', code: 'a'.repeat(32) })).json()).toEqual({ snapshot, acceptedFriend: card });
   });
 
   it('counts a code that is also a state toward a friend\'s stamps only where the server placed the scan', async () => {
-    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue(snapshot);
+    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue(storedSnapshot);
     vi.mocked(SupabaseServiceClient.prototype.listAccountPackages).mockResolvedValue([
       stored(0, [['accepted', '2026-08-04T10:00:00Z', 'Haiger, DE'], ['delivered', '2026-08-05T10:00:00Z', 'Koblenz, DE']]),
     ]);
@@ -95,17 +91,17 @@ describe('Friends privacy boundary', () => {
     expect(friendsAction({ action: 'acknowledge_friend', friendId: id })).toEqual({ action: 'acknowledge_friend', friendId: id });
   });
   it('includes the accepted profile without exposing extra fields', () => {
-    expect(friendsActionResponse({ snapshot, acceptedFriend: { ...card, email: 'private' } }, 'accept_invite')).toEqual({ snapshot: storedSnapshot, acceptedFriend: storedCard });
-    expect(friendsActionResponse({ snapshot, acceptedFriend: card }, 'save_profile')).toEqual({ snapshot: storedSnapshot });
+    expect(friendsActionResponse({ snapshot: storedSnapshot, acceptedFriend: { ...storedCard, email: 'private' } }, 'accept_invite')).toEqual({ snapshot: storedSnapshot, acceptedFriend: storedCard });
+    expect(friendsActionResponse({ snapshot: storedSnapshot, acceptedFriend: storedCard }, 'save_profile')).toEqual({ snapshot: storedSnapshot });
   });
   it('projects an allowlist at every nesting level, excluding all parcel and account data', async () => {
-    const privateCard = { ...card, email: 'private@example.test', trackingNumber: 'PRIVATE123', parcel: { label: 'Private purchase' }, stats: { ...card.stats, location: 'Private address' } };
-    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ ...snapshot, ownCard: privateCard, friends: [privateCard], invites: ['secret-code'] });
+    const privateCard = { ...storedCard, email: 'private@example.test', trackingNumber: 'PRIVATE123', parcel: { label: 'Private purchase' }, stats: { ...card.stats, location: 'Private address' } };
+    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ ...storedSnapshot, ownCard: privateCard, friends: [privateCard], invites: ['secret-code'] });
     const response = await call(); expect(response.status).toBe(200); expect(response.headers.get('cache-control')).toBe('no-store');
     expect(await response.json()).toEqual(snapshot);
   });
   it('exports the owner’s profile and connections without copying friends’ statistics', async () => {
-    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue(snapshot);
+    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue(storedSnapshot);
     vi.spyOn(SupabaseUserClient.prototype, 'listPackages').mockResolvedValue([]);
     vi.spyOn(SupabaseServiceClient.prototype, 'accountLastOpened').mockResolvedValue(null);
     const response = await exportGET(new NextRequest('https://delivery.example/api/account/export', { headers: { Authorization: 'Bearer friends-export-test' } }), { params: Promise.resolve({}) });
@@ -117,7 +113,7 @@ describe('Friends privacy boundary', () => {
     expect(exported.friends.connections[0]).not.toHaveProperty('stats');
   });
   it('uses the authenticated database RPC, never a client-supplied owner', async () => {
-    const rpc = vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ snapshot });
+    const rpc = vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ snapshot: storedSnapshot });
     expect((await call({ action: 'save_profile', nickname: ' Alex ', shareStats: true, shareArrival: false })).status).toBe(200);
     expect(rpc).toHaveBeenCalledWith('/rest/v1/rpc/friends_action', { method: 'POST', body: { p_action: 'save_profile', p_nickname: 'Alex', p_share_stats: true, p_share_arrival: false, p_code: null, p_friend_id: null } });
     expect((await call({ action: 'disable', userId: id })).status).toBe(400);
@@ -135,7 +131,7 @@ describe('Friends privacy boundary', () => {
     for (const body of [{ action: 'revoke_previous_invites' }, { action: 'revoke_invite', code: null }, { action: 'revoke_previous_invites', code: 'short' }, { action: 'revoke_previous_invites', code, userId: id }]) {
       expect(() => friendsAction(body)).toThrow();
     }
-    const rpc = vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ snapshot, previousInviteCount: 0 });
+    const rpc = vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ snapshot: storedSnapshot, previousInviteCount: 0 });
     const response = await call({ action: 'revoke_previous_invites', code });
     expect(await response.json()).toEqual({ snapshot, previousInviteCount: 0 });
     expect(rpc).toHaveBeenCalledWith('/rest/v1/rpc/friends_action', { method: 'POST', body: { p_action: 'revoke_previous_invites', p_code: code, p_nickname: null, p_share_stats: null, p_share_arrival: null, p_friend_id: null } });
@@ -146,11 +142,11 @@ describe('Friends privacy boundary', () => {
     expect(friendsActionResponse({ previewNickname: 'Paul', previousInviteCount: 6 }, 'preview_invite')).toEqual({ previewNickname: 'Paul' });
     for (const previousInviteCount of [-1, 1.5, '6', null, Number.MAX_SAFE_INTEGER + 1]) {
       expect(() => friendsActionResponse({ ...invite, previousInviteCount }, 'create_invite')).toThrow();
-      expect(() => friendsActionResponse({ snapshot, previousInviteCount }, 'revoke_previous_invites')).toThrow();
+      expect(() => friendsActionResponse({ snapshot: storedSnapshot, previousInviteCount }, 'revoke_previous_invites')).toThrow();
     }
   });
   it('revokes the caller’s outstanding invitations without needing a saved link or accepting another owner', async () => {
-    const rpc = vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ snapshot });
+    const rpc = vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ snapshot: storedSnapshot });
     expect((await call({ action: 'revoke_invite' }, false)).status).toBe(401);
     expect((await call({ action: 'revoke_invite', userId: id })).status).toBe(400);
     expect(rpc).not.toHaveBeenCalled();
@@ -172,12 +168,12 @@ describe('Friends privacy boundary', () => {
     { action: 'remove_friend', friendId: 'not-an-id' }, { action: 'bad' }, { action: '__proto__' }, { action: 1 },
   ])('rejects malformed or extra fields: %j', (body) => { expect(() => friendsAction(body)).toThrow(); });
   it('round-trips hidden stats and absent profiles without filling fake data', () => {
-    expect(friendCard({ ...card, stats: null, arrivedThisWeek: false })).toEqual({ ...storedCard, sharesStats: false, arrivedThisWeek: false });
+    expect(friendCard({ ...storedCard, sharesStats: false, arrivedThisWeek: false })).toEqual({ ...storedCard, sharesStats: false, arrivedThisWeek: false });
     expect(friendsSnapshot({ profile: null, ownCard: null, friends: [] })).toEqual({ profile: null, ownCard: null, friends: [] });
-    expect(() => friendsSnapshot({ profile: null, ownCard: card, friends: [card] })).toThrow();
-    expect(() => friendsSnapshot({ ...snapshot, friends: Array(51).fill(card) })).toThrow();
+    expect(() => friendsSnapshot({ profile: null, ownCard: storedCard, friends: [storedCard] })).toThrow();
+    expect(() => friendsSnapshot({ ...storedSnapshot, friends: Array(51).fill(storedCard) })).toThrow();
   });
-  it.each([null, {}, { ...card, stats: 12 }, { ...card, stats: undefined, sharesStats: 'true' }, { ...card, arrivedThisWeek: '2026-09-09T12:13:14Z' }])('fails closed on malformed summaries: %j', (value) => { expect(() => friendCard(value)).toThrow(); });
+  it.each([null, {}, card, { ...storedCard, sharesStats: 'true' }, { ...storedCard, arrivedThisWeek: '2026-09-09T12:13:14Z' }])('fails closed on malformed summaries: %j', (value) => { expect(() => friendCard(value)).toThrow(); });
   it('strips invitation metadata and prevents previewing any stats', () => {
     expect(friendsActionResponse({ previewNickname: 'Mila', ...card }, 'preview_invite')).toEqual({ previewNickname: 'Mila' });
     expect(friendsActionResponse({ inviteCode: 'a'.repeat(32), expiresAt: '2026-09-16T00:00:00Z', userId: id }, 'create_invite')).toEqual({ inviteCode: 'a'.repeat(32), expiresAt: '2026-09-16T00:00:00Z' });
@@ -201,7 +197,7 @@ describe('Friends privacy boundary', () => {
 
 it('accepts standalone keys only through the authenticated action endpoint', async () => {
   const code = 'Ab7kP2mQ9xR4tY6n';
-  const rpc = vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ snapshot });
+  const rpc = vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ snapshot: storedSnapshot });
   expect((await call({ action: 'accept_invite', code }, false)).status).toBe(401);
   expect(rpc).not.toHaveBeenCalled();
   expect((await call({ action: 'accept_invite', code })).status).toBe(200);
@@ -221,9 +217,9 @@ it.each(['already_accepted', 'already_friends'] as const)('returns the private %
   const response = await call({ action: 'preview_invite', code: 'ab'.repeat(16) });
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual(result);
-  expect(friendsActionResponse({ snapshot, invitationState, acceptedFriend: card }, 'accept_invite')).toEqual({ snapshot: storedSnapshot, invitationState });
+  expect(friendsActionResponse({ snapshot: storedSnapshot, invitationState, acceptedFriend: storedCard }, 'accept_invite')).toEqual({ snapshot: storedSnapshot, invitationState });
 });
 it.each(['unknown', null, 123])('rejects malformed invitation outcomes: %s', (invitationState) => {
   expect(() => friendsActionResponse({ previewNickname: 'Paul', invitationState }, 'preview_invite')).toThrow();
-  expect(() => friendsActionResponse({ snapshot, invitationState }, 'accept_invite')).toThrow();
+  expect(() => friendsActionResponse({ snapshot: storedSnapshot, invitationState }, 'accept_invite')).toThrow();
 });

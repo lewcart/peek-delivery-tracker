@@ -72,16 +72,10 @@ function profile(value: unknown): ApiFriendProfile | null {
 export type StoredFriendCard = Omit<ApiFriendCard, 'stats'> & { sharesStats: boolean };
 export type StoredFriendsSnapshot = Omit<ApiFriendsSnapshot, 'ownCard' | 'friends'> & { ownCard: StoredFriendCard | null; friends: StoredFriendCard[] };
 type StoredFriendsActionResponse = Omit<ApiFriendsActionResponse, 'snapshot' | 'acceptedFriend'> & { snapshot?: StoredFriendsSnapshot; acceptedFriend?: StoredFriendCard };
-/**
- * Explicit projection is a second boundary: adding a DB field can never publish it. A card shares
- * stats by its flag, or by the stats object the database gave before it had one, whose contents
- * nothing reads.
- */
+/** Explicit projection is a second boundary: adding a DB field can never publish it. */
 export function friendCard(value: unknown): StoredFriendCard {
-  if (!isRecord(value) || typeof value.id !== 'string' || !uuid.test(value.id) || !nickname(value.nickname) || !(value.arrivedThisWeek === null || typeof value.arrivedThisWeek === 'boolean')) return corrupt();
-  const sharesStats = typeof value.sharesStats === 'boolean' ? value.sharesStats
-    : value.stats === null ? false : isRecord(value.stats) ? true : corrupt();
-  return { id: value.id, nickname: value.nickname, sharesStats, arrivedThisWeek: value.arrivedThisWeek };
+  if (!isRecord(value) || typeof value.id !== 'string' || !uuid.test(value.id) || !nickname(value.nickname) || typeof value.sharesStats !== 'boolean' || !(value.arrivedThisWeek === null || typeof value.arrivedThisWeek === 'boolean')) return corrupt();
+  return { id: value.id, nickname: value.nickname, sharesStats: value.sharesStats, arrivedThisWeek: value.arrivedThisWeek };
 }
 export function friendsSnapshot(value: unknown): StoredFriendsSnapshot {
   if (!isRecord(value) || !Array.isArray(value.friends) || value.friends.length > 50) return corrupt();
