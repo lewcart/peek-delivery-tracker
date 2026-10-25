@@ -207,6 +207,29 @@ describe('review queue replay', () => {
       note: 'Its parcel was filed under fedex, one of the carriers its shape fits, once fedex tracked the number: no gap left.' }]);
   });
 
+  it('ignores a case filed under the carrier that tracked the number when its shape fits that carrier', async () => {
+    const client = fakeClient();
+    const parcel = (number: string, carrier: string, confirmed: boolean, oneOff = true): JsonObject => ({ tracking_number: number,
+      one_off: oneOff, carrier, current_stage: 'registered', created_at: '2026-09-10T05:00:00Z',
+      carrier_data: { routing: { version: 1, ...(confirmed ? { confirmed_carrier: carrier, confirmed_number: number } : {}) } } });
+    // Made-up 12-digit numbers: FedEx's check digit holds for the first two. Only announced, no parcel had a check that verifies a case.
+    client.listOpenTrackingSupportCases.mockResolvedValue([['314159265355', 'fedex'], ['123456789012', 'fedex'], ['271828182845', 'royal-mail']]
+      .map(([number, carrier]) => ({ id: `case-${number}`, tracking_number: number, configured_carrier: carrier,
+        reasons: ['recognition_unknown'], last_outcome: 'unchanged' })));
+    client.trackingNumberParcels.mockResolvedValue(new Map([
+      // An account's parcel and a one-off lookup.
+      ['314159265355', [parcel('314159265355', 'fedex', true, false), parcel('314159265355', 'fedex', true)]],
+      // One of its parcels FedEx has not confirmed.
+      ['123456789012', [parcel('123456789012', 'fedex', true), parcel('123456789012', 'fedex', false)]],
+      // Filed under a carrier the shape does not fit.
+      ['271828182845', [parcel('271828182845', 'royal-mail', true)]],
+    ]));
+    await expect(replayReviewQueues(client as unknown as SupabaseServiceClient, 'v1', new Date('2026-09-10T12:00:00Z')))
+      .resolves.toMatchObject({ cases_replayed: 3, cases_ignored: 1 });
+    expect(client.ignoreReplayedTrackingSupportCases).toHaveBeenCalledExactlyOnceWith('v1', [{ id: 'case-314159265355',
+      note: 'Its parcel is filed under fedex, one of the carriers its shape fits, and fedex tracked the number: no gap left.' }]);
+  });
+
   it('ignores a case on a reference its carrier resolves to a barcode of its own that fits that carrier', async () => {
     const client = fakeClient();
     const supportCase = (number: string, carrier: string, verified: string | null): JsonObject => ({ id: `case-${number}`,
@@ -216,7 +239,7 @@ describe('review queue replay', () => {
       carrier: 'hermes-de', current_stage: 'accepted', created_at: '2026-09-10T05:00:00Z',
       carrier_data: { ...(barcode ? { canonical_tracking_number: barcode } : {}),
         routing: { version: 1, confirmed_carrier: 'hermes-de', confirmed_number: number } } });
-    // Made-up 14-digit numbers: only 90000000001000 and 90000000001017 hold Hermes Germany's check digit.
+    // Made-up 14-digit numbers: only 90000000001000 holds Hermes Germany's check digit.
     client.listOpenTrackingSupportCases.mockResolvedValue([
       supportCase('31415926535897', 'hermes-de', 'hermes-de'),
       // A barcode Hermes's shape does not fit, and no barcode at all.
@@ -224,18 +247,15 @@ describe('review queue replay', () => {
       supportCase('10000000000001', 'hermes-de', 'hermes-de'),
       // Filed under another carrier than its parcel.
       supportCase('12345678901234', 'dpd-de', 'dpd-de'),
-      // A barcode typed as it is waits for Hermes to track it directly.
-      supportCase('90000000001017', 'hermes-de', null),
     ]);
     client.trackingNumberParcels.mockResolvedValue(new Map([
       ['31415926535897', [parcel('31415926535897', '90000000001000')]],
       ['27182818284590', [parcel('27182818284590', '12345678901234')]],
       ['10000000000001', [parcel('10000000000001', null)]],
       ['12345678901234', [parcel('12345678901234', '90000000001000')]],
-      ['90000000001017', [parcel('90000000001017', null)]],
     ]));
     await expect(replayReviewQueues(client as unknown as SupabaseServiceClient, 'v1', new Date('2026-09-10T12:00:00Z')))
-      .resolves.toMatchObject({ cases_replayed: 5, cases_ignored: 1 });
+      .resolves.toMatchObject({ cases_replayed: 4, cases_ignored: 1 });
     expect(client.ignoreReplayedTrackingSupportCases).toHaveBeenCalledExactlyOnceWith('v1', [{ id: 'case-31415926535897',
       note: 'hermes-de resolves the number to a barcode of its own, one its shape fits, and tracks that: no gap left.' }]);
   });

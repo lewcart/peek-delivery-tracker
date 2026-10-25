@@ -106,12 +106,14 @@ export function unseenLookupNote(
 
 /**
  * A case whose parcels are all filed under the carrier that tracked the number, so no gap is
- * left. Its parcel's checks opened it while it was filed under no carrier, and a check then
- * filed it under a carrier its shape fits once that carrier tracked the number, such as FedEx,
- * which recognition asks only through a browser: a one-off lookup can leave the schedule after
- * that check, with no later one to clear the reasons. Or, filed under that carrier or none, the
- * number is a reference the carrier resolves to a barcode of its own (`canonical_tracking_number`)
- * that fits it, such as a Hermes Germany order number: every check keeps the reference's reasons.
+ * left. Filed under no carrier, its parcel's checks opened it before a check filed the parcel
+ * under a carrier its shape fits once that carrier tracked the number, such as FedEx, which
+ * recognition asks only through a browser. Filed under that carrier, only a check with dated
+ * progress verifies it, which a parcel the carrier only announced has not had. Either way a
+ * one-off lookup can leave the schedule with no later check to clear the reasons. Or, filed
+ * under that carrier or none, the number is a reference the carrier resolves to a barcode of its
+ * own (`canonical_tracking_number`) that fits it, such as a Hermes Germany order number: every
+ * check keeps the reference's reasons.
  */
 export function filedParcelNote(supportCase: JsonObject, parcels: readonly JsonObject[] | undefined): string | null {
   const confirmed = (parcels ?? []).map((parcel) => {
@@ -125,8 +127,10 @@ export function filedParcelNote(supportCase: JsonObject, parcels: readonly JsonO
   if (!unfiled && supportCase.configured_carrier !== carrier) return null;
   const fits = (number: string) => (trackingSupportContext(number, carrier, carrier).reasons as string[]).length === 0;
   const number = String(supportCase.tracking_number ?? '');
-  if (unfiled && fits(number)) {
-    return `Its parcel was filed under ${carrier}, one of the carriers its shape fits, once ${carrier} tracked the number: no gap left.`;
+  if (fits(number)) {
+    return unfiled
+      ? `Its parcel was filed under ${carrier}, one of the carriers its shape fits, once ${carrier} tracked the number: no gap left.`
+      : `Its parcel is filed under ${carrier}, one of the carriers its shape fits, and ${carrier} tracked the number: no gap left.`;
   }
   const barcodes = confirmed.map((parcel) => isRecord(parcel?.carrier_data) ? parcel.carrier_data.canonical_tracking_number : null)
     .filter((barcode): barcode is string => typeof barcode === 'string'
@@ -290,7 +294,7 @@ export async function replayReviewQueues(
     return note ? [{ id: String(supportCase.id), note }] : [];
   });
   // Nor are lookups nobody answered for once they leave the schedule, or once they are gone, nor
-  // parcels a check filed under the carrier that tracked the number, as typed or as its own barcode.
+  // parcels filed under the carrier that tracked the number, as typed or as its own barcode.
   const settled = new Set([...resolvedIds, ...pickupIds, ...finished.map(({ id }) => id)]);
   const remaining = cases.filter((supportCase) => !settled.has(String(supportCase.id)));
   const parcels = remaining.length ? await client.trackingNumberParcels(remaining.map((supportCase) => String(supportCase.tracking_number))) : new Map();
