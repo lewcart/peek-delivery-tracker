@@ -267,6 +267,10 @@ export const CARRIER_CAPABILITIES = {
         "confidence": "low"
       },
       {
+        "pattern": "^FMP5P\\d{2}D\\d{8}$",
+        "confidence": "low"
+      },
+      {
         "pattern": "^\\d{3}[A-Z]\\d{8}[A-Z]$",
         "confidence": "low"
       },
@@ -675,6 +679,11 @@ export const CARRIER_CAPABILITIES = {
       {
         "pattern": "^GM[0-9]{16,18}$",
         "confidence": "high"
+      },
+      {
+        "pattern": "^GM[0-9]{8,15}$",
+        "confidence": "low",
+        "preferred": true
       },
       {
         "pattern": "^[0-9]{16,17}$",
