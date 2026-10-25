@@ -736,10 +736,26 @@ final class CarrierCatalogTests: XCTestCase {
             ("Sendungsnummer 0034 0434 1234 5678", "0034 0434 1234 5678"),
             ("Nr. 12345678", "12345678"),
             ("Numéro 12345678", "12345678"),
+            ("N° de suivi 12345678", "12345678"),
+            ("N°12345678", "12345678"),
+            ("Numéro de suivi : 12345678", "12345678"),
+            ("numéro de colis 12345678", "12345678"),
+            ("Suivi: 12345678", "12345678"),
+            ("Trackingnummer: 12345678", "12345678"),
+            ("Nº de seguimiento: 12345678", "12345678"),
+            ("número de envío 12345678", "12345678"),
+            ("numero di tracciamento 12345678", "12345678"),
+            ("n.º de rastreio 12345678", "12345678"),
+            ("Numer przesyłki 12345678", "12345678"),
         ] {
             let parsed = catalog.parse(text)
             XCTAssertEqual(parsed.trackingNumber, number, text)
             XCTAssertEqual(parsed.source, .text, text)
+        }
+        // No other number a label names is taken for the tracking number.
+        for text in ["numéro de commande 12345678", "número de pedido 12345678", "suivi 5555666677 ou 7777888899"] {
+            XCTAssertEqual(catalog.parse(text).trackingNumber, "", text)
+            XCTAssertEqual(catalog.parse(text).source, TrackingInputMatch.Source.none, text)
         }
         // Letters a carrier prints apart from its digits stay on the number.
         for text in ["QZX 123456", "ABCD 1234567", "LP 00123456789012", "1111 2222 3333 4444", "1Z 999 AA1 01 2345 6784", "abholcode123456"] {

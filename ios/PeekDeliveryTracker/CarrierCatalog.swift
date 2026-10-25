@@ -827,10 +827,16 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
     private static let alternativeWords: Set<String> = ["or", "oder", "ou", "o", "of", "lub"]
 
     /// A word naming the code after it, alone or after another word ("Pickup code"), and the rest of
-    /// the entry. German and Dutch join theirs into one word: Abholcode, Sendungsnummer.
-    private static let entryLabelPattern =
-        "^(?:\\p{L}+\\s+)?(?:\\p{L}*(?:code|nummer)|number|numer|numero|número|numéro|nr|kod|codice|codigo|código)"
-        + "[.:#\\s]+(?=[0-9])([\\s\\S]*)"
+    /// the entry. German and Dutch join theirs into one word: Abholcode, Sendungsnummer. French,
+    /// Spanish, Italian and Portuguese name what the number tracks after a preposition ("N° de suivi",
+    /// "número de seguimiento", "numero di tracciamento"), Polish after the word ("numer przesyłki"),
+    /// and the tracking word can stand alone ("Suivi"). "N°" can touch its digits.
+    private static let entryLabelPattern: String = {
+        let tracked = "suivi|seguimiento|tracciamento|rastreio|rastreamento|tracking"
+        return "^(?:\\p{L}+\\s+)?(?:(?:\\p{L}*(?:code|nummer)|number|numer|numero|número|numéro|nr|n\\.?[°º]|kod|codice|codigo|código)"
+            + "(?:\\s+(?:(?:de|du|del|di|do|da)\\s+(?:\(tracked)|colis|envío|envio|spedizione)|przesyłki|paczki))?|\(tracked))"
+            + "(?:[.:#\\s]+|(?<=[°º]))(?=[0-9])([\\s\\S]*)"
+    }()
 
     /// The number a short entry holds whole, groups a label prints apart included, as in
     /// "1Z 999 AA1 01 2345 6784", as the shared engine reads it (`numberEnteredWhole`). A word offering
