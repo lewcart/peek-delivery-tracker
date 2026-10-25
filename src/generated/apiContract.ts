@@ -13366,10 +13366,16 @@ export const CARRIER_CAPABILITIES = {
     "tracking": {
       "mode": "automatic",
       "adapter": "sending",
-      "recognitionRank": 891
+      "recognitionRank": 891,
+      "recognitionServedCountriesOnly": true
     },
     "linkRules": [],
-    "detectionRules": [],
+    "detectionRules": [
+      {
+        "pattern": "^\\d{12}$",
+        "confidence": "low"
+      }
+    ],
     "trackingSearchUrl": "https://www.sending.es/localiza-tu-envio/"
   },
   "serpost": {
@@ -31384,6 +31390,35 @@ export const CARRIER_CAPABILITIES = {
     ],
     "detectionRules": [],
     "trackingSearchUrl": "https://receiver.nowcouriers.co.nz/"
+  },
+  "intel-valley": {
+    "displayName": "Intel-Valley",
+    "aliases": [
+      "INTEL-VALLEY",
+      "Intel Valley",
+      "Intel-Valley Supply Chain",
+      "Intel-Valley Supply Chain Shenzhen",
+      "智谷供应链",
+      "智谷供应链（深圳）有限公司"
+    ],
+    "countries": [
+      "CN"
+    ],
+    "color": "#00a3ff",
+    "selectable": true,
+    "timezone": "Asia/Shanghai",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "intel-valley",
+      "recognitionRank": 66
+    },
+    "linkRules": [],
+    "detectionRules": [
+      {
+        "pattern": "^IV\\d{12}$",
+        "confidence": "low"
+      }
+    ]
   }
 } as const;
 
@@ -32230,7 +32265,8 @@ export const CARRIER_IDS = [
   "ywe",
   "far-international",
   "castle-parcels",
-  "now-couriers"
+  "now-couriers",
+  "intel-valley"
 ] as const;
 export type ApiCarrierId = (typeof CARRIER_IDS)[number];
 
