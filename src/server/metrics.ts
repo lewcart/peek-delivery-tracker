@@ -55,6 +55,7 @@ interface PrometheusRuntime {
   parcelAlertSetTotal: Counter<'outcome' | 'app'>;
   parcelAlertRemovedTotal: Counter<'reason'>;
   parcelAlertSentTotal: Counter<'outcome' | 'app'>;
+  accountPushSentTotal: Counter<'outcome' | 'app'>;
   parcelFeedbackTotal: Counter<'answer' | 'via' | 'app' | 'outcome'>;
   deliveryEmailTotal: Counter<'outcome' | 'reason'>;
   providerInputTotal: Counter<'provider' | 'step'>;
@@ -184,6 +185,12 @@ function createRuntime(): PrometheusRuntime {
     parcelAlertSentTotal: new Counter({
       name: 'parcel_alert_sent_total',
       help: 'Batches of new scans handled for a parcel link alert by outcome (sent, skipped, failed, expired) and app (web, ios).',
+      labelNames: ['outcome', 'app'] as const,
+      registers: [registry],
+    }),
+    accountPushSentTotal: new Counter({
+      name: 'account_push_sent_total',
+      help: 'Batches of new scans of an account\'s parcel handled for one of its browsers or iPhones by outcome (sent, skipped, failed, expired) and app (web, ios).',
       labelNames: ['outcome', 'app'] as const,
       registers: [registry],
     }),
@@ -460,6 +467,11 @@ export function recordParcelAlertRemoved(reason: 'asked' | 'delivered' | 'expire
 /** One batch of new scans for one alert: announced, passed over, failed, or sent to a subscription that is gone. */
 export function recordParcelAlertSent(outcome: 'sent' | 'skipped' | 'failed' | 'expired', app: ParcelAlertApp): void {
   count(runtime.parcelAlertSentTotal, 'parcel_alert_sent_total', { outcome, app });
+}
+
+/** One batch of an account's new scans for one of its browsers or iPhones, as for a link's alert. */
+export function recordAccountPushSent(outcome: 'sent' | 'skipped' | 'failed' | 'expired', app: ParcelAlertApp): void {
+  count(runtime.accountPushSentTotal, 'account_push_sent_total', { outcome, app });
 }
 
 /**

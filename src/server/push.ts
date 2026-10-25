@@ -11,7 +11,7 @@ import { isLocale, type Locale } from '../lib/locale';
 import { languageTags } from '../lib/messages';
 import { ALERT_PRESET_STAGES } from '../lib/notificationPresets';
 import { capitalized } from '../peek/parcel/summary';
-import { recordParcelAlertRemoved, recordParcelAlertSent } from './metrics';
+import { recordAccountPushSent, recordParcelAlertRemoved, recordParcelAlertSent } from './metrics';
 import { errorType, logOperationalEvent } from './observability';
 import { providerCopies } from './providerCopies';
 import { lateScans, relayRepeats } from './relayCopies';
@@ -559,6 +559,7 @@ export class WebPushNotificationService {
       const subscriptionId = stringField(events[0]!, 'subscription_id');
       if (!newest || putAway(newest, times) || isOldNews(newest, times, this.now())) {
         await this.client.recordPushDeliveries(subscriptionId, events.map((event) => stringField(event, 'event_id')).filter(Boolean));
+        recordAccountPushSent('skipped', 'web');
         continue;
       }
       summary.attempted += 1;
@@ -573,6 +574,7 @@ export class WebPushNotificationService {
           last_success_at: new Date().toISOString(),
           last_error: null,
         });
+        recordAccountPushSent('sent', 'web');
         summary.sent += 1;
       } catch (error) {
         signal?.throwIfAborted();
@@ -584,12 +586,14 @@ export class WebPushNotificationService {
             disabled_at: new Date().toISOString(),
             last_error: 'Push endpoint expired',
           });
+          recordAccountPushSent('expired', 'web');
           summary.expired += 1;
         } else {
           logDeliveryFailure('web', error);
           await this.client.updatePushSubscription(subscriptionId, {
             last_error: 'Push delivery failed',
           });
+          recordAccountPushSent('failed', 'web');
           summary.failed += 1;
         }
       }
@@ -923,6 +927,7 @@ export class NativePushNotificationService {
           deviceId,
           events.map((event) => stringField(event, 'event_id')).filter(Boolean),
         );
+        recordAccountPushSent('skipped', 'ios');
         continue;
       }
       summary.attempted += 1;
@@ -937,6 +942,7 @@ export class NativePushNotificationService {
           last_success_at: new Date().toISOString(),
           last_error: null,
         });
+        recordAccountPushSent('sent', 'ios');
         summary.sent += 1;
       } catch (error) {
         signal?.throwIfAborted();
@@ -945,12 +951,14 @@ export class NativePushNotificationService {
             disabled_at: new Date().toISOString(),
             last_error: 'APNs device token expired',
           });
+          recordAccountPushSent('expired', 'ios');
           summary.expired += 1;
         } else {
           logDeliveryFailure('native', error);
           await this.client.updateNativePushDevice(deviceId, {
             last_error: 'APNs delivery failed',
           });
+          recordAccountPushSent('failed', 'ios');
           summary.failed += 1;
         }
       }

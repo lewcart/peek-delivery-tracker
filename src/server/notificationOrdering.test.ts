@@ -1,7 +1,10 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { compareNotificationEvents, DeliveryLiveActivityNotificationService, NativePushNotificationService, WebPushNotificationService } from './push';
+import * as metrics from './metrics';
+import * as observability from './observability';
+import { APNsError, compareNotificationEvents, DeliveryLiveActivityNotificationService, NativePushNotificationService, WebPushNotificationService } from './push';
 import { SupabaseServiceClient } from './supabase';
+import type { JsonObject } from './types';
 
 const privateKey = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
 beforeEach(() => {
@@ -377,4 +380,37 @@ it.each(['web', 'native'] as const)('records an earlier carrier\'s scan told aft
   // A failed lookup announces as before.
   handoffs.mockRejectedValueOnce(new Error('down'));
   expect(await dispatched('late')).toEqual(['late']);
+});
+
+it.each(['web', 'native'] as const)('counts each batch by what became of it, for %s notifications', async (channel) => {
+  const client = new SupabaseServiceClient('https://example.test', 'test');
+  const clock = clocks('2026-10-08T12:00:30Z');
+  const apns = new NativePushNotificationService(client, 'team', 'key', privateKey, 'app', clock.apns);
+  const service = channel === 'web' ? new WebPushNotificationService(client, '', '', '', clock.web) : apns;
+  const batch = (to: string, package_id: string, occurred_at: string) => ({
+    subscription_id: to, device_id: to, package_id, event_id: `${to}-${package_id}`, stage: 'in_transit', occurred_at, event_created_at: '2026-10-08T12:00:00Z',
+  });
+  const pending = [
+    batch('sent', 'pkg', '2026-10-08T11:00:00Z'),
+    // A backfilled scan, hours older than the parcel's newest.
+    batch('sent', 'backfilled', '2026-10-08T03:00:00Z'),
+    batch('gone', 'pkg', '2026-10-08T11:00:00Z'),
+    batch('down', 'pkg', '2026-10-08T11:00:00Z'),
+  ];
+  vi.spyOn(client, 'latestScanTimes').mockResolvedValue(new Map([['pkg', '2026-10-08T11:00:00Z'], ['backfilled', '2026-10-08T11:00:00Z']]));
+  vi.spyOn(client, 'packageJoinTimes').mockResolvedValue(new Map([['pkg', '2026-10-01T08:00:00Z'], ['backfilled', '2026-10-01T08:00:00Z']]));
+  vi.spyOn(client, channel === 'web' ? 'listPendingPushNotifications' : 'listPendingNativePushNotifications').mockResolvedValue(pending);
+  vi.spyOn(client, channel === 'web' ? 'recordPushDeliveries' : 'recordNativePushDeliveries').mockResolvedValue();
+  vi.spyOn(client, channel === 'web' ? 'updatePushSubscription' : 'updateNativePushDevice').mockResolvedValue();
+  const gone = channel === 'web' ? Object.assign(new Error('Gone'), { statusCode: 410 }) : new APNsError(410, 'Unregistered');
+  const down = channel === 'web' ? Object.assign(new Error('Unavailable'), { statusCode: 503 }) : new APNsError(503, 'ServiceUnavailable');
+  vi.spyOn(service, 'send').mockImplementation(async (row: JsonObject) => {
+    if (row.subscription_id === 'gone') throw gone;
+    if (row.subscription_id === 'down') throw down;
+  });
+  vi.spyOn(observability, 'logOperationalEvent').mockReturnValue(undefined);
+  const counted = vi.spyOn(metrics, 'recordAccountPushSent');
+  expect(await service.dispatch()).toEqual({ attempted: 3, sent: 1, failed: 1, expired: 1 });
+  const app = channel === 'web' ? 'web' : 'ios';
+  expect([...counted.mock.calls].sort()).toEqual([['expired', app], ['failed', app], ['sent', app], ['skipped', app]]);
 });
