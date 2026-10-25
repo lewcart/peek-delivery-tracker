@@ -501,6 +501,7 @@ private struct DeliveryListView: View {
                         )
                 } detail: {
                     beside(layout)
+                        .toolbar { besideToolbar }
                 }
                 .navigationSplitViewStyle(.balanced)
                 // A fold turns the window compact a moment before the stack takes over. Folded into one column
@@ -815,32 +816,48 @@ private struct DeliveryListView: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            AccountToolbarButton { showingAccount = true }
-                .environment(\.keyboardInFront, keyboardFree)
+        if windowArrangement == .stacked {
+            ToolbarItem(placement: .topBarTrailing) { accountButton }
         }
 
-        // The mark stands at the leading edge on its own tile, not on a control's glass.
+        // The mark stands at the leading edge on its own tile, not on a control's glass. It is drawn as one image:
+        // beside a parcel, the list's bar draws an item's shapes with vibrancy, which greyed the eyes.
         if #available(iOS 26.0, *) {
-            ToolbarItem(placement: .topBarLeading) { PeekMark(size: 30) }
+            ToolbarItem(placement: .topBarLeading) { PeekMark(size: 30).drawingGroup() }
                 .sharedBackgroundVisibility(.hidden)
         } else {
-            ToolbarItem(placement: .topBarLeading) { PeekMark(size: 30) }
+            ToolbarItem(placement: .topBarLeading) { PeekMark(size: 30).drawingGroup() }
         }
 
-        ToolbarItem(placement: .topBarLeading) {
-            Button {
-                sharedDraft = nil
-                showingAdd = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Brand.ink)
-                    .frame(width: 34, height: 34)
-            }
-            .accessibilityLabel(localizer.text("app.addParcelAria"))
-            .dropDestination(for: DroppedText.self) { items, _ in addDropped(items) }
+        if windowArrangement == .stacked {
+            ToolbarItem(placement: .topBarLeading) { addButton }
         }
+    }
+
+    /// Beside a parcel, adding one and the account stand at the window's trailing edge with the parcel's menu,
+    /// as on an iPhone Duo, rather than in the list's bar.
+    @ToolbarContentBuilder private var besideToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) { addButton }
+        ToolbarItem(placement: .topBarTrailing) { accountButton }
+    }
+
+    private var addButton: some View {
+        Button {
+            sharedDraft = nil
+            showingAdd = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Brand.ink)
+                .frame(width: 34, height: 34)
+        }
+        .accessibilityLabel(localizer.text("app.addParcelAria"))
+        .dropDestination(for: DroppedText.self) { items, _ in addDropped(items) }
+    }
+
+    private var accountButton: some View {
+        AccountToolbarButton { showingAccount = true }
+            .environment(\.keyboardInFront, keyboardFree)
     }
 
     private func listOverview(_ layout: DeliveryListLayout) -> some View {
