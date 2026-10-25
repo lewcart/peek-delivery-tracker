@@ -134,9 +134,9 @@ describe('tracking event normalization', () => {
       ]);
     }
     // A stage the wording gives counts as much as a declared one, and so does the same instant.
-    expect(stages({ time: '2026-09-10T15:08:00Z', description: 'Return to origin' },
+    expect(stages({ time: '2026-09-10T15:08:00Z', description: 'Fixture scan' },
       { time: '2026-09-10T14:00:00Z', description: 'Refused by the recipient' })).toEqual([
-      ['Return to origin', 'pending'], ['Refused by the recipient', 'exception'],
+      ['Fixture scan', 'pending'], ['Refused by the recipient', 'exception'],
     ]);
     expect(stages(notice, { time: notice.time, description: 'Delivered' })).toEqual([
       ['Fixture notice 7', 'pending'], ['Delivered', 'delivered'],
