@@ -50,9 +50,9 @@
  *   dates it, a scan new to the parcel taking its row over, and a new one a
  *   stored row dates is not stored (`datedObservations`).
  * - A handoff's batch carries the earlier carrier's scans too, and that
- *   carrier may relay the delivery carrier's scans in its own words. Both are
- *   stored (relayCopies.ts), but only the delivery carrier's scan takes over a
- *   universal copy (`relayedScans`).
+ *   carrier may relay the delivery carrier's scans in its own words and stage.
+ *   Both are stored (relayCopies.ts), but only the delivery carrier's scan
+ *   takes over a universal copy (`relayedScans`).
  */
 import { createHash } from 'node:crypto';
 import { DateTime, FixedOffsetZone } from 'luxon';
@@ -1213,17 +1213,24 @@ export function datedObservations(
  * The identities of the earlier carrier's scans in a handoff's batch that
  * relay a delivery scan: Nova Poshta tells each GOFO scan in its own words at
  * the same second and place. A relay falls in the same second as a delivery
- * scan, with stages that agree and places that share a word or name no more
- * than a country; wording may differ. Left out of `sharedScans`, a relay stays
- * a row of the earlier carrier, which relayCopies.ts pairs with the scan, and
- * the delivery scan takes over a universal copy alone.
+ * scan, from places that share a word or name no more than a country; wording
+ * may differ. The stages may differ too, as relayCopies.ts pairs the two (JS
+ * Express calls La Poste's return notice an exception), except on a minute's
+ * first second, which a carrier keeping minutes gives every scan: there the
+ * stages agree or the places share a word. Left out of `sharedScans`, a relay
+ * stays a row of the earlier carrier, which relayCopies.ts pairs with the
+ * scan, and the delivery scan takes over a universal copy alone.
  */
 export function relayedScans(earlier: readonly JsonObject[], delivery: readonly JsonObject[]): Set<string> {
   const scans = delivery.filter((row) => !observedOnly(row) && Number.isFinite(instantOf(row)));
   const second = (row: JsonObject) => Math.floor(instantOf(row) / 1_000);
-  return new Set(earlier.filter((row) => !observedOnly(row) && Number.isFinite(instantOf(row)) && scans.some((scan) => (
-    second(scan) === second(row) && stagesAgree(stageOf(scan), stageOf(row)) && !placesConflict(placeWords(scan), placeWords(row))
-  ))).map(identity));
+  const relays = (row: JsonObject, scan: JsonObject) => {
+    const [words, scanWords] = [placeWords(row), placeWords(scan)];
+    return second(scan) === second(row) && !placesConflict(scanWords, words) && (stagesAgree(stageOf(scan), stageOf(row))
+      || second(row) % 60 !== 0 || words.some((word) => scanWords.includes(word)));
+  };
+  return new Set(earlier.filter((row) => !observedOnly(row) && Number.isFinite(instantOf(row))
+    && scans.some((scan) => relays(row, scan))).map(identity));
 }
 
 /** Clocks a few minutes apart: a scan dated this little past the check that returned it is no misread zone. */

@@ -1533,19 +1533,29 @@ describe('an earlier carrier relaying the delivery carrier\'s scans', () => {
       at('nova-poshta:station', '2026-01-14T09:31:13.412Z', 'Arrived at the address depot', 'Hollywood, FL'),
       // A copy with no place, or a pending one, is still a copy.
       at('nova-poshta:bare', '2026-01-11T21:11:25Z', 'Arrived at the depot', '', 'pending'),
+      // So is one in another stage, which relayCopies.ts pairs too (an origin may call the partner's return an exception).
+      at('nova-poshta:customs', '2026-01-11T21:11:25Z', 'Customs clearance in progress', 'Springfield Gardens, NY', 'customs'),
     ];
-    expect([...relayedScans(relays, delivery)]).toEqual(['nova-poshta:hub', 'nova-poshta:station', 'nova-poshta:bare']);
+    expect([...relayedScans(relays, delivery)]).toEqual(['nova-poshta:hub', 'nova-poshta:station', 'nova-poshta:bare', 'nova-poshta:customs']);
+    // On a minute's first second, a scan in another stage relays one whose place shares a word with its own.
+    const minute = [at('gofo:sort', '2026-01-12T08:20:00Z', 'Processed at GOFO Sort Center', 'Miami, FL', 'accepted')];
+    expect([...relayedScans([at('nova-poshta:sort', '2026-01-12T08:20:00Z', 'Sorted', 'Miami Gardens, FL')], minute)])
+      .toEqual(['nova-poshta:sort']);
   });
 
-  it('leaves its own scans: another second, another place, another stage, or an observation', () => {
+  it('leaves its own scans: another second, another place, another stage on a minute\'s first second, or an observation', () => {
     const own = [
       at('nova-poshta:handover', '2026-01-11T21:01:29Z', 'Transferred to delivery partner GoFo Express', 'Jamaica, NY'),
       at('nova-poshta:hub', '2026-01-11T21:11:26Z', 'Arrived at the depot', 'Springfield Gardens, NY'),
       at('nova-poshta:lviv', '2026-01-11T21:11:25Z', 'Left the sorting center', 'Lviv'),
-      at('nova-poshta:customs', '2026-01-11T21:11:25Z', 'Customs clearance in progress', 'Springfield Gardens, NY', 'customs'),
+      at('nova-poshta:lviv-customs', '2026-01-11T21:11:25Z', 'Customs clearance in progress', 'Lviv', 'customs'),
       { ...at('nova-poshta:seen', '2026-01-11T21:11:25Z', 'In transit', 'Springfield Gardens, NY'), observed_without_provider_timestamp: true },
+      // A carrier keeping minutes gives every scan a minute's first second: in another stage, with no place in
+      // common, the two are scans of their own.
+      at('nova-poshta:minute', '2026-01-12T08:20:00Z', 'Sorted', ''),
     ];
-    expect(relayedScans(own, delivery).size).toBe(0);
+    const minute = [...delivery, at('gofo:sort', '2026-01-12T08:20:00Z', 'Processed at GOFO Sort Center', 'Miami, FL', 'accepted')];
+    expect(relayedScans(own, minute).size).toBe(0);
     expect(relayedScans(delivery, []).size).toBe(0);
   });
 });

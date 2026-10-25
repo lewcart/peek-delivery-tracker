@@ -3677,6 +3677,29 @@ describe('TrackingSyncService', () => {
     expect(saved).toHaveLength(3);
   });
 
+  it('lets the delivery scan take over a universal copy at a handoff when the origin relays it in another stage', async () => {
+    const client = fakeClient();
+    const adapter = { fetch: vi.fn()
+      .mockResolvedValueOnce({ status: 'exception', last_update: '2026-01-11T21:11:25Z',
+        delivery_carrier: 'gofo', delivery_tracking_number: 'GFUS01000000000001', events: [
+          { time: '2026-01-10T10:00:00Z', description: 'Left the sorting center', location: 'Lviv', stage: 'in_transit' },
+          { time: '2026-01-11T21:11:25Z', description: 'Address incomplete, returning to sender', location: 'Springfield Gardens, NY', stage: 'exception' },
+        ] })
+      .mockResolvedValueOnce({ status: 'returned', last_update: '2026-01-11T21:11:25Z', events: [
+        { time: '2026-01-11T21:11:25Z', description: 'Address incomplete, returning to sender', location: 'US', stage: 'returned' },
+      ] }) };
+    // A universal provider's copy of the scan in the same words, stored before the handoff.
+    const copy = { provider_event_id: 'unknown:copy', occurred_at: '2026-01-11T21:11:25+00:00',
+      description: 'Address incomplete, returning to sender', location: 'Springfield Gardens, NY', stage: 'returned' };
+    await new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null)
+      .syncPackage({ id: 'relayed', carrier: 'nova-poshta', tracking_number: '59500000000012', [STORED_EVENT_IDENTITIES]: [copy] });
+    const saved = client.insertEvents.mock.calls[0][0].map((event: JsonObject) => [String(event.provider_event_id).split(':')[0], event.stage]);
+    // The origin's relay stays its own row, for relayCopies.ts to pair; taking the copy over, it would leave the
+    // delivery scan a row of its own that nothing pairs.
+    expect(saved).toEqual(expect.arrayContaining([['nova-poshta', 'exception'], ['unknown', 'returned']]));
+    expect(saved).toHaveLength(3);
+  });
+
   it('hands a Cainiao result to its reported local number through normalization', async () => {
     const swissNumber = 'RA314159268CH';
     const origin = { ...carrierResult('cainiao-delivered'), delivery_tracking_number: swissNumber };
