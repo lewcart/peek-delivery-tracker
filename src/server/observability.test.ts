@@ -27,7 +27,6 @@ describe('structured operational logs', () => {
     logOperationalEvent('tracking_sync_step', {
       attempt_id: 'opaque-attempt',
       carrier: 'dpd-fr',
-      tracking_number: '250123456789012',
       package_id: 'private-package',
       status_text: 'private status',
       tracking_url: 'https://carrier.example/secret-link',
@@ -39,12 +38,30 @@ describe('structured operational logs', () => {
       event: 'tracking_sync_step',
       attempt_id: 'opaque-attempt',
       carrier: 'dpd-fr',
-      tracking_number: '250123456789012',
     });
     expect(payload).toHaveProperty('package_id');
     expect(payload).toHaveProperty('status_text');
     expect(payload).toHaveProperty('tracking_url');
     expect(payload).toHaveProperty('authorization');
+  });
+
+  it('names a parcel by the shape of its number, wherever the line would hold a number', () => {
+    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    logOperationalEvent('tracking_sync_step', {
+      package_id: 'private-package',
+      tracking_number: 'TEST9012',
+      // A handoff's number, looked up instead of the parcel's.
+      support_lookup_number: 'HAND7305',
+      error_message: 'No parcel test9012, see hand7305',
+    });
+    logOperationalEvent('tracking_routing', { tracking_number: null, decision: 'fresher_provider_found' });
+
+    const [step, routing] = output.mock.calls.map(([line]) => String(line));
+    expect(JSON.parse(step!)).toEqual(expect.objectContaining({ package_id: 'private-package', number_pattern: '4 letters + 4 digits',
+      error_message: 'No parcel 4 letters + 4 digits, see 4 letters + 4 digits' }));
+    expect(step).not.toMatch(/tracking_number|support_lookup_number|test9012|hand7305/i);
+    expect(JSON.parse(routing!)).not.toHaveProperty('number_pattern');
   });
 });
 

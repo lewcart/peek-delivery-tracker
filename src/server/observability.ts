@@ -267,30 +267,13 @@ export function scrubSentryEvent(event: ErrorEvent): ErrorEvent {
 
 /**
  * Each breadcrumb is scrubbed as it is recorded: addresses are cut down, and the
- * console's copy of a log line's arguments is dropped.
+ * console's copy of a log line's arguments is dropped. A log line holds no number.
  */
 export function scrubSentryBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
   const data = breadcrumb.data && Object.fromEntries(Object.entries(breadcrumb.data)
     .filter(([key]) => !['arguments', 'http.query', 'http.fragment'].includes(key))
     .map(([key, value]) => [key, scrubValue(value, scrubText)]));
-  return { ...breadcrumb, ...(breadcrumb.message ? { message: logLineWithoutNumber(scrubText(breadcrumb.message)) } : {}), ...(data ? { data } : {}) };
-}
-
-/** The fields of a log line that hold a whole number: the parcel's, and the one its check looked up (a handoff's). */
-const LOG_NUMBER_FIELDS = ['tracking_number', 'support_lookup_number'];
-
-/** A log line, which names its parcel, keeps only the shape of each number in a report. */
-function logLineWithoutNumber(message: string): string {
-  if (!message.startsWith('{') || !LOG_NUMBER_FIELDS.some((field) => message.includes(`"${field}"`))) return message;
-  try {
-    const line = JSON.parse(message) as Record<string, unknown>;
-    const numbers = LOG_NUMBER_FIELDS.map((field) => line[field]).filter((value): value is string => typeof value === 'string');
-    if (!numbers.length) return message;
-    for (const field of LOG_NUMBER_FIELDS) if (typeof line[field] === 'string') line[field] = numberPattern(line[field]);
-    return numbers.reduce((text, number) => withoutNumber(text, number), JSON.stringify(line));
-  } catch {
-    return message;
-  }
+  return { ...breadcrumb, ...(breadcrumb.message ? { message: scrubText(breadcrumb.message) } : {}), ...(data ? { data } : {}) };
 }
 
 /** The text with every occurrence of the number, in any case, replaced by its pattern. */
@@ -610,14 +593,26 @@ function boundedLogValue(value: unknown): string | number | boolean | null | und
   return undefined;
 }
 
+/** The fields a line is given a whole number in: the parcel's, and the one its check looked up (a handoff's). */
+const LOG_NUMBER_FIELDS = ['tracking_number', 'support_lookup_number'];
+
+/**
+ * Writes one JSON line. Loki keeps lines past their parcel's deletion, so no line holds a
+ * tracking number: the parcel's gives way to its shape (`number_pattern`), and each number
+ * given is replaced by its shape wherever else the line repeats it, such as a carrier's error.
+ */
 export function logOperationalEvent(
   event: string,
   fields: JsonObject = {},
   level: 'info' | 'warning' | 'error' = 'info',
 ): void {
+  const numbers = LOG_NUMBER_FIELDS.map((field) => fields[field])
+    .filter((value): value is string => typeof value === 'string' && value.length >= 4);
+  const { tracking_number: trackingNumber } = fields;
   const safeFields = Object.fromEntries(
-    Object.entries(fields)
-      .map(([key, value]) => [key, boundedLogValue(value)] as const)
+    Object.entries({ ...fields, number_pattern: typeof trackingNumber === 'string' ? numberPattern(trackingNumber) : undefined })
+      .filter(([key]) => !LOG_NUMBER_FIELDS.includes(key))
+      .map(([key, value]) => [key, boundedLogValue(typeof value === 'string' ? numbers.reduce(withoutNumber, value) : value)] as const)
       .filter((entry): entry is [string, string | number | boolean | null] => entry[1] !== undefined),
   );
   const payload = JSON.stringify({

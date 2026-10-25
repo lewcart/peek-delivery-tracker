@@ -52,7 +52,7 @@ describe('detection support retention', () => {
     expect(retain).not.toHaveBeenCalled();
   });
 
-  it('logs the submitted number and the actual recognition candidates privately', async () => {
+  it('logs the shape of the submitted number and the actual recognition candidates', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const client = new SupabaseServiceClient('https://database.example', 'service-key');
     vi.spyOn(client, 'recordTrackingSupportObservation').mockResolvedValue(undefined);
@@ -60,7 +60,7 @@ describe('detection support retention', () => {
       trackingNumber: '0000000046', carrier: 'unknown', asked: ['relais-colis', 'tipsa'], unanswered: ['tipsa'],
     });
     expect(JSON.parse(log.mock.calls[0][0])).toMatchObject({
-      event: 'carrier_detection_support', tracking_number: '0000000046', outcome: 'detection_unknown',
+      event: 'carrier_detection_support', number_pattern: '10 digits', outcome: 'detection_unknown',
       asked_carriers: 'relais-colis,tipsa', unanswered_carriers: 'tipsa', recognized_carriers: '',
     });
   });

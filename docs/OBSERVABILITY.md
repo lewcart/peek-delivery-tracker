@@ -36,7 +36,8 @@ from error reports because their headers can carry verification credentials.
 
 Each carrier refresh leaves a trace in three places:
 
-1. **Logs**: one-line JSON describing the control flow, including the tracking number.
+1. **Logs**: one-line JSON describing the control flow, naming the parcel by its id or check
+   and the shape of its number.
 2. **Postgres audit**: private rows with every step and the evidence behind each status
    decision.
 3. **Sentry**: groups the failures someone has to fix: crashes, outages and failing
@@ -49,11 +50,13 @@ in Postgres and Prometheus, for the hourly review in [Review signals](#review-si
 Metrics (Sentry and Prometheus) cover latency and fallback use. Sentry alerts on each new
 error; [Grafana alerts](#grafana-alerts) on what no single error shows.
 
-**Privacy.** Logs keep tracking numbers, original errors and upstream request/response
-details. Sentry reports keep the errors and details but name a parcel by the shape of its
-number (`MY + 10 digits + US`), shorten addresses and leave out the failing request's
-body, query and client address (see "What Sentry reports keep" below). Both survive parcel
-deletion until retention expires. Restrict access and retention, and sanitize anything
+**Privacy.** Logs keep original errors and upstream request/response details but no
+tracking number: a line names its parcel by the shape of its number (`number_pattern`,
+such as `MY + 10 digits + US`), its `package_id` or its check's `attempt_id`, and wherever
+else the line would repeat the number, such as in a carrier's error, it reads as that
+shape. Sentry reports keep the errors and details, name a parcel the same way, shorten
+addresses and leave out the failing request's body, query and client address (see "What
+Sentry reports keep" below). Both survive parcel deletion until retention expires. Restrict access and retention, and sanitize anything
 you share publicly.
 
 Parcel link ids and owner keys are the exception, because holding one is enough to read
@@ -569,7 +572,8 @@ logfmt: `{app="delivery-tracker-trawl", event="tier.failure"} | logfmt`.
 
 Key JSON events:
 
-- `tracking_sync_started`, `tracking_sync_step`, `tracking_sync_completed` (by `attempt_id`).
+- `tracking_sync_started`, `tracking_sync_step`, `tracking_sync_completed` (by `attempt_id`,
+  with the parcel's `package_id`).
   The completed line has the `outcome` and `events_new`; a check cut off at shutdown
   ends `interrupted`, with `error_type` `WorkerShutdown`;
 - `tracking_scrape` and `tracking_routing`, which include `transport_fallback`, carry the
@@ -771,9 +775,8 @@ Request IDs and excerpts don't affect grouping.
 
 A report names its parcel by the shape of its number, in the `number_pattern` tag and the
 operation context. The number itself is replaced by that shape wherever it appears in the
-report, in any case, and so are the numbers of any log line among its breadcrumbs: its
-`tracking_number` and the `support_lookup_number` its check looked up. Find a
-parcel's reports through its `attempt_id` or `job_id`.
+report, in any case; the log lines among its breadcrumbs hold none. Find a parcel's
+reports through its `attempt_id` or `job_id`.
 
 - **Addresses** anywhere in a report or breadcrumb, the request's and the transaction's
   included, lose their query and fragment, which can hold keys. A path segment of six

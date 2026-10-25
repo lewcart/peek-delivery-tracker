@@ -488,12 +488,14 @@ export class TrackingSyncAudit {
     return previous;
   }
 
+  /** The parcel by its id: the line keeps only its number's shape (logOperationalEvent). */
   private logContext(): JsonObject {
     return {
       attempt_id: this.attemptId,
       job_id: this.context.jobId ?? null,
       trigger: this.context.trigger,
       carrier: this.configuredCarrier,
+      package_id: this.packageId,
       tracking_number: this.trackingNumber,
     };
   }

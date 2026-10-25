@@ -175,7 +175,7 @@ describe('the audit of a check whose parcel was deleted', () => {
     await attempt.finish({ outcome: 'superseded' });
     for (const operation of ['start_attempt', 'complete_attempt']) {
       expect(logged).toHaveBeenCalledWith('tracking_sync_audit_skipped', {
-        attempt_id: attempt.attemptId, job_id: null, trigger: 'scheduled', carrier: 'ups', tracking_number: 'TEST1234', operation,
+        attempt_id: attempt.attemptId, job_id: null, trigger: 'scheduled', carrier: 'ups', package_id: 'parcel', tracking_number: 'TEST1234', operation,
       });
     }
     expect(events()).not.toContain('tracking_sync_audit_write_failed');
