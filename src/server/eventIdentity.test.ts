@@ -369,7 +369,7 @@ describe('a scan its source restates with or without its milliseconds', () => {
 
   it('leaves a source without a policy out, and lets codes that agree do for one that requires none', () => {
     const as = (source: string, value: Record<string, unknown>) => ({ ...value, provider_event_id: String(value.provider_event_id).replace('royal-mail', source) });
-    expect(sameInstantIdentities([as('dhl', scan)], [as('dhl', row)], 'dhl').size).toBe(0);
+    expect(sameInstantIdentities([as('example-carrier', scan)], [as('example-carrier', row)], 'example-carrier').size).toBe(0);
     expect(sameInstantIdentities([as('dhl-express', scan)], [as('dhl-express', { ...row, raw_data: {} })], 'dhl-express').size).toBe(1);
     expect(sameInstantIdentities([as('dhl-express', scan)], [as('dhl-express', { ...row, raw_data: { provider_code: 'OTHER' } })], 'dhl-express').size)
       .toBe(0);
