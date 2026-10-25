@@ -3,14 +3,13 @@ import { createHash } from 'node:crypto';
 import { isInvitationCode, isInvitationPreviewId } from '../lib/invitationLinkFormat';
 import { sharedPassport } from '../lib/passport';
 import { toParcel } from '../store/apiRepo';
-import type { ApiFriendCard, ApiFriendProfile, ApiFriendsActionRequest, ApiFriendsActionResponse, ApiFriendsSnapshot, ApiFriendStamp, ApiFriendsActivity, ApiPackageRow } from '../generated/apiContract';
+import type { ApiFriendCard, ApiFriendProfile, ApiFriendsActionRequest, ApiFriendsActionResponse, ApiFriendsSnapshot, ApiFriendsActivity, ApiPackageRow } from '../generated/apiContract';
 import { HttpError } from './api';
 import { withEventPlaces } from './eventPlaces';
 import { isRecord, type JsonObject } from './types';
 import { SupabaseError, type SupabaseUserClient, type SupabaseServiceClient } from './supabase';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const stamps = new Set<ApiFriendStamp>(['first', 'ten', 'connected', 'express', 'acrossBorders', 'aroundWorld', 'theRegular', 'rightNextDoor', 'worthTheWait', 'busyDoorstep', 'pickedUp', 'homeForHolidays']);
 const fields: Record<ApiFriendsActionRequest['action'], string[]> = {
   save_profile: ['nickname', 'shareStats', 'shareArrival'], create_invite: [], revoke_invite: [], revoke_previous_invites: ['code'],
   preview_invite: ['code'], accept_invite: ['code'], remove_friend: ['friendId'], acknowledge_friend: ['friendId'], disable: [],
@@ -69,18 +68,22 @@ function profile(value: unknown): ApiFriendProfile | null {
   if (!isRecord(value) || !nickname(value.nickname) || typeof value.shareStats !== 'boolean' || typeof value.shareArrival !== 'boolean') return corrupt();
   return { nickname: value.nickname, shareStats: value.shareStats, shareArrival: value.shareArrival };
 }
-/** Explicit projection is a second boundary: adding a DB field can never publish it. */
-export function friendCard(value: unknown): ApiFriendCard {
+/** A card as the database gives it: whether its owner shares stats, which the server works out (withSharedPassports). */
+export type StoredFriendCard = Omit<ApiFriendCard, 'stats'> & { sharesStats: boolean };
+export type StoredFriendsSnapshot = Omit<ApiFriendsSnapshot, 'ownCard' | 'friends'> & { ownCard: StoredFriendCard | null; friends: StoredFriendCard[] };
+type StoredFriendsActionResponse = Omit<ApiFriendsActionResponse, 'snapshot' | 'acceptedFriend'> & { snapshot?: StoredFriendsSnapshot; acceptedFriend?: StoredFriendCard };
+/**
+ * Explicit projection is a second boundary: adding a DB field can never publish it. A card shares
+ * stats by its flag, or by the stats object the database gave before it had one, whose contents
+ * nothing reads.
+ */
+export function friendCard(value: unknown): StoredFriendCard {
   if (!isRecord(value) || typeof value.id !== 'string' || !uuid.test(value.id) || !nickname(value.nickname) || !(value.arrivedThisWeek === null || typeof value.arrivedThisWeek === 'boolean')) return corrupt();
-  let stats: ApiFriendCard['stats'] = null;
-  if (value.stats !== null) {
-    const s = value.stats;
-    if (!isRecord(s) || !Number.isSafeInteger(s.deliveredCount) || Number(s.deliveredCount) < 0 || !(s.averageDays === null || (Number.isSafeInteger(s.averageDays) && Number(s.averageDays) >= 1)) || !Array.isArray(s.stamps) || s.stamps.length > stamps.size || s.stamps.some((stamp) => !stamps.has(stamp as ApiFriendStamp))) return corrupt();
-    stats = { deliveredCount: Number(s.deliveredCount), averageDays: s.averageDays === null ? null : Number(s.averageDays), stamps: [...new Set(s.stamps as ApiFriendStamp[])] };
-  }
-  return { id: value.id, nickname: value.nickname, stats, arrivedThisWeek: value.arrivedThisWeek };
+  const sharesStats = typeof value.sharesStats === 'boolean' ? value.sharesStats
+    : value.stats === null ? false : isRecord(value.stats) ? true : corrupt();
+  return { id: value.id, nickname: value.nickname, sharesStats, arrivedThisWeek: value.arrivedThisWeek };
 }
-export function friendsSnapshot(value: unknown): ApiFriendsSnapshot {
+export function friendsSnapshot(value: unknown): StoredFriendsSnapshot {
   if (!isRecord(value) || !Array.isArray(value.friends) || value.friends.length > 50) return corrupt();
   const own = profile(value.profile);
   if (!own && (value.ownCard !== null || value.friends.length)) return corrupt();
@@ -91,14 +94,14 @@ export function friendsSnapshot(value: unknown): ApiFriendsSnapshot {
  * owner's apps read, as served to them. The card still carries only those; a card whose owner stopped
  * sharing in between loses them.
  */
-export async function withSharedPassports(service: SupabaseServiceClient, snapshot: ApiFriendsSnapshot, acceptedFriend?: ApiFriendCard): Promise<{ snapshot: ApiFriendsSnapshot; acceptedFriend?: ApiFriendCard }> {
-  const shared = [snapshot.ownCard, ...snapshot.friends, acceptedFriend].filter((card): card is ApiFriendCard => Boolean(card?.stats));
+export async function withSharedPassports(service: SupabaseServiceClient, snapshot: StoredFriendsSnapshot, acceptedFriend?: StoredFriendCard): Promise<{ snapshot: ApiFriendsSnapshot; acceptedFriend?: ApiFriendCard }> {
+  const shared = [snapshot.ownCard, ...snapshot.friends, acceptedFriend].filter((card): card is StoredFriendCard => Boolean(card?.sharesStats));
   const owners = await service.passportSharers(shared.map(({ id }) => id));
   const passports = new Map(await Promise.all([...new Set(owners.values())].map(async (owner) => [owner,
     sharedPassport((await service.listAccountPackages(owner)).map((row) => toParcel(withEventPlaces(row) as unknown as ApiPackageRow)))] as const)));
-  const restamp = (card: ApiFriendCard): ApiFriendCard => {
-    const owner = owners.get(card.id);
-    return card.stats ? { ...card, stats: owner ? passports.get(owner) ?? null : null } : card;
+  const restamp = ({ sharesStats, ...card }: StoredFriendCard): ApiFriendCard => {
+    const owner = sharesStats ? owners.get(card.id) : undefined;
+    return { ...card, stats: owner ? passports.get(owner) ?? null : null };
   };
   return {
     snapshot: { ...snapshot, ownCard: snapshot.ownCard && restamp(snapshot.ownCard), friends: snapshot.friends.map(restamp) },
@@ -124,9 +127,9 @@ export async function friendsRPC(client: SupabaseUserClient, action?: ApiFriends
     throw error;
   }
 }
-export function friendsActionResponse(value: unknown, action: ApiFriendsActionRequest['action']): ApiFriendsActionResponse {
+export function friendsActionResponse(value: unknown, action: ApiFriendsActionRequest['action']): StoredFriendsActionResponse {
   if (!isRecord(value)) return corrupt();
-  const invitationState = (): Pick<ApiFriendsActionResponse, 'invitationState'> => {
+  const invitationState = (): Pick<StoredFriendsActionResponse, 'invitationState'> => {
     if (value.invitationState === undefined) return {};
     if (value.invitationState !== 'already_accepted' && value.invitationState !== 'already_friends') return corrupt();
     return { invitationState: value.invitationState };

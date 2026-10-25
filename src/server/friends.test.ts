@@ -14,6 +14,9 @@ import type { ApiPackageRow } from '../generated/apiContract';
 const id = '11000000-0000-4000-8000-000000000001';
 const card = { id, nickname: 'Mila', stats: { deliveredCount: 12, averageDays: 3, stamps: ['first', 'ten'] }, arrivedThisWeek: null };
 const snapshot = { profile: { nickname: 'Alex', shareStats: true, shareArrival: false }, ownCard: card, friends: [card] };
+/** The card and snapshot as the server reads them, before it works out the shared stats. */
+const storedCard = { id, nickname: 'Mila', sharesStats: true, arrivedThisWeek: null };
+const storedSnapshot = { ...snapshot, ownCard: storedCard, friends: [storedCard] };
 const owner = '11000000-0000-4000-8000-0000000000aa';
 /** A stored parcel row, as the database gives it to the server: each scan its stage, time and location. */
 function stored(index: number, scans: Array<[string, string, string?]>) {
@@ -38,13 +41,11 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe('Friends privacy boundary', () => {
-  it('shares all twelve known stamps while rejecting unknown or oversized collections', async () => {
-    const stamps = ['first', 'ten', 'connected', 'express', 'acrossBorders', 'aroundWorld', 'theRegular', 'rightNextDoor', 'worthTheWait', 'busyDoorstep', 'pickedUp', 'homeForHolidays'];
-    const full = { ...card, stats: { ...card.stats, deliveredCount: 25, stamps } };
-    expect(friendsSnapshot({ ...snapshot, ownCard: full, friends: [full] }).friends[0].stats?.stamps).toEqual(stamps);
-    expect(() => friendCard({ ...full, stats: { ...full.stats, stamps: [...stamps, 'first'] } })).toThrow();
-    expect(() => friendCard({ ...full, stats: { ...full.stats, stamps: ['centuryClub'] } })).toThrow();
-    expect(friendCard({ ...full, stats: null }).stats).toBeNull();
+  it('reads whether a card shares stats from its flag, or from the stats object the database gave before it', () => {
+    expect(friendCard(storedCard)).toEqual(storedCard);
+    expect(friendCard({ ...storedCard, sharesStats: false })).toEqual({ ...storedCard, sharesStats: false });
+    expect(friendsSnapshot(snapshot)).toEqual(storedSnapshot);
+    expect(friendCard({ ...card, stats: null })).toEqual({ ...storedCard, sharesStats: false });
   });
 
   it('works out a shared card with the app\'s Passport rules over its owner\'s parcels, and sends only its counts and stamps', async () => {
@@ -66,7 +67,8 @@ describe('Friends privacy boundary', () => {
     expect(JSON.stringify(body)).not.toMatch(/PRIVATE|Private/);
     expect(JSON.stringify(body)).not.toContain(owner);
     // An accepted friend's card is worked out the same way.
-    vi.mocked(SupabaseUserClient.prototype.request).mockResolvedValue({ snapshot: { ...snapshot, ownCard: sql, friends: [sql] }, acceptedFriend: sql });
+    // So is one the database gives with only its flag.
+    vi.mocked(SupabaseUserClient.prototype.request).mockResolvedValue({ snapshot: storedSnapshot, acceptedFriend: storedCard });
     expect(await (await call({ action: 'accept_invite', code: 'a'.repeat(32) })).json()).toEqual({ snapshot, acceptedFriend: card });
   });
 
@@ -93,8 +95,8 @@ describe('Friends privacy boundary', () => {
     expect(friendsAction({ action: 'acknowledge_friend', friendId: id })).toEqual({ action: 'acknowledge_friend', friendId: id });
   });
   it('includes the accepted profile without exposing extra fields', () => {
-    expect(friendsActionResponse({ snapshot, acceptedFriend: { ...card, email: 'private' } }, 'accept_invite')).toEqual({ snapshot, acceptedFriend: card });
-    expect(friendsActionResponse({ snapshot, acceptedFriend: card }, 'save_profile')).toEqual({ snapshot });
+    expect(friendsActionResponse({ snapshot, acceptedFriend: { ...card, email: 'private' } }, 'accept_invite')).toEqual({ snapshot: storedSnapshot, acceptedFriend: storedCard });
+    expect(friendsActionResponse({ snapshot, acceptedFriend: card }, 'save_profile')).toEqual({ snapshot: storedSnapshot });
   });
   it('projects an allowlist at every nesting level, excluding all parcel and account data', async () => {
     const privateCard = { ...card, email: 'private@example.test', trackingNumber: 'PRIVATE123', parcel: { label: 'Private purchase' }, stats: { ...card.stats, location: 'Private address' } };
@@ -170,12 +172,12 @@ describe('Friends privacy boundary', () => {
     { action: 'remove_friend', friendId: 'not-an-id' }, { action: 'bad' }, { action: '__proto__' }, { action: 1 },
   ])('rejects malformed or extra fields: %j', (body) => { expect(() => friendsAction(body)).toThrow(); });
   it('round-trips hidden stats and absent profiles without filling fake data', () => {
-    expect(friendCard({ ...card, stats: null, arrivedThisWeek: false })).toEqual({ ...card, stats: null, arrivedThisWeek: false });
+    expect(friendCard({ ...card, stats: null, arrivedThisWeek: false })).toEqual({ ...storedCard, sharesStats: false, arrivedThisWeek: false });
     expect(friendsSnapshot({ profile: null, ownCard: null, friends: [] })).toEqual({ profile: null, ownCard: null, friends: [] });
     expect(() => friendsSnapshot({ profile: null, ownCard: card, friends: [card] })).toThrow();
     expect(() => friendsSnapshot({ ...snapshot, friends: Array(51).fill(card) })).toThrow();
   });
-  it.each([null, {}, { ...card, stats: { ...card.stats, stamps: ['private-field'] } }, { ...card, stats: { ...card.stats, deliveredCount: -1 } }, { ...card, stats: { ...card.stats, averageDays: 0 } }, { ...card, arrivedThisWeek: '2026-09-09T12:13:14Z' }])('fails closed on malformed summaries: %j', (value) => { expect(() => friendCard(value)).toThrow(); });
+  it.each([null, {}, { ...card, stats: 12 }, { ...card, stats: undefined, sharesStats: 'true' }, { ...card, arrivedThisWeek: '2026-09-09T12:13:14Z' }])('fails closed on malformed summaries: %j', (value) => { expect(() => friendCard(value)).toThrow(); });
   it('strips invitation metadata and prevents previewing any stats', () => {
     expect(friendsActionResponse({ previewNickname: 'Mila', ...card }, 'preview_invite')).toEqual({ previewNickname: 'Mila' });
     expect(friendsActionResponse({ inviteCode: 'a'.repeat(32), expiresAt: '2026-09-16T00:00:00Z', userId: id }, 'create_invite')).toEqual({ inviteCode: 'a'.repeat(32), expiresAt: '2026-09-16T00:00:00Z' });
@@ -219,7 +221,7 @@ it.each(['already_accepted', 'already_friends'] as const)('returns the private %
   const response = await call({ action: 'preview_invite', code: 'ab'.repeat(16) });
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual(result);
-  expect(friendsActionResponse({ snapshot, invitationState, acceptedFriend: card }, 'accept_invite')).toEqual({ snapshot, invitationState });
+  expect(friendsActionResponse({ snapshot, invitationState, acceptedFriend: card }, 'accept_invite')).toEqual({ snapshot: storedSnapshot, invitationState });
 });
 it.each(['unknown', null, 123])('rejects malformed invitation outcomes: %s', (invitationState) => {
   expect(() => friendsActionResponse({ previewNickname: 'Paul', invitationState }, 'preview_invite')).toThrow();
