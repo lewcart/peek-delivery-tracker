@@ -3126,6 +3126,13 @@ describe('TrackingSyncService', () => {
     const seen = { ...unseen, id: 'seen', carrier_data: { routing: { version: 1, configured_carrier: 'unknown', failures: {},
       last_success_at: '2026-09-09T10:00:15Z' } } };
     await expect(check([seen], '2026-09-09T11:30:00Z')).resolves.toBe(1);
+    // So does one filed under a carrier that refuses its number as one it does not issue, unlike
+    // one whose carrier has yet to answer for its label.
+    const refused = { ...unseen, id: 'refused', carrier: 'chronodiali', sync_status: 'error', sync_error: 'carrier:refused_number',
+      carrier_data: { routing: { version: 1, configured_carrier: 'chronodiali', failures: {} } } };
+    await expect(check([refused], '2026-09-09T11:30:00Z')).resolves.toBe(0);
+    await expect(check([{ ...refused, id: 'filed', sync_status: 'waiting', sync_error: null }], '2026-09-09T11:30:00Z')).resolves.toBe(1);
+    expect(isOpenedParcelSyncDue(refused, new Date('2026-09-09T16:00:00Z'))).toBe(true);
     // Opening the link still queues a check every six hours, then daily.
     expect(isOpenedParcelSyncDue(unseen, new Date('2026-09-09T11:30:00Z'))).toBe(false);
     expect(isOpenedParcelSyncDue(unseen, new Date('2026-09-09T16:00:00Z'))).toBe(true);

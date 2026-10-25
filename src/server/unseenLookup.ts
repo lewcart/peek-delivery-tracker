@@ -1,4 +1,5 @@
 import 'server-only';
+import { REFUSED_NUMBER } from '../lib/messages';
 import { routingState } from './trackingRouting';
 import { isRecord, type JsonObject } from './types';
 
@@ -33,10 +34,13 @@ export function unseenIntervalHours(unseen: number, opened = false): number {
 /**
  * How long ago a parcel was added when no carrier or provider has answered
  * for its number yet: no carrier identified or recognised, no history and
- * nothing asked of the user. Null once one has.
+ * nothing asked of the user. Null once one has. A parcel filed under a carrier
+ * counts only while that carrier refuses its number as one it does not issue
+ * (`carrier:refused_number`): asking it again changes nothing.
  */
 export function unseenFor(parcel: JsonObject, now: Date): number | null {
-  if (!['unknown', 'intl-post'].includes(String(parcel.carrier)) || String(parcel.current_stage ?? 'pending') !== 'pending') return null;
+  const unfiled = ['unknown', 'intl-post'].includes(String(parcel.carrier)) || parcel.sync_error === REFUSED_NUMBER;
+  if (!unfiled || String(parcel.current_stage ?? 'pending') !== 'pending') return null;
   const data = isRecord(parcel.carrier_data) ? parcel.carrier_data : {};
   const routing = routingState(parcel);
   if (data.original_carrier || data.universal_input || routing.last_success_at || routing.last_event_at

@@ -152,7 +152,9 @@ evidence while the chip is hidden. A parcel without scans whose own carrier refu
 number, such as one chosen by hand that issues no number of that shape, shows the refusal
 at the first check. The refusal is stored as `carrier:refused_number` when the carrier's
 adapter refuses the number alone ([`numberRefusal.ts`](../src/server/numberRefusal.ts)), so
-the reader is told to check the number or the carrier; a refused input such as a postcode
+the reader is told to check the number or the carrier, and until a provider answers for it the
+number is scheduled as one nobody has seen (Refresh cadence, below): asking that carrier again
+changes nothing. A refused input such as a postcode
 keeps `carrier:invalid_input`, which asks for the parcel's details.
 
 A placeholder number, such as 123456789, is one under which providers merge other people's
