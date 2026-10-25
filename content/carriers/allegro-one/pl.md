@@ -44,7 +44,7 @@ Na allegro.pl śledzenie Allegro One jest po polsku. Najczęstsze komunikaty, w 
 | `Przesyłka oczekuje na odbiór - zbliża się termin odbioru paczki` | Przypomnienie: czas na odbiór zaraz minie. |
 | `Czas na odbiór został przedłużony` | Czas na odbiór wydłużono o darmowe 24 godziny. |
 | `Skończył się czas na odbiór przesyłki` | Paczka nie została odebrana na czas i wraca do sprzedającego. |
-| `Przesyłka została zwrócona do nadawcy` | Paczka wróciła do nadawcy. |
+| `Przesyłka została zwrócona do nadawcy` | Paczka jest w drodze powrotnej do nadawcy. Mimo brzmienia komunikatu nadawca jeszcze jej nie ma. |
 | `Przesyłka została doręczona` | Paczka doręczona albo odebrana przez Ciebie. |
 
 `Przesyłka została doręczona` pojawia się także wtedy, gdy sam odbierzesz paczkę z One Boxa albo z One Punktu: osobnego statusu „odebrana” nie ma.

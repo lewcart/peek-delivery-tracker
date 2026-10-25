@@ -42,7 +42,7 @@ On allegro.pl Allegro's tracking is in Polish. These are its English wordings, i
 | `Parcel is awaiting pick-up` | Ready for pickup in the One Box or One Punkt. |
 | `Parcel is awaiting pick-up — pick-up deadline is about to expire` | A reminder: your time to pick it up is nearly over. |
 | `Time for parcel pick-up has expired` | Not picked up in time: it goes back to the seller. |
-| `Parcel has been returned to the sender` | Returned. |
+| `Parcel has been returned to the sender` | On its way back to the sender. Despite the wording, they don't have it yet. |
 | `Parcel has been delivered` | Delivered, or picked up by you (see below). |
 
 `Parcel has been delivered` also follows your own pickup from a One Box: there is no separate "picked up" scan. On allegro.pl it reads `Przesyłka została doręczona`.
