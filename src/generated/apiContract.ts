@@ -15467,6 +15467,7 @@ export const CARRIER_CAPABILITIES = {
       "CL",
       "CO",
       "CR",
+      "DO",
       "EC",
       "MX",
       "PE",
