@@ -874,6 +874,7 @@ export const CARRIER_DECALS: Record<string, CarrierDecal> = {
   "inpost": "inpost",
   "instabox": "instabox",
   "integral-pack": "integral-pack",
+  "intel-valley": "intel-valley",
   "intelcom": "intelcom",
   "inter-courier": "inter-courier",
   "intereuropa": "intereuropa",
@@ -14695,6 +14696,27 @@ export const CARRIER_TRUCK: TruckGeometry = {
       {
         "type": "polygon",
         "d": "M13.91 10.34L15.22 10.34L14.84 12.26L13.52 12.26Z",
+        "fill": "accent"
+      }
+    ],
+    "intel-valley": [
+      {
+        "type": "circle",
+        "cx": 11,
+        "cy": 9.25,
+        "r": 5.2,
+        "fill": "accent"
+      },
+      {
+        "type": "circle",
+        "cx": 11.97,
+        "cy": 9.25,
+        "r": 4.1,
+        "fill": "truck"
+      },
+      {
+        "type": "polygon",
+        "d": "M9.83 6.49L13.88 6.49L14.15 6.57L14.33 6.77L14.38 7.03L14.29 7.29L12.05 10.33L14.54 10.33L14.54 11.83L9.79 11.83L9.52 11.76L9.34 11.56L9.29 11.29L9.38 11.04L11.69 7.89L9.83 7.89Z",
         "fill": "accent"
       }
     ]

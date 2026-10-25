@@ -316,6 +316,7 @@ and [`truck.json`](truck.json).
 | `inpost` | [inpost.pl](https://inpost.pl/) |
 | `instabox` | [favicon SVG](https://track.instabox.com/assets/icons/instabox-favicon.svg) — circle fill #FF3E3E |
 | `integral-pack` | [integralpack.com.ar](https://www.integralpack.com.ar/assets/img/logo.svg?v=2026-01-04) — logo SVG fills #004D9C and #FFC629 |
+| `intel-valley` | [qhzhigu.com](http://www.qhzhigu.com/) — header logo PNG flat blue #00a3ff, its most frequent pixel and the catalog colour: the 智谷供应链 and Intel-Valley Supply Chain wordmark; the circled Z beside it shades from a bright blue to navy #014478, and a yellow diamond #f7f509 sits in 智 |
 | `intelcom` | [dragonflyshipping.ca](https://dragonflyshipping.ca/) (sampled from the site icon) |
 | `inter-courier` | [intercourier.pt](https://intercourier.pt/assets/img/logo/logo.svg) — logo SVG fill #76ba59 (COURIER and the up-right arrow); the site's buttons use the same green |
 | `intereuropa` | [intereuropa.si](https://www.intereuropa.si/files/default/vsebina/logo-mobile.png) — mobile logo fill #1b5949 (approximate); main logo #02695a |
@@ -1431,3 +1432,4 @@ and [`truck.json`](truck.json).
 | `shouwu` | White arrow pointing up and right, its long tail curving down to the left, under a blue swoosh, on red | [sedel.com](http://www.sedel.com/) — the customer portal logo mark above the SWE wordmark and 守务国际: a red arrow with a sweeping tail, and a blue swoosh above and behind it |
 | `ywe` | White running figure, a round head over a slanted flag of an arm, a long diagonal stride and two zigzag strokes, on blue | [yanwenexpress.com](https://www.yanwenexpress.com/img/logo_up.svg) — the header logo mark beside the YANWEN wordmark: a white running figure with a round head and lightning-bolt strides, on a blue panel |
 | `far-international` | White heavy italic FAR with an orange middle bar on the F, on navy | [far800.com](https://www.far800.com/static/www/img/logo_h.png) — the FAR of the header logo: heavy italic capitals split into blocks by thin gaps, a flat-topped A whose crossbar runs on as the foot of the R's bowl, and an orange middle bar on the F; the swoosh and the names beneath are left out |
+| `intel-valley` | White Z with rounded turns inside a ring that is heavy on the left and thins to a hairline on the right, on blue | [qhzhigu.com](http://www.qhzhigu.com/) — the header logo mark beside the 智谷供应链 wordmark: a Z inside a ring heavy on the left and thinning to a hairline on the right, both shading from blue to navy; the checkered pixel trail running out of the Z's base is left out |
