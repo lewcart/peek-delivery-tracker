@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { DateTime, IANAZone } from 'luxon';
-import { countryTimeZone } from 'universal-parcel-scraper';
+import { placeTimeZone } from 'universal-parcel-scraper/places';
 import { sortEventsDesc } from '../../lib/stages';
 import type { ParcelWithEvents, TrackingEvent } from '../../types';
 import { carrierTimezone } from '../carriers';
@@ -29,9 +29,10 @@ export function deliveredScan(parcel: ParcelWithEvents, stage: EmailStage = 'del
 
 /**
  * The zones a scan's carrier time may have been read in, likeliest first: the
- * carrier delivering, the one the parcel was added with, and the country the
- * scan happened in when it keeps one clock. A carrier without a zone of its
- * own is read in UTC.
+ * carrier delivering, the one the parcel was added with, and the clock of the
+ * place the scan happened at: its country's, or its state's where a country
+ * keeps several ("WA" alone on a parcel to Australia names its state). A
+ * carrier without a zone of its own is read in UTC.
  */
 function scanZones(parcel: ParcelWithEvents, scan: TrackingEvent): string[] {
   const zones = [parcel.trackingSource, parcel.carrier].map((carrier) => {
@@ -41,7 +42,7 @@ function scanZones(parcel: ParcelWithEvents, scan: TrackingEvent): string[] {
       return null;
     }
   });
-  return [...new Set([...zones, countryTimeZone(scan.place?.country), 'UTC'])].filter((zone): zone is string => !!zone && IANAZone.isValidZone(zone));
+  return [...new Set([...zones, scan.place ? placeTimeZone(scan.place) : null, 'UTC'])].filter((zone): zone is string => !!zone && IANAZone.isValidZone(zone));
 }
 
 const startsDay = (local: DateTime) => local.isValid && local.toMillis() === local.startOf('day').toMillis();

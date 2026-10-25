@@ -121,6 +121,15 @@ describe('deliveredWhen, judging the scan itself', () => {
     expect(deliveredWhen(parcel('dhl', [scan('2026-10-02T15:00:00+00:00')]), reader)).toEqual({ kind: 'yesterday', time: '17:00' });
   });
 
+  it('reads midnight on the clock of the scan’s state where its country keeps several', () => {
+    // USPS and Australia Post read times in UTC: the state the scan happened in tells its day.
+    const illinois: EventPlace = { latitude: 41.88, longitude: -87.63, precision: 'city', country: 'US', name: 'Chicago' };
+    expect(deliveredWhen(parcel('usps', [scan('2026-10-02T05:00:00+00:00', { place: illinois })]), reader)).toEqual({ kind: 'day', date: '02.10.2026' });
+    // "WA" alone on a parcel to Australia: placed as the country, with the state as its region.
+    const westernAustralia: EventPlace = { latitude: -25.27, longitude: 133.78, precision: 'country', country: 'AU', region: 'WA', name: 'WA' };
+    expect(deliveredWhen(parcel('australia-post', [scan('2026-10-02T16:00:00+00:00', { place: westernAustralia })]), reader)).toEqual({ kind: 'day', date: '03.10.2026' });
+  });
+
   it('takes a time with a fraction of a second as the moment the app noticed', () => {
     expect(deliveredWhen(parcel('dhl', [scan('2026-10-03T12:12:34.567+00:00')]), reader)).toEqual({ kind: 'plain' });
   });
