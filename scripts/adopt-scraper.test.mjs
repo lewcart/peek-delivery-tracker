@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import {
+  BY_HAND_TITLE,
   ENFORCED_BY,
   adoptionSlot,
   chooseTarget,
@@ -136,6 +137,18 @@ describe('adoption slots', () => {
     ]), undefined);
   });
 
+  it("counts the timer's runs and the backup runs, not a run by hand", () => {
+    const pushed = (id, event, display_title = 'Adopt scraper release') => ({
+      ...run(id, adopt('2026-10-21T12:30:00Z'), push('2026-10-21T12:40:00Z')), event, display_title,
+    });
+    const byHand = pushed(1, 'workflow_dispatch', BY_HAND_TITLE);
+    assert.equal(slotAdoption(slot, [byHand]), undefined);
+    // The timer's dispatch, a scheduled run and one a CI run on main started.
+    for (const event of ['workflow_dispatch', 'schedule', 'workflow_run']) {
+      assert.equal(slotAdoption(slot, [byHand, pushed(2, event)])?.id, 2, event);
+    }
+  });
+
   it('ignores pushes still queued or started before the slot', () => {
     assert.equal(slotAdoption(slot, [
       run(1, adopt('2026-10-21T13:10:00Z'), push(null, null, 'queued')),
@@ -158,6 +171,9 @@ describe('adoption slots', () => {
     assert.equal(slotFailure(slot, '0.689.0', runs)?.id, 1);
     // A newer release adopts at once.
     assert.equal(slotFailure(slot, '0.689.1-main.3270', runs), undefined);
+    // A release that failed in a run by hand waits too.
+    const byHand = { ...failed(2, '0.689.0', 'Test the app with the release'), event: 'workflow_dispatch', display_title: BY_HAND_TITLE };
+    assert.equal(slotFailure(slot, '0.689.0', [byHand])?.id, 2);
     for (const step of ['Install the release', "Check the scraper's optional peers",
       'Regenerate the contract and the iPhone resources', 'Write the adoption as a patch']) {
       assert.equal(slotFailure(slot, '0.689.0', [failed(1, '0.689.0', step)])?.id, 1);

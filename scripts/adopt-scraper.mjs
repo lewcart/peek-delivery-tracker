@@ -109,15 +109,22 @@ export function adoptionSlot(now) {
 }
 
 /**
+ * The title the workflow's `run-name` gives a run dispatched by hand, without the
+ * `slot` input the server's timer sets. Every other run has the workflow's name.
+ */
+export const BY_HAND_TITLE = 'Adopt scraper release by hand';
+
+/**
  * The run that adopted in this slot, if any: its Push job, which runs only for a
  * newer release that passed the app's tests and the database gate, started once
  * the slot had begun and pushed or is pushing. A run that found nothing newer,
  * or whose release failed, leaves the slot to a later run, so a release
- * published since does not wait for the next slot. `runs` are the workflow's
- * runs, each with its `jobs`.
+ * published since does not wait for the next slot. So does a run by hand: an
+ * urgent release does not hold back the ones after it. `runs` are the
+ * workflow's runs, each with its `display_title` and `jobs`.
  */
 export function slotAdoption(slot, runs) {
-  return runs.find((run) => run.jobs.some((job) => job.name === 'Push'
+  return runs.find((run) => run.display_title !== BY_HAND_TITLE && run.jobs.some((job) => job.name === 'Push'
     && (job.status === 'in_progress' || (job.status === 'completed' && job.conclusion === 'success'))
     && Date.parse(job.started_at) >= slot.getTime()));
 }
@@ -141,8 +148,9 @@ export function releaseFailed(slot, run) {
 /**
  * The run of this slot whose release `version` failed, such as the app's tests
  * with it: that release waits for the next slot instead of failing every later
- * run of this one, while a newer release still adopts at once. `runs` carry
- * their `jobs` and `artifacts`.
+ * run of this one, while a newer release still adopts at once. A run by hand
+ * counts too: the release fails the same way whoever started the run. `runs`
+ * carry their `jobs` and `artifacts`.
  */
 export function slotFailure(slot, version, runs) {
   return runs.find((run) => releaseFailed(slot, run)

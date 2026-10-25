@@ -6,7 +6,7 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { planChanges, selectSuites, successfulBaseline } from './ci-changes.mjs';
-import { RELEASE_STEPS } from './adopt-scraper.mjs';
+import { BY_HAND_TITLE, RELEASE_STEPS } from './adopt-scraper.mjs';
 
 const none = { web: false, migrations: false, ios: false };
 const web = { ...none, web: true };
@@ -268,7 +268,7 @@ describe('scraper adoption validation', () => {
     assert.doesNotMatch(workflow, /repository_dispatch|client_payload/);
   });
 
-  it('lets the first scheduled or CI-started run of a slot adopt, and a run by hand always', () => {
+  it('lets the first scheduled or CI-started run of a slot adopt, and a dispatched run always', () => {
     const triggers = workflow.match(/\non:\n([\s\S]*?)\n\S/)?.[1] ?? '';
     assert.match(triggers, /\n  workflow_run:\n\s+workflows: \[CI\]\n\s+types: \[completed\]\n\s+branches: \[main\]/);
     const due = workflow.match(/\n  due:\n([\s\S]*?)\n  adopt:\n/)?.[1];
@@ -285,7 +285,11 @@ describe('scraper adoption validation', () => {
     assert.match(workflow, /\n  push:\n    name: Push\n/);
     for (const step of RELEASE_STEPS) assert.ok(workflow.includes(`- name: ${step}\n`), `No step named ${step}`);
     assert.match(workflow, /- name: Record the release this run tries\n\s+if: steps\.target\.outputs\.adopt == 'true'\n[\s\S]*?name: release-\$\{\{ steps\.target\.outputs\.version \}\}\n/);
-    // Only a run by hand skips that check.
+    // It leaves out a run by hand by its title: a dispatch without the slot input the server's timer sets.
+    assert.ok(workflow.startsWith('name: Adopt scraper release\n'));
+    assert.ok(workflow.includes(`\nrun-name: \${{ github.event_name == 'workflow_dispatch' && inputs.slot != true && '${BY_HAND_TITLE}' || 'Adopt scraper release' }}\n`));
+    assert.match(workflow, /\n      slot:\n {8}description: .+\n {8}required: false\n {8}type: boolean\n {8}default: false\n/);
+    // Only a dispatched run, the timer's or one by hand, skips the Due job.
     assert.match(workflow, /\n    needs: due\n    if: >-\n      !cancelled\(\) && github\.repository == 'plhery\/peek-delivery-tracker'\n      && \(github\.event_name == 'workflow_dispatch' \|\| needs\.due\.outputs\.due == 'true'\)\n/);
     // Due is skipped then, and a skipped ancestor skips the push unless it says !cancelled().
     const push = workflow.match(/\n  push:\n([\s\S]*?)\n    runs-on:/)?.[1] ?? '';
