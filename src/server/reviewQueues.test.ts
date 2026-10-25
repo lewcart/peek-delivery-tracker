@@ -12,7 +12,7 @@ import {
   statusMapClosings,
 } from './reviewQueues';
 import { SupabaseError, SupabaseServiceClient } from './supabase';
-import type { JsonObject } from './types';
+import { isRecord, type JsonObject } from './types';
 
 const scraper = `universal-parcel-scraper@${manifest.dependencies['universal-parcel-scraper']}`;
 const HANDED = "DPD's map leaves it unmapped on purpose: it moves the parcel in transit without a milestone of its own.";
@@ -228,6 +228,51 @@ describe('review queue replay', () => {
       .resolves.toMatchObject({ cases_replayed: 3, cases_ignored: 1 });
     expect(client.ignoreReplayedTrackingSupportCases).toHaveBeenCalledExactlyOnceWith('v1', [{ id: 'case-314159265355',
       note: 'Its parcel is filed under fedex, one of the carriers its shape fits, and fedex tracked the number: no gap left.' }]);
+  });
+
+  it('ignores an S10 case filed under the post its suffix names once that post tracked the number', async () => {
+    const client = fakeClient();
+    const parcel = (number: string, carrier: string, confirmed: boolean): JsonObject => ({ tracking_number: number, one_off: true,
+      carrier, current_stage: 'in_transit', created_at: '2026-09-10T05:00:00Z',
+      carrier_data: { routing: { version: 1, ...(confirmed ? { confirmed_carrier: carrier, confirmed_number: number } : {}) } } });
+    // Made-up S10 numbers with Lithuania's suffix: detection leaves them to international post.
+    client.listOpenTrackingSupportCases.mockResolvedValue([['RA123456785LT', 'lietuvos-pastas'], ['RA876543216LT', 'lietuvos-pastas'],
+      ['RA111111115LT', 'royal-mail']].map(([number, carrier]) => ({ id: `case-${number}`, tracking_number: number,
+      configured_carrier: carrier, reasons: ['generic_postal'], last_outcome: 'unchanged' })));
+    client.trackingNumberParcels.mockResolvedValue(new Map([
+      ['RA123456785LT', [parcel('RA123456785LT', 'lietuvos-pastas', true)]],
+      // Not confirmed yet, and filed under another post than its suffix names.
+      ['RA876543216LT', [parcel('RA876543216LT', 'lietuvos-pastas', false)]],
+      ['RA111111115LT', [parcel('RA111111115LT', 'royal-mail', true)]],
+    ]));
+    await expect(replayReviewQueues(client as unknown as SupabaseServiceClient, 'v1', new Date('2026-09-10T12:00:00Z')))
+      .resolves.toMatchObject({ cases_replayed: 3, cases_ignored: 1 });
+    expect(client.ignoreReplayedTrackingSupportCases).toHaveBeenCalledExactlyOnceWith('v1', [{ id: 'case-RA123456785LT',
+      note: 'Its parcel is filed under lietuvos-pastas, the post its suffix names, and lietuvos-pastas tracked the number: no gap left.' }]);
+  });
+
+  it('ignores a case whose parcel routing filed from no carrier under the carrier that tracked the number', async () => {
+    const client = fakeClient();
+    const parcel = (number: string, data: JsonObject): JsonObject => ({ tracking_number: number, one_off: true, carrier: 'seur',
+      current_stage: 'in_transit', created_at: '2026-09-10T05:00:00Z', carrier_data: { ...data,
+        routing: { version: 1, confirmed_carrier: 'seur', confirmed_number: number, ...(isRecord(data.routing) ? data.routing : {}) } } });
+    // Made-up 12-digit numbers: several carriers issue the shape, SEUR not among those detection lists.
+    const numbers = ['314159265355', '123456789012', '271828182845', '161803398874'];
+    client.listOpenTrackingSupportCases.mockResolvedValue(numbers.map((number) => ({ id: `case-${number}`, tracking_number: number,
+      configured_carrier: 'seur', reasons: ['ambiguous_shape'], last_outcome: 'unchanged' })));
+    client.trackingNumberParcels.mockResolvedValue(new Map([
+      // Swapped from no carrier, and filed under the carrier a provider named.
+      ['314159265355', [parcel('314159265355', { auto_changed_from: 'unknown', auto_changed_to: 'seur' })]],
+      ['123456789012', [parcel('123456789012', { routing: { discovered_carrier: 'seur' } })]],
+      // Swapped from another carrier, and filed by its owner.
+      ['271828182845', [parcel('271828182845', { auto_changed_from: 'correos-express', auto_changed_to: 'seur' })]],
+      ['161803398874', [parcel('161803398874', {})]],
+    ]));
+    await expect(replayReviewQueues(client as unknown as SupabaseServiceClient, 'v1', new Date('2026-09-10T12:00:00Z')))
+      .resolves.toMatchObject({ cases_replayed: 4, cases_ignored: 2 });
+    const note = 'Routing filed its parcel under seur from no carrier, and seur tracked the number: several carriers issue its shape, so no gap is left.';
+    expect(client.ignoreReplayedTrackingSupportCases).toHaveBeenCalledExactlyOnceWith('v1',
+      [{ id: 'case-314159265355', note }, { id: 'case-123456789012', note }]);
   });
 
   it('ignores a case on a reference its carrier resolves to a barcode of its own that fits that carrier', async () => {

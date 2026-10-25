@@ -240,7 +240,11 @@ the reasons, and a parcel its carrier only announced has had no check with dated
 to verify the case. So is a case on a reference, filed under its parcels' carrier or none, that
 the carrier tracked and resolves to a barcode of its own (`canonical_tracking_number`)
 the carrier's shape fits, such as a Hermes Germany order number: every check keeps the
-reference's reasons. So is a case on a pickup code filed under no carrier, which was never a
+reference's reasons. So is a case whose parcels are all filed under the carrier that tracked
+the number when the shape alone keeps a reason: an S10 number detection leaves to
+international post, filed under the post its suffix names, or a shape several carriers issue,
+under whose carrier routing filed each parcel from no carrier (a swap from `unknown`, or the
+carrier a provider named), never as a correction of another carrier. So is a case on a pickup code filed under no carrier, which was never a
 tracking number. A case only the
 Add sheet's recognition saw stays open, since detection could still learn its shape.
 `tracking_review_runs` keeps one row per version, so restarts and other servers do not
