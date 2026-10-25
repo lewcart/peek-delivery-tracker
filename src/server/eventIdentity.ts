@@ -232,11 +232,13 @@ function zoneWallClock(zone: string, row: JsonObject): string | null {
 /**
  * One scan read on two clocks: one row shows a wall clock under an offset of
  * its own, the other carries the same wall clock under the zone's label. The
- * provider code must agree, and the location too; wording may differ.
+ * provider code must agree, and the location too; wording may differ. A scan
+ * and a row that carry no code (Posti's) need the same wording instead.
  */
 function relabelled(zone: string, scan: JsonObject, row: JsonObject): boolean {
   const code = providerCode(scan);
-  if (!code || code.toLowerCase() === 'unknown' || code !== providerCode(row)) return false;
+  if (code || providerCode(row) ? !code || code.toLowerCase() === 'unknown' || code !== providerCode(row)
+    : wordingOf(scan) === '' || wordingOf(scan) !== wordingOf(row)) return false;
   if (String(scan.location ?? '').trim() !== String(row.location ?? '').trim()) return false;
   const shown = ownWallClock(zone, scan);
   const saved = ownWallClock(zone, row);

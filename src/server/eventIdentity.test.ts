@@ -261,6 +261,17 @@ describe('scans a source once read on one zone\'s clock', () => {
     expect(sameInstantIdentities([indian], [{ ...labelled, occurred_at: '2026-07-13T20:50:00+00:00', time: '2026-07-13T20:50:00Z' }], 'india-post').size).toBe(0);
   });
 
+  it('matches a scan and a row that carry no code by their wording instead', () => {
+    // Posti's copies of an origin post's scans carry no code.
+    const uncoded = { ...labelled, provider_code: undefined };
+    const scan = { ...abroad, description: ' item  RECEIVED', raw_data: { time: abroad.raw_data.time } };
+    expect([...sameInstantIdentities([scan], [uncoded], 'india-post')]).toEqual([['india-post:abroad', 'india-post:labelled']]);
+    expect(sameInstantIdentities([{ ...scan, description: 'Item dispatched' }], [uncoded], 'india-post').size).toBe(0);
+    expect(sameInstantIdentities([{ ...scan, description: '' }], [{ ...uncoded, description: '' }], 'india-post').size).toBe(0);
+    // A code on one side only is no match.
+    expect(sameInstantIdentities([scan], [{ ...uncoded, description: 'Item Received', provider_code: 'ItemReceived' }], 'india-post').size).toBe(0);
+  });
+
   it('keeps ambiguous scans and rows unmatched, and other sources out', () => {
     expect(sameInstantIdentities([abroad], [labelled, { ...labelled, provider_event_id: 'india-post:twin' }], 'india-post').size).toBe(0);
     expect(sameInstantIdentities([abroad, { ...abroad, provider_event_id: 'india-post:twin' }], [labelled], 'india-post').size).toBe(0);
