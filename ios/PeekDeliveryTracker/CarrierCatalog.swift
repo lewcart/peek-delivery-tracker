@@ -203,6 +203,12 @@ enum OrderShop: String, Decodable, Sendable {
     case amazon, shein, shopee, temu
 }
 
+/// A postal number whose check digit doesn't add up, which Add asks about as the front door does.
+struct CheckDigitTrouble: Equatable, Sendable {
+    /// The number with a lookalike letter read as its digit, or back, when that one adds up.
+    let suggestion: String?
+}
+
 /// Carrier recognition in the Add sheet: a shape several carriers share is
 /// checked with them once the number is settled (the field loses focus, a
 /// paste, a scan, a shared number), never on each keystroke. It never holds
@@ -1040,8 +1046,13 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
             let source: String
             let flags: String
         }
+        struct Lookalikes: Decodable {
+            let digitForLetter: [String: String]
+            let letterForDigit: [String: String]
+        }
         let shops: [Shop]
         let numberWords: String
+        let lookalikes: Lookalikes
         let candidates: [Shape]
     }
 
@@ -1062,6 +1073,37 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
     private static let numberWords = readingRules?.numberWords
 
     private static let linkPattern = "https?://[^\\s<>\\\"']+"
+
+    /// Letters a scanner or a tired eye reads where a label prints a digit, and the other way around.
+    private static let digitForLetter = characters(readingRules?.lookalikes.digitForLetter)
+    private static let letterForDigit = characters(readingRules?.lookalikes.letterForDigit)
+
+    private static func characters(_ map: [String: String]?) -> [Character: Character] {
+        (map ?? [:]).reduce(into: [:]) { characters, pair in
+            if let key = pair.key.first, let value = pair.value.first { characters[key] = value }
+        }
+    }
+
+    /// A postal number (2 letters, 9 digits, 2 letters) whose check digit doesn't add up, as the front door
+    /// reads it (`checkDigitTrouble` in src/peek/lookup/reading.ts). A letter standing where a digit belongs
+    /// has one likely correction; a wrong digit has many, each as likely as the next, so none is offered.
+    /// Carriers that reuse the shape without the check digit exist, so this is a question, never a refusal.
+    func checkDigitTrouble(_ number: String) -> CheckDigitTrouble? {
+        let value = Self.normalize(number)
+        guard Self.matches(value, pattern: "^[A-Z0-9]{13}$"), !Self.isValidS10(value), detect(value).confidence != .high
+        else { return nil }
+        var postal = ""
+        for (index, character) in value.enumerated() {
+            let digit = character.isASCII && character.isNumber
+            let read = (2...10).contains(index)
+                ? (digit ? character : Self.digitForLetter[character])
+                : (digit ? Self.letterForDigit[character] : character)
+            guard let read else { return nil }
+            postal.append(read)
+        }
+        if postal == value { return CheckDigitTrouble(suggestion: nil) }
+        return Self.isValidS10(postal) ? CheckDigitTrouble(suggestion: postal) : nil
+    }
 
     /// The shop whose order number a text holds.
     static func orderShop(in text: String) -> OrderShop? {

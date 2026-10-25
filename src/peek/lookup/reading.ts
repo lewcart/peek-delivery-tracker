@@ -155,8 +155,8 @@ export function looksLikeNumber(text: string): boolean {
 }
 
 /** Letters a scanner or a tired eye reads where a label prints a digit, and the other way around. */
-const DIGIT_FOR: Record<string, string> = { O: '0', Q: '0', D: '0', I: '1', L: '1', Z: '2', A: '4', S: '5', G: '6', T: '7', B: '8' };
-const LETTER_FOR: Record<string, string> = { 0: 'O', 1: 'I', 2: 'Z', 5: 'S', 8: 'B' };
+const DIGIT_FOR: Record<string, string | undefined> = rules.lookalikes.digitForLetter;
+const LETTER_FOR: Record<string, string | undefined> = rules.lookalikes.letterForDigit;
 
 export interface CheckDigitTrouble {
   /** The number with a lookalike letter read as its digit (or back), when that one adds up. */

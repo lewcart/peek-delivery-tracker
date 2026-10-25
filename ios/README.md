@@ -73,7 +73,9 @@ extension does. A drop with neither a tracking number nor a shop's order number 
 Add reads a text as the front door does, with the same rules and examples (`shared/reading.json`).
 A message's one number is read even when its shape proves no carrier, and the carriers are asked.
 A pickup code or a shop's order number is held back: Add asks no server about it, can't save it
-and says where the tracking number is instead.
+and says where the tracking number is instead. A postal number whose check digit doesn't add up is
+questioned, never refused: Add offers the number a lookalike letter suggests, and adding the parcel
+takes it as typed.
 
 With a keyboard, ⌘N adds a parcel, ⌘F searches, ⌘R refreshes where its button shows, ⌘1 to ⌘3
 choose the tabs and ⌘, opens Settings. On the parcel shown, beside the list or over it, ⇧⌘C

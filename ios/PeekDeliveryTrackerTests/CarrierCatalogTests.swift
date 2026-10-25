@@ -1903,6 +1903,8 @@ extension CarrierCatalogTests {
             let number: String?
             /// The carrier that claims the number read instead, with certainty.
             let carrier: String?
+            /// Whether the number read is a pickup code, which Add holds back.
+            let pickup: Bool?
         }
         struct File: Decodable {
             let examples: [Example]
@@ -1926,6 +1928,9 @@ extension CarrierCatalogTests {
             if let carrier = example.carrier, match.carrier.rawValue != carrier || match.confidence != .high {
                 mismatches.append("\(text): expected \(carrier) to claim it, got \(match.carrier.rawValue)/\(match.confidence)")
             }
+            if let pickup = example.pickup, CarrierCatalog.isPickupCode(CarrierCatalog.normalize(match.trackingNumber)) != pickup {
+                mismatches.append("\(text): expected \(pickup ? "a pickup code" : "no pickup code")")
+            }
         }
         XCTAssertEqual(mismatches, [], mismatches.prefix(10).joined(separator: "\n"))
         // Each shop's notice is the front door's, in every language.
@@ -1937,6 +1942,25 @@ extension CarrierCatalogTests {
                 XCTAssertNotNil(messages["door.order.\(shop.rawValue).title"], "\(language) \(shop)")
                 XCTAssertNotNil(messages["door.order.\(shop.rawValue).body"], "\(language) \(shop)")
             }
+        }
+    }
+
+    /// The front door's check-digit examples (shared/reading.json): Add asks about the same numbers.
+    func testCheckDigitsAreQuestionedAsTheFrontDoorQuestionsThem() throws {
+        struct Example: Decodable {
+            let number: String
+            let trouble: Bool
+            let suggestion: String?
+        }
+        struct File: Decodable {
+            let checkDigits: [Example]
+        }
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "Reading", withExtension: "json"))
+        let file = try JSONDecoder().decode(File.self, from: Data(contentsOf: url))
+        XCTAssertGreaterThan(file.checkDigits.count, 5)
+        for example in file.checkDigits {
+            let expected = example.trouble ? CheckDigitTrouble(suggestion: example.suggestion) : nil
+            XCTAssertEqual(catalog.checkDigitTrouble(example.number), expected, example.number)
         }
     }
 

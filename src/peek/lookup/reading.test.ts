@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkDigitTrouble, looksLikeNumber, numbersInText, readText } from './reading';
+import { isPickupCode, normalizeTrackingNumber } from '../../lib/carriers';
 import rules from '../../../shared/reading.json';
 
 // Every number here is fictional.
@@ -40,6 +41,7 @@ describe('reading the field', () => {
     expect(reading.order).toBe(example.shop);
     if ('number' in example) expect(reading.match.trackingNumber).toBe(example.number);
     if ('carrier' in example) expect(reading.match).toMatchObject({ carrier: example.carrier, confidence: 'high' });
+    if ('pickup' in example) expect(isPickupCode(normalizeTrackingNumber(reading.match.trackingNumber))).toBe(example.pickup);
   });
 
   it('sets a typed number in the label’s type, and prose as prose', () => {
@@ -52,27 +54,9 @@ describe('reading the field', () => {
   });
 });
 
+// The iPhone's Add sheet asks about the same numbers.
 describe('check digits', () => {
-  it('suggests the digit a letter was read for', () => {
-    expect(checkDigitTrouble('LX1234567B5DE')).toEqual({ suggestion: 'LX123456785DE' });
-    expect(checkDigitTrouble('lx 1234567b5 de')).toEqual({ suggestion: 'LX123456785DE' });
-    expect(checkDigitTrouble('RR12345678SCH')).toEqual({ suggestion: 'RR123456785CH' });
-    // A digit where a letter stands.
-    expect(checkDigitTrouble('1X123456785DE')).toEqual({ suggestion: 'IX123456785DE' });
-    expect(checkDigitTrouble('LX123456785D3')).toBeNull();
-  });
-
-  it('asks without guessing when a digit is wrong: many corrections would add up', () => {
-    expect(checkDigitTrouble('LX123456789DE')).toEqual({ suggestion: null });
-    expect(checkDigitTrouble('LX123465785DE')).toEqual({ suggestion: null });
-  });
-
-  it('leaves alone what adds up, and what is not a postal number', () => {
-    expect(checkDigitTrouble('LX123456785DE')).toBeNull();
-    expect(checkDigitTrouble('1ZDEMO202600000001')).toBeNull();
-    expect(checkDigitTrouble('1234567899')).toBeNull();
-    expect(checkDigitTrouble('DEMOGLS202600')).toBeNull();
-    // Letters that stand for no digit make it another kind of number.
-    expect(checkDigitTrouble('LX12X4567Y5DE')).toBeNull();
+  it.each(rules.checkDigits)('questions a postal number whose check digit does not add up: $number', (example) => {
+    expect(checkDigitTrouble(example.number)).toEqual(example.trouble ? { suggestion: example.suggestion ?? null } : null);
   });
 });

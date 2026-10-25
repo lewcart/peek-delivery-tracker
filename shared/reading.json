@@ -22,6 +22,24 @@
     }
   ],
   "numberWords": "track|parcel|shipment|sendung|paket|suivi|colis|tracciamento|spedizione|pacco|seguimiento|env[ií]o|paquete|seguimento|encomenda|śledzeni|przesyłk|paczk",
+  "lookalikes": {
+    "digitForLetter": { "O": "0", "Q": "0", "D": "0", "I": "1", "L": "1", "Z": "2", "A": "4", "S": "5", "G": "6", "T": "7", "B": "8" },
+    "letterForDigit": { "0": "O", "1": "I", "2": "Z", "5": "S", "8": "B" }
+  },
+  "checkDigits": [
+    { "number": "LX1234567B5DE", "trouble": true, "suggestion": "LX123456785DE", "why": "A letter read where the label prints a digit: the one reading that adds up is offered." },
+    { "number": "lx 1234567b5 de", "trouble": true, "suggestion": "LX123456785DE" },
+    { "number": "RR12345678SCH", "trouble": true, "suggestion": "RR123456785CH" },
+    { "number": "1X123456785DE", "trouble": true, "suggestion": "IX123456785DE", "why": "A digit read where the label prints a letter." },
+    { "number": "LX123456785D3", "trouble": false },
+    { "number": "LX123456789DE", "trouble": true, "why": "A wrong digit has many corrections, each as likely as the next: the number is questioned, and none is offered." },
+    { "number": "LX123465785DE", "trouble": true },
+    { "number": "LX123456785DE", "trouble": false, "why": "What adds up, and what is not a postal number, is left alone." },
+    { "number": "1ZDEMO202600000001", "trouble": false },
+    { "number": "1234567899", "trouble": false },
+    { "number": "DEMOGLS202600", "trouble": false },
+    { "number": "LX12X4567Y5DE", "trouble": false, "why": "Letters that stand for no digit make it another kind of number." }
+  ],
   "examples": [
     { "text": "302-4571983-2294617", "shop": "amazon" },
     { "text": "Order #302-4571983-2294617 is confirmed", "shop": "amazon" },
@@ -68,6 +86,10 @@
     { "text": "Track it with DHL: 1234567899 (order PO-000-12345678901234567)", "shop": null, "number": "1234567899", "why": "A number beside an order number is read, and the order is not noted." },
     { "text": "Your order 302-4571983-2294617 has shipped.\nTrack it with DHL: 1234567899", "shop": null, "number": "1234567899" },
     { "text": "Shein order GSH0A1B2C3D4E5F: your parcel 1234567899 is on its way", "shop": null, "number": "1234567899" },
-    { "text": "Order 261025ABCD1234\nTracking 1234567899", "shop": null, "number": "1234567899" }
+    { "text": "Order 261025ABCD1234\nTracking 1234567899", "shop": null, "number": "1234567899" },
+    { "text": "123456", "shop": null, "number": "123456", "pickup": true, "why": "Six digits are the code that opens a locker or collects a parcel: held back, and nobody is asked." },
+    { "text": "Parcel 123456", "shop": null, "number": "123456", "pickup": true },
+    { "text": "Your pickup code: 123456", "shop": null, "number": "", "why": "No carrier claims six digits, so a message's code is no number it introduces." },
+    { "text": "1234567", "shop": null, "number": "1234567", "pickup": false }
   ]
 }

@@ -30,6 +30,8 @@ struct AddParcelView: View {
     @State private var verifiedCarrier: CarrierDetectionResponse?
     @State private var recognition: CarrierRecognition
     @State private var refusedQuestion: NumberRefusalRequest?
+    /// The number whose check digit was questioned and then added as typed.
+    @State private var asTyped: String?
     @FocusState private var focusedField: Field?
 
     @ObservedObject private var catalog = CarrierCatalog.shared
@@ -307,6 +309,20 @@ struct AddParcelView: View {
                     Link(localizer.text("add.openAmazonOrders"), destination: CarrierCatalog.amazonOrdersURL(""))
                         .font(.subheadline)
                 }
+            }
+            // A check digit that doesn't add up is a question, never a refusal: adding the parcel takes it as typed.
+            if let typo, recognition.settledNumber == normalizedNumber {
+                heldBackNote(title: localizer.text("door.typo.check"),
+                             body: localizer.text(typo.suggestion == nil ? "door.typo.compare" : "door.typo.letter"))
+                if let suggestion = typo.suggestion {
+                    Button(localizer.text("door.typo.suggest", ["number": suggestion])) { use(suggestion) }
+                        .font(.subheadline)
+                }
+                Button(localizer.text("door.typo.asTyped")) {
+                    asTyped = normalizedNumber
+                    save()
+                }
+                .font(.subheadline)
             }
         }
         .foregroundStyle(Brand.ink)
@@ -664,6 +680,11 @@ struct AddParcelView: View {
 
     private var amazonNumber: Bool { catalog.isAmazonTrackingNumber(parsed.trackingNumber) }
 
+    /// A postal number whose check digit doesn't add up, until it is added as typed.
+    private var typo: CheckDigitTrouble? {
+        normalizedNumber.isEmpty || asTyped == normalizedNumber ? nil : catalog.checkDigitTrouble(normalizedNumber)
+    }
+
     /// Six digits are a pickup code unless a carrier picked by hand takes them as its number.
     private var pickupCode: Bool { carrierOverride == nil && CarrierCatalog.isPickupCode(normalizedNumber) }
 
@@ -891,6 +912,14 @@ struct AddParcelView: View {
         focusedField = nil
         errorMessage = nil
         duplicateParcelID = nil
+    }
+
+    /// Puts the number the check digit suggests in the field, as a paste would.
+    private func use(_ suggestion: String) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.34)) {
+            trackingInput = suggestion
+        }
+        recognition.settledNumber = Self.trackingNumber(in: suggestion)
     }
 
     private func submitTracking() {
