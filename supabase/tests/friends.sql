@@ -36,8 +36,8 @@ begin
  exception when invalid_parameter_value then null; end;
  perform public.friends_action('save_profile','A friend',true,false);
  view := public.friends_snapshot();
- if view#>>'{ownCard,stats,deliveredCount}' <> '1' or view#>>'{ownCard,stats,averageDays}' <> '1'
-    or view#>'{ownCard,stats,stamps}' <> to_jsonb(array_remove(array['first','express',case when extract(month from (now()-interval '1 hour') at time zone 'UTC')=12 then 'homeForHolidays' end],null)) or view#>'{ownCard,arrivedThisWeek}' <> 'null' then raise exception 'Incorrect private summary: %',view; end if;
+ -- The server fills in a shared card's counts and stamps.
+ if view#>'{ownCard,stats}' <> '{"deliveredCount":0,"averageDays":null,"stamps":[]}' or view#>'{ownCard,arrivedThisWeek}' <> 'null' then raise exception 'Incorrect private summary: %',view; end if;
  code := public.friends_action('create_invite')->>'inviteCode';
  begin
    perform public.friends_action('accept_invite',p_code=>code);

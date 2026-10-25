@@ -170,7 +170,7 @@ enum TrackingLocation {
     ]
 
     // Carrier spellings no region name matches. Display only: Passport evidence
-    // stays in step with private.passport_country, which Friends stamps use.
+    // stays in step with the web's trackingLocationCountry, which Friends stamps use.
     private static let carrierSpellings: [String: String] = [
         "united states of america": "US", "great britain": "GB", "czech republic": "CZ", "holland": "NL",
         "hong kong": "HK", "macau": "MO", "macao": "MO", "turkey": "TR", "russian federation": "RU",
