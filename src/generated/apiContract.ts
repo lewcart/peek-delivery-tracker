@@ -25432,7 +25432,7 @@ export const CARRIER_CAPABILITIES = {
     "timezone": "Asia/Singapore",
     "tracking": {
       "mode": "automatic",
-      "adapter": "universal"
+      "adapter": "spx-sg"
     },
     "trackingUrlTemplate": "https://spx.sg/track?{trackingNumber}",
     "linkRules": [
