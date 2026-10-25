@@ -29,7 +29,7 @@ describe('relayCopies', () => {
   it('leaves a scan of another stage, or more than a minute away, on its own', () => {
     expect(relayCopies(handedOver([
       scan('customs', 'swiss-post', 'customs', '2026-09-09T13:15:11Z'),
-      scan('exchange', 'dhl', 'in_transit', '2026-09-09T13:15:00Z'),
+      scan('exchange', 'dhl', 'in_transit', '2026-09-09T13:15:04Z'),
       scan('sorted', 'swiss-post', 'in_transit', '2026-09-09T15:42:29Z'),
       scan('later', 'dhl', 'in_transit', '2026-09-09T15:43:30Z'),
       // Nor are two scans of the new carrier, or of the earlier one, a pair.
@@ -66,6 +66,39 @@ describe('relayCopies', () => {
       placed('minute', 'four-px', 'in_transit', '2026-10-18T08:20:00Z'),
       placed('minute-scan', 'dpd', 'accepted', '2026-10-18T08:20:00Z', 'Lublin'),
     ]))).toEqual(new Map());
+  });
+
+  it('pairs a row of a carrier keeping minutes with the other carrier\'s row of that minute, in any stage', () => {
+    const placed = (id: string, source: string, stage: string, at: string, location?: string) => ({ ...scan(id, source, stage, at), location });
+    const parcel = (tracking_events: object[]) => ({
+      carrier: 'poczta-polska', carrier_data: { original_carrier: 'poczta-polska', active_tracking_carrier: 'dhl' }, tracking_events,
+    });
+    expect(relayCopies(parcel([
+      // A post office's posting, and the new carrier's first row stamped to the minute in that country, or at a code.
+      placed('posted', 'poczta-polska', 'accepted', '2026-10-23T08:20:59Z', 'Post office Lodz'),
+      placed('origin', 'dhl', 'in_transit', '2026-10-23T08:20:00Z', 'Poland'),
+      placed('posted-again', 'poczta-polska', 'accepted', '2026-10-23T09:50:34Z', 'Post office Lodz'),
+      placed('announced', 'dhl', 'registered', '2026-10-23T09:50:00Z', 'PL12345, PL'),
+      // The earlier carrier keeping minutes: its failed delivery beside the new carrier's, filed in transit.
+      placed('missed', 'poczta-polska', 'failed_attempt', '2026-10-25T11:28:00Z'),
+      placed('not-possible', 'dhl', 'in_transit', '2026-10-25T11:28:40Z', 'Germany'),
+    ]))).toEqual(new Map([['posted', 'origin'], ['posted-again', 'announced'], ['missed', 'not-possible']]));
+    // Two rows on a minute's first second (two carriers keeping minutes), the next minute's row, and places whose names
+    // conflict stay two.
+    expect(relayCopies(parcel([
+      placed('minutes', 'poczta-polska', 'accepted', '2026-10-23T08:20:00Z'),
+      placed('minutes-too', 'dhl', 'in_transit', '2026-10-23T08:20:00Z'),
+      placed('before', 'poczta-polska', 'accepted', '2026-10-23T09:49:59Z'),
+      placed('next-minute', 'dhl', 'registered', '2026-10-23T09:50:00Z'),
+      placed('here', 'poczta-polska', 'accepted', '2026-10-23T10:20:59Z', 'Post office Lodz'),
+      placed('there', 'dhl', 'in_transit', '2026-10-23T10:20:00Z', 'Warszawa'),
+    ]))).toEqual(new Map());
+    // A pair of the same stage comes first: the customs office's two steps of one minute stay apart.
+    expect(relayCopies(parcel([
+      placed('sent', 'unknown', 'customs', '2026-10-10T11:37:00Z', 'Langley'),
+      placed('returned', 'poczta-polska', 'in_transit', '2026-10-10T11:37:01Z'),
+      placed('received', 'dhl', 'in_transit', '2026-10-10T11:37:53Z', 'Langley'),
+    ]))).toEqual(new Map([['returned', 'received']]));
   });
 
   it('makes the closest pairs first, and one scan pairs once', () => {

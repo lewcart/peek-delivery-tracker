@@ -629,8 +629,13 @@ A parcel often changes carrier at the border. The origin history is always kept.
   hand-over at one second, each in its own stage (4PX's "Parcel handed to dpd" and DPD's
   acceptance). At that second the places must not conflict, and on a minute's first second,
   which a carrier keeping minutes gives every scan, they must share a word; a few seconds
-  apart in other stages the rows stay two. When only the earlier carrier's row says where the
-  scan was, the other row is served with `relay_of` instead. The new carrier may also tell
+  apart in other stages the rows stay two. A carrier keeping minutes stamps the other's scan
+  on its minute's first second, so such a row and the other carrier's row with seconds within
+  that minute pair in any stage too (Poczta Polska's posting and DHL's or bpost's first row),
+  when the places' names, codes left out, do not conflict. That pairing comes after the
+  others, so two steps of one minute that both carriers tell pair stage by stage. When only
+  the earlier carrier's row says where the scan was, the other row is served with `relay_of`
+  instead. The new carrier may also tell
   the steps the earlier one sent it over the posts' data exchange, placed only in the earlier carrier's
   country and stamped when the message arrived (Slovenská pošta tells Poczta Polska's posting
   and departure an hour or two late). A row of the new carrier placed in nothing but a country

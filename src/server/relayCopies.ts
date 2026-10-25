@@ -15,7 +15,13 @@
  * second (4PX's "Parcel handed to dpd" and DPD's acceptance, Chronopost's
  * departure sort and DPD's): a second the two share, from places that do not
  * conflict, is one scan. On a minute's first second, which a carrier keeping
- * minutes gives every scan, the places must also share a word.
+ * minutes gives every scan, the places must also share a word. A carrier that
+ * keeps minutes tells the other's scan on that minute's first second: such a
+ * row and the other carrier's row within that minute, with seconds, are one
+ * scan in any stage too (Poczta Polska's posting and DHL's or bpost's first
+ * row, PostNord's failed delivery and DHL's), when the places' names do not
+ * conflict. That pairing comes after the others, so a minute's two scans each
+ * carrier tells in its stage still pair stage by stage.
  *
  * The new carrier, in turn, may tell the steps the earlier one sent it over
  * the posts' data exchange: the posting and the departure from its country,
@@ -90,10 +96,26 @@ function sameSecond(copy: { at: number; words: string[] }, scan: { at: number; w
   return second(copy.at) % 60 !== 0 || copy.words.some((word) => scan.words.includes(word));
 }
 
+/** A place's words that name it, without its codes: a postcode or an office number names no other place. */
+function names(words: readonly string[]): string[] {
+  return words.filter((word) => !/\d/.test(word));
+}
+
+/**
+ * Whether two scans of one minute are one, told by a carrier that keeps minutes only and one that keeps seconds: one
+ * on the minute's first second and the other within it, from places whose names do not conflict.
+ */
+function sameMinute(copy: { at: number; words: string[] }, scan: { at: number; words: string[] }): boolean {
+  const first = (at: number) => Math.floor(at / SECOND_MS) % 60 === 0;
+  return Math.floor(copy.at / MINUTE_MS) === Math.floor(scan.at / MINUTE_MS) && first(copy.at) !== first(scan.at)
+    && !placesConflict(names(copy.words), names(scan.words));
+}
+
 /**
  * The relay pairs of a handed-over parcel, each copy with the id of the scan it repeats. The earlier carrier's scans
  * repeat a scan of another source at the same stage within a minute, or in any stage at the same second, the closest
- * pairs first. Then a row of the new
+ * pairs first. Then, in any stage, a row on a minute's first second repeats one with seconds within that minute
+ * (`sameMinute`). Then a row of the new
  * carrier placed only in a country the earlier carrier delivers in, and the new carrier does not, repeats the earlier
  * carrier's latest scan of its stage, when it follows every such scan by up to three hours but not by whole hours.
  * A scan is in one pair at most, so two scans of one minute that the earlier carrier tells once stay two rows.
@@ -112,6 +134,9 @@ export function relayCopies(row: JsonObject): Map<string, string> {
     .filter((scan) => scan.source !== earlier
       && ((scan.stage === copy.stage && Math.abs(scan.at - copy.at) <= RELAY_WINDOW_MS) || sameSecond(copy, scan)))
     .map((scan) => ({ copy, scan, gap: Math.abs(scan.at - copy.at) })));
+  const minutes = scans.filter((copy) => copy.source === earlier).flatMap((copy) => scans
+    .filter((scan) => scan.source !== earlier && sameMinute(copy, scan))
+    .map((scan) => ({ copy, scan, gap: Math.abs(scan.at - copy.at) })));
   const current = currentCarrier(row);
   const exchanged = scans.filter((copy) => copy.source === current && copy.country !== null
     && homes(earlier).includes(copy.country) && !homes(current).includes(copy.country)).flatMap((copy) => {
@@ -121,7 +146,7 @@ export function relayCopies(row: JsonObject): Map<string, string> {
       ? [{ copy, scan, gap: copy.at - scan.at }] : [];
   });
   const paired = new Set<string>();
-  for (const list of [candidates, exchanged]) {
+  for (const list of [candidates, minutes, exchanged]) {
     list.sort((a, b) => a.gap - b.gap || a.copy.at - b.copy.at
       || a.copy.id.localeCompare(b.copy.id) || a.scan.id.localeCompare(b.scan.id));
     for (const { copy, scan } of list) {
