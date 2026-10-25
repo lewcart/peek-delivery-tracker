@@ -112,7 +112,7 @@ describe('providerCopies', () => {
       scan('c2', 'correos-chile', '2026-10-08T23:28:00Z', { description: 'Left the country', location: 'Airport' }),
       scan('u1', 'unknown', '2026-10-08T20:28:00Z', { universal_provider: '17TRACK', description: 'In transfer', location: 'CL' }),
       scan('u2', 'unknown', '2026-10-08T11:18:00Z', { universal_provider: '17TRACK', stage: 'registered', location: 'CL' }),
-      // Another shift, another place or another provider is no reading of that clock.
+      // Another shift, at that place or another, or another provider is no reading of that clock.
       scan('u3', 'unknown', '2026-10-08T12:18:00Z', { universal_provider: '17TRACK', stage: 'registered', location: 'CL' }),
       scan('u4', 'unknown', '2026-10-08T11:19:00Z', { universal_provider: '17TRACK', stage: 'registered', location: 'BR' }),
       scan('u5', 'unknown', '2026-10-08T11:20:00Z', { ...named, stage: 'registered', location: 'CL' }),
@@ -172,22 +172,23 @@ describe('providerCopies', () => {
     expect([...providerCopies({ carrier_data: confirmed, tracking_events: events })].sort()).toEqual(['u1', 'u2', 'u3']);
   });
 
-  it('leaves out a provider\'s row with no place by the shift its copy with no place shows', () => {
+  it('leaves out a provider\'s row, at any place, by the shift its copies show', () => {
     // ParcelsApp reads Pitney Bowes's customs scans an hour late; its clearance has no place, and the carrier's
-    // scan of it is read as another stage.
+    // scan of it is read as another stage. It reads the depot's sorting scan on the same clock.
     const events = [
       scan('c1', 'pitney-bowes', '2026-10-21T07:55:00Z', { stage: 'customs', description: 'Customs Clearance', location: 'IT' }),
       scan('c2', 'pitney-bowes', '2026-10-22T10:42:00Z', { description: 'B2C ClearanceStatus4', location: 'NL' }),
       scan('c3', 'pitney-bowes', '2026-10-23T09:00:00Z', { description: 'Sorted', location: 'NL' }),
       scan('u1', 'unknown', '2026-10-21T08:55:00Z', { ...named, stage: 'customs', description: 'Customs Import submitted' }),
       scan('u2', 'unknown', '2026-10-22T11:42:00Z', { ...named, stage: 'customs', description: 'Customs Import cleared' }),
-      // Another shift, or a row at a place no copy there shows the shift of, stays.
-      scan('u3', 'unknown', '2026-10-22T12:42:00Z', { ...named, stage: 'customs' }),
-      scan('u4', 'unknown', '2026-10-22T11:42:00Z', { universal_provider: '17TRACK', stage: 'customs' }),
       scan('u5', 'unknown', '2026-10-23T10:00:00Z', { ...named, stage: 'customs', location: 'Venlo' }),
+      // Another shift, with no place or at one, or another provider's row at that shift, stays: a step of its own.
+      scan('u3', 'unknown', '2026-10-22T12:42:00Z', { ...named, stage: 'customs' }),
+      scan('u6', 'unknown', '2026-10-23T11:00:00Z', { ...named, stage: 'customs', location: 'Venlo' }),
+      scan('u4', 'unknown', '2026-10-22T11:42:00Z', { universal_provider: '17TRACK', stage: 'customs' }),
     ];
     const row = { carrier_data: { routing: { confirmed_carrier: 'pitney-bowes' } }, tracking_events: events };
-    expect(providerCopyScans(row)).toEqual(new Map([['u1', new Set(['c1'])], ['u2', new Set(['c2'])]]));
+    expect(providerCopyScans(row)).toEqual(new Map([['u1', new Set(['c1'])], ['u2', new Set(['c2'])], ['u5', new Set(['c3'])]]));
   });
 });
 

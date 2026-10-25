@@ -134,9 +134,8 @@ do $$ begin
   end if;
 end; $$;
 -- A provider tells some scans on two clocks: its twin of a copy, in the copy's words, place and stage whole hours
--- from it, is the same scan, and so is its row by the shift another of its copies at the same place shows. Each
--- hides the provider's other rows of its minute. A twin 90 minutes away, a row at another place or by another
--- shift stays.
+-- from it, is the same scan, and so is its row, at any place, by the shift another of its copies shows. Each hides
+-- the provider's other rows of its minute. A twin 90 minutes away, or a row by another shift, stays.
 insert into public.packages(id, user_id, tracking_number, label, carrier, current_stage, carrier_data)
 values ('97000000-0000-0000-0000-000000000011', '97000000-0000-0000-0000-000000000001', 'COPYTEST2', 'Clocks',
   'posti', 'in_transit', '{"routing": {"confirmed_carrier": "posti"}}');
@@ -181,8 +180,8 @@ do $$ begin
   if public.hidden_provider_copy('97000000-0000-0000-0000-000000000018') then
     raise exception 'A provider row 90 minutes from its copy was hidden as a twin';
   end if;
-  if public.hidden_provider_copy('97000000-0000-0000-0000-000000000021') then
-    raise exception 'A provider row at another place than its shifted copy was hidden';
+  if not public.hidden_provider_copy('97000000-0000-0000-0000-000000000021') then
+    raise exception 'A provider row at another place, at the shift of its copy, was not hidden';
   end if;
   if public.hidden_provider_copy('97000000-0000-0000-0000-000000000022') then
     raise exception 'A provider row at another shift than its copy at the same place was hidden';

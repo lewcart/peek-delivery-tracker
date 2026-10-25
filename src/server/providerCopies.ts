@@ -16,17 +16,18 @@
  * ParcelsApp tells the departure twice). So is the provider's twin of a copy,
  * in its words, place and stage whole hours from it (ParcelsApp tells a
  * Chilean posting on the right clock and again on Chile's wall clock read as
- * UTC), and its row whole hours from a carrier's scan, in any stage, by the
- * shift another of its copies at the same place shows (17TRACK's export-unit
- * scan, read as information received, beside its departure three hours early);
- * the provider's other rows of their minute are copies too; a row with no
- * place is read by a copy with no place. A carrier's scan dated by its day, on
- * a wall clock in no zone (YunExpress's), has no instant to compare: a copy
- * whose time shows that wall clock whole quarter hours away up to 14 h, in its
- * words and stage (or none), or at its second when that is not a minute's
- * first, is left out, and so is a copy at the wall clock read as UTC, to the
- * second, in its stage (ParcelsApp's reworded MailAmericas scans). A
- * provider's step the carrier never shows, such as another leg's scans, stays.
+ * UTC), and its row whole hours from a carrier's scan, in any stage and at
+ * any place, by the shift another of its copies shows (17TRACK's export-unit
+ * scan, read as information received, beside its departure three hours early;
+ * ParcelsApp's airport scans by the shift of its copy at a delivery depot);
+ * the provider's other rows of their minute are copies too. A carrier's
+ * scan dated by its day, on a wall clock in no zone (YunExpress's), has no
+ * instant to compare: a copy whose time shows that wall clock whole quarter
+ * hours away up to 14 h, in its words and stage (or none), or at its second
+ * when that is not a minute's first, is left out, and so is a copy at the wall
+ * clock read as UTC, to the second, in its stage (ParcelsApp's reworded
+ * MailAmericas scans). A provider's step the carrier never shows, such as
+ * another leg's scans, stays.
  * Push leaves the copies unannounced too (push.ts), and the Live Activity
  * queue tells them with the same rules in SQL (`public.hidden_provider_copy`):
  * change both together.
@@ -201,9 +202,11 @@ export function providerCopyScans(row: JsonObject): Map<string, Set<string>> {
   const repeats = scans.filter((event) => providerOnly(event) && own.some((scan) => copies(event, scan)));
   // A copy that only repeats scans whole hours away shows its provider read them a zone away.
   const zoned = repeats.filter((event) => own.every((scan) => !copies(event, scan) || hoursAway(event, scan)));
-  // That provider reads the place's other scans on the same clock: its row whole hours from a carrier's scan, by the
-  // shift of such a copy at the same place, lands on that scan's minute once read on the carrier's clock.
-  const clock = (event: JsonObject, shift: number) => `${providerName(event)}@${place(event)}@${shift}`;
+  // That provider reads the carrier's other scans on the same clock: its row whole hours from a carrier's scan, by the
+  // shift of such a copy, lands on that scan's minute once read on the carrier's clock. A provider can read each place
+  // on its own clock, but a row of another step falls at the minute of that shift from one of the carrier's scans
+  // too seldom to tell it by its place.
+  const clock = (event: JsonObject, shift: number) => `${providerName(event)}@${shift}`;
   const shifts = new Set(zoned
     .flatMap((event) => own.filter((scan) => hoursAway(event, scan)).map((scan) => clock(event, minutesApart(event, scan)))));
   const twin = (event: JsonObject, copy: JsonObject) => providerName(event) === providerName(copy) && wording(event) === wording(copy)
