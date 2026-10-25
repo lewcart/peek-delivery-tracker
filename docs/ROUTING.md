@@ -589,7 +589,9 @@ A parcel often changes carrier at the border. The origin history is always kept.
   scans no rule reads yet do not hide the progress before them, and do not turn a pre-advice
   into a scan. A partner whose only input is optional
   (DPD's postcode) is asked without it, and only with a reference of its own number shape,
-  never the origin's postal number.
+  never the origin's postal number. A partner of the origin's own brand is the exception: it
+  receives the parcel's postcode, when the parcel holds one, at the confirmation and at every
+  later check (DPD Belgium and the Netherlands hand Swiss deliveries to DPD Switzerland).
   Failed confirmations wait 55 min, doubling with each miss up to 6 h, unless the origin
   history or the partner changes; the wait stays 55 min while the origin is down, from an
   ask the failed check saves too, and a check a provider answers in the meantime keeps the

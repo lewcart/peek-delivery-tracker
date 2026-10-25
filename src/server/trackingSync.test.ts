@@ -3224,6 +3224,32 @@ describe('TrackingSyncService', () => {
     expect(client.updatePackage.mock.calls.at(-1)![1].carrier_data.original_carrier).toBe('la-poste');
   });
 
+  it.each(['dpd-be', 'dpd-nl'])('sends the parcel\'s postcode to DPD Switzerland when %s hands it a Swiss delivery', async (carrier) => {
+    const parcel = { id: 'swiss-dpd-handoff', carrier, tracking_number: '05200000000001', dpd_postcode: '0000' };
+    const origin: CarrierResult = { status: 'in_transit', delivery_carrier: 'dpd', last_update: '2026-01-11T10:00:00Z',
+      events: [{ time: '2026-01-11T10:00:00Z', description: 'In transport', stage: 'in_transit' }] };
+    const delivery: CarrierResult = { status: 'out_for_delivery', last_update: '2026-01-12T08:00:00Z',
+      events: [{ time: '2026-01-12T08:00:00Z', description: 'Out for delivery', stage: 'out_for_delivery' }] };
+    const client = fakeClient();
+    const adapter = { fetch: vi.fn().mockResolvedValueOnce(origin).mockResolvedValue(delivery) };
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null);
+    await service.syncPackage(parcel);
+    expect(adapter.fetch.mock.calls).toEqual([[carrier, parcel.tracking_number, null, '0000'], ['dpd', parcel.tracking_number, null, '0000']]);
+    const values = client.updatePackage.mock.calls.at(-1)![1];
+    expect(values.carrier_data).toMatchObject({ active_tracking_carrier: 'dpd', original_carrier: carrier });
+    adapter.fetch.mockClear();
+    await service.syncPackage({ ...parcel, ...values });
+    expect(adapter.fetch).toHaveBeenCalledExactlyOnceWith('dpd', parcel.tracking_number, null, '0000');
+
+    // Without a postcode DPD Switzerland is asked without one, and another brand's carrier never receives it.
+    const bare = { fetch: vi.fn().mockResolvedValueOnce(origin).mockResolvedValue(delivery) };
+    await new TrackingSyncService(fakeClient() as unknown as SupabaseServiceClient, bare, null).syncPackage({ ...parcel, dpd_postcode: null });
+    expect(bare.fetch.mock.calls[1]).toEqual(['dpd', parcel.tracking_number, null, null]);
+    const posti = { fetch: vi.fn().mockResolvedValueOnce({ ...origin, delivery_carrier: 'posti' }).mockResolvedValue(delivery) };
+    await new TrackingSyncService(fakeClient() as unknown as SupabaseServiceClient, posti, null).syncPackage(parcel);
+    expect(posti.fetch.mock.calls[1]).toEqual(['posti', parcel.tracking_number, null, null]);
+  });
+
   it('asks the post of the country an outbound postal item is looked up from, when its origin names no destination', async () => {
     const parcel = { id: 'looked-up-handoff', carrier: 'an-post', tracking_number: 'LX123456785IE', current_stage: 'in_transit',
       carrier_data: { lookup_country_hint: 'FI', routing: { version: 1, configured_carrier: 'an-post', last_event_at: '2026-01-12T09:23:00.000Z' } } };

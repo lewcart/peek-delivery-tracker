@@ -12,6 +12,7 @@ import { STAGES } from '../generated/apiContract';
 import { normalizeCarrierResult, type CarrierResult } from 'universal-parcel-scraper';
 import { deliveryHandoff, hasDirectHandoffAdapter, type DeliveryHandoff } from 'universal-parcel-scraper';
 import {
+  activeRequirements,
   AUTOMATIC_CARRIER_IDS,
   supportsSwissPostHandoff,
 } from './carriers';
@@ -57,7 +58,7 @@ import { directHistoryNumber, directLocalHistory, directLocalSnapshotIsOlder, ha
 import { carrierMovedAt, eventStage, scanStages, showsDelivery, UNCONFIRMED_DELIVERY_MS } from './disputedDelivery';
 import { DIRECT_HISTORY, directHistory } from './providerCopies';
 import { earlierCarrier } from './relayCopies';
-import { eventTimestamp, latestResultTime, resultTimezone, statusMapAnswer, SWISS_POST_GLOBAL_STATUSES } from 'universal-parcel-scraper/app';
+import { carrierBrand, eventTimestamp, latestResultTime, resultTimezone, statusMapAnswer, SWISS_POST_GLOBAL_STATUSES } from 'universal-parcel-scraper/app';
 import { trackingSupportEvidence } from './trackingSupport';
 import { noteTypoCandidate } from './typoCandidate';
 import { confirmationLookup } from './trackingHealth';
@@ -179,6 +180,19 @@ function previousDeliveryProbe(parcel: JsonObject, carrier: string, number: stri
   return { at: stored.at, origin_update: typeof stored.origin_update === 'string' ? stored.origin_update : null,
     ...(stored.announced === true ? { announced: true as const } : {}),
     ...(Number.isSafeInteger(stored.misses) && Number(stored.misses) > 0 ? { misses: Number(stored.misses) } : {}) };
+}
+
+/**
+ * The parcel's delivery postcode for the carrier it is handed to, when that carrier takes one and
+ * is a unit of the filed carrier's brand: DPD Belgium and the Netherlands, which take none, hand a
+ * Swiss delivery to DPD Switzerland, which unlocks its verified scans with it. Another brand's
+ * carrier is never sent it.
+ */
+function handoffPostcode(parcel: JsonObject, carrier: string, partner: string, number: string): string | null {
+  const postcode = typeof parcel.dpd_postcode === 'string' ? parcel.dpd_postcode.trim() : '';
+  const brand = carrierBrand(carrier);
+  return postcode && brand && carrierBrand(partner) === brand
+    && activeRequirements(partner, number).some(({ field }) => field === 'postcode') ? postcode : null;
 }
 
 /**
@@ -2393,7 +2407,7 @@ export class TrackingSyncService {
       const followUp = metadata.original_carrier === carrierId && carrierId !== activeCarrier
         && metadata.original_tracking_number === trackingNumber && asksEarlierCarrier(metadata, this.now());
       const [result, earlier] = await Promise.all([
-        this.fetchCarrier(checks, activeCarrier, activeNumber, null, null),
+        this.fetchCarrier(checks, activeCarrier, activeNumber, null, handoffPostcode(parcel, carrierId, activeCarrier, activeNumber)),
         followUp ? this.fetchCarrier(checks, carrierId, trackingNumber,
           typeof parcel.tracking_url === 'string' ? parcel.tracking_url : null,
           typeof parcel.dpd_postcode === 'string' ? parcel.dpd_postcode : null,
@@ -2452,7 +2466,8 @@ export class TrackingSyncService {
           misses: previousProbe && originUpdate === previousProbe.origin_update ? misses + 1 : 1 };
         origin.delivery_probe = probe;
         try {
-          const delivery = normalizeCarrierResult(await confirmationLookup(() => this.fetchCarrier(checks, candidate.carrier, candidate.number, null, null)));
+          const delivery = normalizeCarrierResult(await confirmationLookup(() => this.fetchCarrier(checks, candidate.carrier, candidate.number,
+            null, handoffPostcode(parcel, carrierId, candidate.carrier, candidate.number))));
           const originTime = latestResultTime(origin, carrierId);
           const watermark = Math.max(originTime, latestResultTime(metadata, carrierId),
             Date.parse(routingState(parcel).last_event_at || '') || 0);
