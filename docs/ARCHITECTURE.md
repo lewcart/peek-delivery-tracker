@@ -407,10 +407,10 @@ and nothing typed is sent.
   it, and the delivery email leaves it out. Someone it was shared with still gets their
   link's alerts.
 - A Live Activity starts only at `out_for_delivery`, once until a scan in another stage,
-  not counting a provider copy the timeline leaves out. It ends on delivery, failed attempt,
-  problem, pickup, return, archive, sign-out or opt-out. At most two run at once. Live
-  Activity pushes go first, so a successful one replaces the matching banner; if it fails,
-  the banner is sent.
+  not counting a provider copy the timeline leaves out or a scan in no stage (`pending`).
+  It ends on delivery, failed attempt, problem, pickup, return, archive, sign-out or
+  opt-out. At most two run at once. Live Activity pushes go first, so a successful one
+  replaces the matching banner; if it fails, the banner is sent.
 - The choice of updates is the account's, for every device it notifies. In Safari on an
   iPhone or iPad outside the Home Screen, Settings and the deliveries' invitation to
   notifications offer the Peek app first, signed in to the same account, and the Home
