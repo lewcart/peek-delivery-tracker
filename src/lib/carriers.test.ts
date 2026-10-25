@@ -651,9 +651,10 @@ describe('carrier detection', () => {
 
   it('gofo — GOFO Express', () => {
     // OSS EXAMPLES, US GFUS + 14 digits family (other regions unverified; not asserted real).
+    // Cainiao follows these waybills for AliExpress parcels, so GOFO may be a suggestion beside AliExpress.
     // Source: https://github.com/jkeen/tracking_number_data/blob/main/couriers/gofo.json
     for (const number of ['GFUS01011884214464', 'GFUS01011884214272']) {
-      expect(detectCarrier(number)).toBe('gofo');
+      expect(detectCarrierMatch(number).candidates).toContain('gofo');
     }
     expectDirectTracking('gofo');
   });
