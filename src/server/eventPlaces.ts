@@ -68,16 +68,48 @@ function withoutServiceData(row: JsonObject): JsonObject {
   return { ...row, carrier_data: data };
 }
 
+/** A stage change the sync stamped with the time it saw it, not a scan of the carrier's. */
+function sighted(event: JsonObject): boolean {
+  return event.observed === true || event.observed_without_provider_timestamp === true;
+}
+
+/** Who stored a row: the carrier its identity starts with (`unknown` for a universal provider, `app` for Peek's own rows). */
+function sourceOf(event: JsonObject): string {
+  return typeof event.provider_event_id === 'string' ? event.provider_event_id.split(':')[0]! : '';
+}
+
 /**
- * The scans of a stored package row its timeline shows: without a provider's copies of its carrier's scans, then as
- * `timeline` keeps them. A placeholder number's scans are other people's shipments merged under it: only Peek's own
- * rows are shown.
+ * The sightings a parcel has moved on from that a dated scan of their source tells in another stage: the sync stored
+ * the stage the carrier's summary gave when no scan showed it, in the words of a scan that kept a stage of its own
+ * (Swiss Post's summary read a poste restante scan as a missed delivery while the scan's code had no stage, and the
+ * words made it ready for pickup). The scan, no later than the sighting and in the same words, tells it, once a later
+ * scan shows the stage passed. A sighting in the scan's stage is the sync's to date (`datedObservations`), and one in
+ * Peek's stand-in words names no scan.
+ */
+function restatedSightings(events: readonly JsonObject[]): Set<string> {
+  const words = (event: JsonObject) => String(event.description ?? '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('en-US');
+  const time = (event: JsonObject) => Date.parse(String(event.occurred_at));
+  const scans = events.filter((event) => !sighted(event) && !['', 'app'].includes(sourceOf(event)) && Number.isFinite(time(event)));
+  const worded = (event: JsonObject) => !['', UNWORDED_STEP.toLocaleLowerCase('en-US')].includes(words(event));
+  return new Set(events.filter((sighting) => sighted(sighting) && worded(sighting) && !['', 'app'].includes(sourceOf(sighting))
+    && scans.some((scan) => time(scan) > time(sighting))
+    && scans.some((scan) => sourceOf(scan) === sourceOf(sighting) && scan.stage !== sighting.stage
+      && words(scan) === words(sighting) && time(scan) <= time(sighting)))
+    .map((sighting) => String(sighting.id)));
+}
+
+/**
+ * The scans of a stored package row its timeline shows: without a provider's copies of its carrier's scans or a
+ * sighting a scan already tells (`restatedSightings`), then as `timeline` keeps them. A placeholder number's scans are
+ * other people's shipments merged under it: only Peek's own rows are shown.
  */
 export function shownEvents(row: JsonObject): JsonObject[] {
   const copied = providerCopies(row);
   const placeholder = placeholderNumber(row);
-  return timeline((Array.isArray(row.tracking_events) ? row.tracking_events.filter(isRecord) : [])
-    .filter((event) => !copied.has(String(event.id)) && (!placeholder || isOwnRow(event))));
+  const events = Array.isArray(row.tracking_events) ? row.tracking_events.filter(isRecord) : [];
+  const restated = restatedSightings(events);
+  return timeline(events
+    .filter((event) => !copied.has(String(event.id)) && !restated.has(String(event.id)) && (!placeholder || isOwnRow(event))));
 }
 
 /**

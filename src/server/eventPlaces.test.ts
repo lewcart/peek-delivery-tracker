@@ -325,6 +325,33 @@ it('serves a stage change seen without the carrier\'s words without Peek\'s stan
   expect((withoutEventSources(row) as typeof served).tracking_events[0].description).toBe('Tracking update');
 });
 
+it('leaves out a sighting a scan of its source tells in another stage, once the parcel has moved on', () => {
+  const at = (id: string, source: string, stage: string, occurredAt: string, description: string, extra: Record<string, unknown> = {}) => ({
+    ...event(id, null, occurredAt), provider_event_id: `${source}:${id}`, stage, description, ...extra,
+  });
+  const words = 'Held at the post office for collection';
+  // The summary read the scan as a missed delivery while its code had no stage; its words made it ready for pickup.
+  const scan = at('held', 'swiss-post', 'ready_for_pickup', '2026-10-22T14:34:29+00:00', words);
+  const sighting = at('seen', 'swiss-post', 'failed_attempt', '2026-10-22T15:54:00+00:00', words, { observed: true });
+  const delivered = at('delivered', 'swiss-post', 'delivered', '2026-10-22T16:11:37+00:00', 'Delivered over counter');
+  const shown = (tracking_events: object[]) => (withEventPlaces({ id: 'parcel', carrier: 'swiss-post', tracking_events }) as {
+    tracking_events: Array<Record<string, unknown>>;
+  }).tracking_events.map((row) => row.id);
+  expect(shown([scan, sighting, delivered])).toEqual(['held', 'delivered']);
+  // While it is the newest row its stage is the parcel's news; in the scan's stage the sync dates it, and the scan
+  // must be no later, from its source, in its words. Peek's stand-in words name no scan.
+  expect(shown([scan, sighting])).toEqual(['held', 'seen']);
+  expect(shown([{ ...scan, stage: 'failed_attempt' }, sighting, delivered])).toEqual(['held', 'seen', 'delivered']);
+  expect(shown([{ ...scan, occurred_at: '2026-10-22T15:55:00+00:00' }, sighting, delivered])).toEqual(['held', 'seen', 'delivered']);
+  expect(shown([{ ...scan, provider_event_id: 'unknown:held' }, sighting, delivered])).toEqual(['held', 'seen', 'delivered']);
+  expect(shown([{ ...scan, description: 'Arrived at the post office' }, sighting, delivered])).toEqual(['held', 'seen', 'delivered']);
+  expect(shown([{ ...scan, description: 'Tracking update' }, { ...sighting, description: 'Tracking update' }, delivered]))
+    .toEqual(['held', 'seen', 'delivered']);
+  // The account's export keeps it.
+  const exported = withoutEventSources({ id: 'parcel', tracking_events: [scan, sighting, delivered] }) as { tracking_events: unknown[] };
+  expect(exported.tracking_events).toHaveLength(3);
+});
+
 describe('withoutEventSources', () => {
   it('keeps every stored row, Peek\'s own included, without its source', () => {
     const row = { id: 'parcel', tracking_events: [
