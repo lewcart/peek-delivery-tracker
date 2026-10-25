@@ -2951,6 +2951,9 @@ extension ParcelLogicTests {
         // An order number opens Add, which says where to find the tracking number.
         let order = "Order #302-4571983-2294617 is confirmed"
         XCTAssertEqual(FirstParcelRequest.drop([order], catalog: catalog), .paste(order))
+        // So does a message's one number whose shape proves no carrier: Add asks the carriers.
+        let uncertain = "Your order has shipped!\nTrack it with DHL: 1234567899"
+        XCTAssertEqual(FirstParcelRequest.drop([uncertain], catalog: catalog), .paste(uncertain))
         // Nothing to track: the drop is refused, and Add stays closed.
         XCTAssertNil(FirstParcelRequest.drop([], catalog: catalog))
         XCTAssertNil(FirstParcelRequest.drop([" ", "\n"], catalog: catalog))

@@ -70,9 +70,10 @@ bring it back, and delete it once confirmed.
 Text or a link dropped on the deliveries or on + opens Add with it, as a paste or the Share
 extension does. A drop with neither a tracking number nor a shop's order number in it is refused.
 
-Add holds back a pickup code and a shop's order number as the front door does, with the same
-patterns (`shared/order-numbers.json`): it asks no server about them, can't save them and says
-where the tracking number is instead.
+Add reads a text as the front door does, with the same rules and examples (`shared/reading.json`).
+A message's one number is read even when its shape proves no carrier, and the carriers are asked.
+A pickup code or a shop's order number is held back: Add asks no server about it, can't save it
+and says where the tracking number is instead.
 
 With a keyboard, ⌘N adds a parcel, ⌘F searches, ⌘R refreshes where its button shows, ⌘1 to ⌘3
 choose the tabs and ⌘, opens Settings. On the parcel shown, beside the list or over it, ⇧⌘C

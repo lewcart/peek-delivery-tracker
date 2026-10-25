@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TRACKING_CANDIDATE_PATTERNS } from 'universal-parcel-scraper';
 import { readBrandData, renderBrandJson } from './generate-brand.mjs';
 import { infoPlistStrings, keysNamingOnlyTheIPhone, nativeLocalizationReferences, nativeSwiftSources } from './native-localization.mjs';
 import { readLocalizationCatalogs } from './localization-catalog.mjs';
@@ -74,8 +75,12 @@ const outputs = new Map([
     JSON.parse(fs.readFileSync(path.join(root, 'shared', 'postcode-examples.json'), 'utf8')).examples, null, 2,
   )}\n`],
   ['ContractFixtures.json', `${JSON.stringify(apiFixture, null, 2)}\n`],
-  // The shops' order numbers Add holds back as the front door does, and the examples both replay in their tests.
-  ['OrderNumbers.json', fs.readFileSync(path.join(root, 'shared', 'order-numbers.json'), 'utf8')],
+  // How Add reads a text as the front door does: the shops' order numbers, the words that introduce a number, the
+  // examples both replay in their tests, and the shapes of a number in a text that the shared engine tries.
+  ['Reading.json', `${JSON.stringify({
+    ...JSON.parse(fs.readFileSync(path.join(root, 'shared', 'reading.json'), 'utf8')),
+    candidates: TRACKING_CANDIDATE_PATTERNS.map(({ source, flags }) => ({ source, flags })),
+  }, null, 2)}\n`],
   // Replayed by the native detection test so the Swift port cannot drift from the shared engine.
   ['DetectionGolden.json', fs.readFileSync(fileURLToPath(import.meta.resolve('universal-parcel-scraper/data/detection-golden.json')), 'utf8')],
   // Replayed against each Swift checksum so none can drift from its TypeScript validator.

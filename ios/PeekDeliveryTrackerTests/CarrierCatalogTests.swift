@@ -1893,21 +1893,25 @@ extension CarrierCatalogTests {
         XCTAssertEqual(mismatches, [], mismatches.prefix(10).joined(separator: "\n"))
     }
 
-    /// The front door's order-number examples (shared/order-numbers.json): Add holds back the same ones.
-    func testOrderNumbersReadAsTheFrontDoorReadsThem() throws {
+    /// The front door's examples (shared/reading.json): Add reads the same number out of a message and holds
+    /// back the same order numbers.
+    func testTextReadsAsTheFrontDoorReadsIt() throws {
         struct Example: Decodable {
             let text: String
             let shop: OrderShop?
+            /// The tracking number read, or none.
+            let number: String?
             /// The carrier that claims the number read instead, with certainty.
             let carrier: String?
         }
         struct File: Decodable {
             let examples: [Example]
         }
-        let url = try XCTUnwrap(Bundle.main.url(forResource: "OrderNumbers", withExtension: "json"))
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "Reading", withExtension: "json"))
         let file = try JSONDecoder().decode(File.self, from: Data(contentsOf: url))
         XCTAssertEqual(CarrierCatalog.orderNumbers.map { $0.shop }, [.amazon, .shein, .shopee, .temu])
-        XCTAssertGreaterThan(file.examples.count, 20)
+        XCTAssertFalse(CarrierCatalog.candidatePatterns.isEmpty)
+        XCTAssertGreaterThan(file.examples.count, 40)
         var mismatches: [String] = []
         for example in file.examples {
             let text = String(reflecting: example.text)
@@ -1915,11 +1919,12 @@ extension CarrierCatalogTests {
             if order != example.shop {
                 mismatches.append("\(text): expected \(example.shop?.rawValue ?? "no shop"), got \(order?.rawValue ?? "no shop")")
             }
-            if let carrier = example.carrier {
-                let match = catalog.parse(example.text)
-                if match.carrier.rawValue != carrier || match.confidence != .high {
-                    mismatches.append("\(text): expected \(carrier) to claim it, got \(match.carrier.rawValue)/\(match.confidence)")
-                }
+            let match = catalog.read(example.text)
+            if let number = example.number, match.trackingNumber != number {
+                mismatches.append("\(text): expected to read \(String(reflecting: number)), got \(String(reflecting: match.trackingNumber))")
+            }
+            if let carrier = example.carrier, match.carrier.rawValue != carrier || match.confidence != .high {
+                mismatches.append("\(text): expected \(carrier) to claim it, got \(match.carrier.rawValue)/\(match.confidence)")
             }
         }
         XCTAssertEqual(mismatches, [], mismatches.prefix(10).joined(separator: "\n"))
@@ -1933,14 +1938,6 @@ extension CarrierCatalogTests {
                 XCTAssertNotNil(messages["door.order.\(shop.rawValue).body"], "\(language) \(shop)")
             }
         }
-    }
-
-    /// A message's number is never part of a shop's order number, while the number beside one still is read.
-    func testNoPartOfAnOrderNumberIsReadAsATrackingNumber() {
-        XCTAssertEqual(catalog.order(in: "Parcel PO-000 12345678901234567"), .temu)
-        XCTAssertNotEqual(catalog.parse("Parcel PO-000 12345678901234567").trackingNumber, "PO-000")
-        XCTAssertEqual(catalog.parse("Parcel 1234567899, order PO-000 12345678901234567").trackingNumber, "1234567899")
-        XCTAssertNil(catalog.order(in: "Parcel 1234567899, order PO-000 12345678901234567"))
     }
 
     /// The shared engine's patterns and separators are JavaScript's.

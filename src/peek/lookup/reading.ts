@@ -1,4 +1,4 @@
-import { TRACKING_CANDIDATE_PATTERNS } from 'universal-parcel-scraper';
+import { keywordNumberInText, recognizedNumberInText, TRACKING_CANDIDATE_PATTERNS, validTrackingNumber } from 'universal-parcel-scraper';
 import {
   detectCarrierMatch,
   isValidS10TrackingNumber,
@@ -6,7 +6,7 @@ import {
   parseTrackingInput,
   type TrackingInputMatch,
 } from '../../lib/carriers';
-import orderNumbers from '../../../shared/order-numbers.json';
+import rules from '../../../shared/reading.json';
 
 /** One tracking number a text names, with what its shape says about the carrier. */
 export interface NumberInText {
@@ -30,7 +30,7 @@ export type OrderShop = 'amazon' | 'shein' | 'shopee' | 'temu';
 
 const LINK = /https?:\/\/[^\s<>"']+/gi;
 /** Each shop's order number, tried in turn and read without regard to case. The iPhone reads the same file. */
-const ORDER_NUMBERS = orderNumbers.shops.map(({ shop, pattern }) => ({ shop: shop as OrderShop, pattern: new RegExp(pattern, 'i') }));
+const ORDER_NUMBERS = rules.shops.map(({ shop, pattern }) => ({ shop: shop as OrderShop, pattern: new RegExp(pattern, 'i') }));
 
 /** The shop whose order number a text holds. */
 const orderShop = (text: string) => ORDER_NUMBERS.find(({ pattern }) => pattern.test(text))?.shop ?? null;
@@ -75,7 +75,7 @@ export function numbersInText(text: string): NumberInText[] {
 }
 
 /** Words that introduce a tracking number in the door's seven languages. */
-const NUMBER_WORDS = /track|parcel|shipment|sendung|paket|suivi|colis|tracciamento|spedizione|pacco|seguimiento|env[ií]o|paquete|seguimento|encomenda|śledzeni|przesyłk|paczk/i;
+const NUMBER_WORDS = new RegExp(rules.numberWords, 'i');
 
 /**
  * A number in prose whose shape fits a carrier without proving one: "Track it
@@ -86,7 +86,7 @@ const NUMBER_WORDS = /track|parcel|shipment|sendung|paket|suivi|colis|tracciamen
  * candidate holds a digit: some shapes also fit a word, and a word in a
  * message is not a number.
  */
-export function uncertainNumberInText(text: string): TrackingInputMatch | null {
+function uncertainNumberInText(text: string): TrackingInputMatch | null {
   const candidates = new Map<string, { match: TrackingInputMatch; introduced: boolean }>();
   for (const line of text.split(/\r?\n/)) {
     const prose = withoutOrders(line.replace(LINK, ' '));
@@ -110,14 +110,34 @@ export function uncertainNumberInText(text: string): TrackingInputMatch | null {
   return all.length === 1 ? all[0].match : introduced.length === 1 ? introduced[0].match : null;
 }
 
+const NOTHING = parseTrackingInput('');
+
+/**
+ * The number the parser reads out of a text. It knows no shop's order number, and would take "PO-000" from
+ * "Parcel PO-000 12345678901234567", so its rules for prose run again on the text without its order numbers, and
+ * the whole text stays its last resort.
+ */
+function parse(text: string): TrackingInputMatch {
+  const parsed = parseTrackingInput(text);
+  if (parsed.source !== 'text' || !orderShop(text)) return parsed;
+  const prose = withoutOrders(text);
+  const number = recognizedNumberInText(prose) ?? keywordNumberInText(prose);
+  if (number) return { trackingNumber: number, source: 'text', ...detectCarrierMatch(number) };
+  const whole = text.trim();
+  return !whole.includes('://') && validTrackingNumber(whole) ? { trackingNumber: whole, source: 'number', ...detectCarrierMatch(whole) } : NOTHING;
+}
+
 // The same text is read several times on its way through an event and a render.
 const read = new Map<string, Reading>();
 
-/** Reads the field: the number the parser finds, the others beside it, and whose order number it is instead. */
+/**
+ * Reads the field: the number the parser finds, the others beside it, and whose order number it is instead. The
+ * iPhone's Add sheet reads text the same way, and replays the examples in shared/reading.json.
+ */
 export function readText(text: string): Reading {
   const known = read.get(text);
   if (known) return known;
-  const parsed = parseTrackingInput(text);
+  const parsed = parse(text);
   const match = parsed.trackingNumber ? parsed : uncertainNumberInText(text) ?? parsed;
   const numbers = numbersInText(text);
   const order = match.confidence === 'high' ? null : orderShop(match.trackingNumber || text);

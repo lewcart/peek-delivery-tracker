@@ -653,13 +653,13 @@ struct AddParcelView: View {
     private var order: OrderShop? { catalog.order(in: trackingInput) }
 
     /// The number in play: none for an order number.
-    private var parsed: TrackingInputMatch { order == nil ? catalog.parse(trackingInput) : CarrierCatalog.emptyMatch }
+    private var parsed: TrackingInputMatch { order == nil ? catalog.read(trackingInput) : CarrierCatalog.emptyMatch }
 
     private var normalizedNumber: String { CarrierCatalog.normalize(parsed.trackingNumber) }
 
     private static func trackingNumber(in input: String) -> String {
         let catalog = CarrierCatalog.shared
-        return catalog.order(in: input) == nil ? CarrierCatalog.normalize(catalog.parse(input).trackingNumber) : ""
+        return catalog.order(in: input) == nil ? CarrierCatalog.normalize(catalog.read(input).trackingNumber) : ""
     }
 
     private var amazonNumber: Bool { catalog.isAmazonTrackingNumber(parsed.trackingNumber) }

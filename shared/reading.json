@@ -21,6 +21,7 @@
       "pattern": "(?:^|[^A-Za-z0-9_-])PO[- ]?[0-9]{3}[- ]?[0-9]{17}(?![A-Za-z0-9_-])"
     }
   ],
+  "numberWords": "track|parcel|shipment|sendung|paket|suivi|colis|tracciamento|spedizione|pacco|seguimiento|env[ií]o|paquete|seguimento|encomenda|śledzeni|przesyłk|paczk",
   "examples": [
     { "text": "302-4571983-2294617", "shop": "amazon" },
     { "text": "Order #302-4571983-2294617 is confirmed", "shop": "amazon" },
@@ -51,6 +52,22 @@
     { "text": "000-00000000000000000", "shop": null },
     { "text": "XPO-000-00000000000000000", "shop": null },
     { "text": "PO0000000000000000000", "shop": null, "carrier": "australia-post", "why": "A carrier's number that starts with PO stays a tracking number: here Australia Post's, a digit short of Temu's." },
-    { "text": "Order PO-000-00000000000000000, tracking 1ZDEMO202600000001", "shop": null, "carrier": "ups" }
+    { "text": "Order PO-000-00000000000000000, tracking 1ZDEMO202600000001", "shop": null, "carrier": "ups" },
+    { "text": "Parcel PO-000 12345678901234567", "shop": "temu", "why": "No part of an order number is read as a tracking number, however a label introduces it." },
+    { "text": "Parcel 1234567899, order PO-000 12345678901234567", "shop": null, "number": "1234567899" },
+    { "text": "Hi Alex, good news: your order has shipped!\nTrack it with DHL: 1234567899\nExpected delivery: Wednesday", "shop": null, "number": "1234567899", "why": "A message's one number is read though its shape proves no carrier; the carriers are asked." },
+    { "text": "Tracking number: 01234567890123", "shop": null, "number": "01234567890123" },
+    { "text": "Your registration is complete. Parcel number 1234567899", "shop": null, "number": "1234567899" },
+    { "text": "Call us on 0441234567.\nYour parcel will arrive soon: 1234567899", "shop": null, "number": "1234567899", "why": "Of two numbers, the one on the line that speaks of tracking." },
+    { "text": "Ihr Paket ist unterwegs: 1234567899\nFragen? 0441234567", "shop": null, "number": "1234567899" },
+    { "text": "Your order has shipped!\r\nTrack it with DHL: 1234567899\r\n", "shop": null, "number": "1234567899" },
+    { "text": "Track it with DHL: 1234567899\nhttps://example.test/track/9987654321", "shop": null, "number": "1234567899", "why": "A number in a link is the link's, not the message's." },
+    { "text": "Call us on 1234567899 or 9987654321, any day.", "shop": null, "number": "", "why": "Two numbers and nothing to tell them apart: neither is read." },
+    { "text": "Order confirmation", "shop": null, "number": "", "why": "A word is never the number, though a carrier's rule may fit its length." },
+    { "text": "Thanks for your order! We'll let you know as soon as it ships.", "shop": null, "number": "" },
+    { "text": "Track it with DHL: 1234567899 (order PO-000-12345678901234567)", "shop": null, "number": "1234567899", "why": "A number beside an order number is read, and the order is not noted." },
+    { "text": "Your order 302-4571983-2294617 has shipped.\nTrack it with DHL: 1234567899", "shop": null, "number": "1234567899" },
+    { "text": "Shein order GSH0A1B2C3D4E5F: your parcel 1234567899 is on its way", "shop": null, "number": "1234567899" },
+    { "text": "Order 261025ABCD1234\nTracking 1234567899", "shop": null, "number": "1234567899" }
   ]
 }

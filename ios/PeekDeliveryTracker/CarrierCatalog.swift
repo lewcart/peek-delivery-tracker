@@ -198,7 +198,7 @@ struct TrackingInputMatch: Equatable, Sendable {
     let source: Source
 }
 
-/// A shop whose order numbers Add tells from tracking numbers, as the front door does (`shared/order-numbers.json`).
+/// A shop whose order numbers Add tells from tracking numbers, as the front door does (`shared/reading.json`).
 enum OrderShop: String, Decodable, Sendable {
     case amazon, shein, shopee, temu
 }
@@ -363,6 +363,7 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
         didSet {
             detections.removeAllObjects()
             parsedInputs.removeAllObjects()
+            readings.removeAllObjects()
             orders.removeAllObjects()
         }
     }
@@ -374,6 +375,7 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
     }
     private let detections = NSCache<NSString, Memo<CarrierMatch>>()
     private let parsedInputs = NSCache<NSString, Memo<TrackingInputMatch>>()
+    private let readings = NSCache<NSString, Memo<TrackingInputMatch>>()
     private let orders = NSCache<NSString, Memo<OrderShop?>>()
     private static let expressions = NSCache<NSString, NSRegularExpression>()
 
@@ -701,19 +703,30 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
         return match
     }
 
-    /// The shop whose order number the input is, read as the front door reads it (`readText` in
-    /// src/peek/lookup/reading.ts): a number a carrier claims with certainty wins; otherwise the
-    /// number parsed, or the whole text, is tried.
+    /// The number Add reads out of a text, as the front door reads it (`readText` in src/peek/lookup/reading.ts):
+    /// the parser's, or else the one number a message introduces though its shape proves no carrier.
+    func read(_ raw: String) -> TrackingInputMatch {
+        let parsed = parse(raw)
+        guard parsed.trackingNumber.isEmpty else { return parsed }
+        if let memo = readings.object(forKey: raw as NSString) { return memo.value }
+        let match = uncertainNumber(in: raw) ?? parsed
+        readings.setObject(Memo(match), forKey: raw as NSString)
+        return match
+    }
+
+    /// The shop whose order number the input is, read as the front door reads it: a number a carrier
+    /// claims with certainty wins; otherwise the number read, or the whole text, is tried. A message
+    /// with a number of its own beside the order number is that number's.
     func order(in raw: String) -> OrderShop? {
         if let memo = orders.object(forKey: raw as NSString) { return memo.value }
-        let match = parse(raw)
+        let match = read(raw)
         let order = match.confidence == .high ? nil : Self.orderShop(in: match.trackingNumber.nonEmpty ?? raw)
         orders.setObject(Memo(order), forKey: raw as NSString)
         return order
     }
 
     private func parseTrimmed(_ input: String) -> TrackingInputMatch {
-        for pasted in Self.matches(in: input, pattern: "https?://[^\\s<>\\\"']+") {
+        for pasted in Self.matches(in: input, pattern: Self.linkPattern, caseInsensitive: true) {
             let cleaned = pasted
                 .trimmingCharacters(
                     in: CharacterSet.whitespacesAndNewlines
@@ -802,6 +815,31 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
         }
         if !input.contains("://"), valid(input) { return makeMatch(input, source: .number) }
         return Self.emptyMatch
+    }
+
+    /// A number in prose whose shape fits a carrier without proving one: "Track it with DHL: 1234567899".
+    /// The parser leaves these alone, since a phone number can look the same; Add takes one when the
+    /// text holds no other candidate, or when only one stands on a line that speaks of tracking, and the
+    /// carriers are then asked. A candidate holds a digit: some shapes also fit a word, and a word in a
+    /// message is not a number.
+    private func uncertainNumber(in text: String) -> TrackingInputMatch? {
+        var candidates: [String: (number: String, introduced: Bool)] = [:]
+        for line in text.components(separatedBy: "\n") {
+            let prose = Self.withoutOrders(Self.blanking(Self.linkPattern, in: line, caseInsensitive: true))
+            let introduced = Self.numberWords.map { Self.matches(prose, pattern: $0, caseInsensitive: true) } ?? false
+            for shape in Self.candidatePatterns {
+                for hit in Self.matches(in: prose, pattern: shape.pattern, caseInsensitive: shape.caseInsensitive) {
+                    let number = hit.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard Self.matches(number, pattern: "[0-9]"), detect(number).confidence == .low else { continue }
+                    let normalized = Self.normalize(number)
+                    candidates[normalized] = (number, introduced || candidates[normalized]?.introduced == true)
+                }
+            }
+        }
+        let introduced = candidates.values.filter { $0.introduced }
+        guard let picked = candidates.count == 1 ? candidates.values.first : introduced.count == 1 ? introduced.first : nil
+        else { return nil }
+        return makeMatch(picked.number, source: .text)
     }
 
     /// The followed carrier's pages first, and then the named delivering carrier's, for its own number.
@@ -918,22 +956,10 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
         }.sorted { left, _ in left.role == .active }
     }
 
+    /// The first candidate in the text that one carrier claims with certainty.
     private func recognizedNumber(in text: String) -> String? {
-        let patterns = [
-            "\\b(?:[A-Z]{2}[\\s.-]*[0-9](?:[\\s.-]?[0-9]){9}|TBA[\\s.-]*[0-9](?:[\\s.-]?[0-9]){11})\\b",
-            "\\b\\d{4}/\\d{8}\\b",
-            "\\b\\d{26}\\b",
-            "\\bH\\d{15,19}\\b",
-            "\\b1Z[A-Z0-9]{16}\\b",
-            "\\b1G[A-Z0-9]{10}\\b",
-            "\\b[A-Z]{2}\\s*\\d(?:[\\s.-]?\\d){8}\\s*[A-Z]{2}\\b",
-            "\\b(?:JJD|JVGL)[A-Z0-9]{8,}\\b",
-            "\\b\\d(?:[\\s.-]?\\d){9,19}\\b",
-            // Let catalog rules claim other complete identifiers without copying their shapes here.
-            "\\b[A-Z0-9]{4,40}\\b",
-        ]
-        for pattern in patterns {
-            for candidate in Self.matches(in: text, pattern: pattern, caseInsensitive: true) {
+        for shape in Self.candidatePatterns {
+            for candidate in Self.matches(in: text, pattern: shape.pattern, caseInsensitive: shape.caseInsensitive) {
                 if detect(candidate).confidence == .high { return candidate.trimmingCharacters(in: .whitespaces) }
             }
         }
@@ -1003,20 +1029,39 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
         matches(normalized, pattern: "^[0-9]{6}$")
     }
 
-    /// Each shop's order number, tried in turn and read without regard to case: the front door's patterns.
-    static let orderNumbers: [(shop: OrderShop, pattern: String)] = {
-        struct File: Decodable {
-            struct Shop: Decodable {
-                let shop: OrderShop
-                let pattern: String
-            }
-            let shops: [Shop]
+    /// How the front door reads a text (`shared/reading.json`), with the shapes of a number in a text
+    /// that the shared engine tries, in its order.
+    private struct ReadingRules: Decodable {
+        struct Shop: Decodable {
+            let shop: OrderShop
+            let pattern: String
         }
-        guard let url = Bundle.main.url(forResource: "OrderNumbers", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let file = try? JSONDecoder().decode(File.self, from: data) else { return [] }
-        return file.shops.map { ($0.shop, $0.pattern) }
+        struct Shape: Decodable {
+            let source: String
+            let flags: String
+        }
+        let shops: [Shop]
+        let numberWords: String
+        let candidates: [Shape]
+    }
+
+    private static let readingRules: ReadingRules? = {
+        guard let url = Bundle.main.url(forResource: "Reading", withExtension: "json"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(ReadingRules.self, from: data)
     }()
+
+    /// Each shop's order number, tried in turn and read without regard to case: the front door's patterns.
+    static let orderNumbers: [(shop: OrderShop, pattern: String)] = readingRules?.shops.map { ($0.shop, $0.pattern) } ?? []
+
+    /// The shapes of a number in a text, as the shared engine tries them (`TRACKING_CANDIDATE_PATTERNS`).
+    static let candidatePatterns: [(pattern: String, caseInsensitive: Bool)] =
+        readingRules?.candidates.map { ($0.source, $0.flags.contains("i")) } ?? []
+
+    /// Words that introduce a tracking number in the app's languages.
+    private static let numberWords = readingRules?.numberWords
+
+    private static let linkPattern = "https?://[^\\s<>\\\"']+"
 
     /// The shop whose order number a text holds.
     static func orderShop(in text: String) -> OrderShop? {
@@ -1025,13 +1070,16 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
 
     /// The text without its order numbers, so that no part of one is read as a tracking number.
     private static func withoutOrders(_ text: String) -> String {
-        orderNumbers.reduce(text) { rest, order in
-            expression(order.pattern, caseInsensitive: true)?.stringByReplacingMatches(
-                in: rest,
-                range: NSRange(rest.startIndex..., in: rest),
-                withTemplate: " "
-            ) ?? rest
-        }
+        orderNumbers.reduce(text) { rest, order in blanking(order.pattern, in: rest, caseInsensitive: true) }
+    }
+
+    /// The text with a space for each match of the pattern.
+    private static func blanking(_ pattern: String, in text: String, caseInsensitive: Bool = false) -> String {
+        expression(pattern, caseInsensitive: caseInsensitive)?.stringByReplacingMatches(
+            in: text,
+            range: NSRange(text.startIndex..., in: text),
+            withTemplate: " "
+        ) ?? text
     }
 
     static func format(_ raw: String, carrier: CarrierID? = nil) -> String {

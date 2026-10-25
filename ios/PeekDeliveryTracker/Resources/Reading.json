@@ -1,0 +1,284 @@
+{
+  "shops": [
+    {
+      "shop": "amazon",
+      "shape": "3-7-7 digits, or D01-… for digital orders.",
+      "pattern": "(?:^|[^A-Za-z0-9_-])(?:[0-9]{3}|D[0-9]{2})-[0-9]{7}-[0-9]{7}(?![A-Za-z0-9_-])"
+    },
+    {
+      "shop": "shein",
+      "shape": "GSH and 12 letters or digits: GSH000000000000.",
+      "pattern": "(?:^|[^A-Za-z0-9_-])GSH[A-Z0-9]{12}(?![A-Za-z0-9_-])"
+    },
+    {
+      "shop": "shopee",
+      "shape": "The order's date (YYMMDD) and 8 letters and digits: 261025ABCD1234. One of the 8 is a letter, so a carrier's 14 digits that start like a date stay a tracking number.",
+      "pattern": "(?:^|[^A-Za-z0-9_-])[0-9]{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12][0-9]|3[01])(?=[A-Z0-9]{0,7}[A-Z])[A-Z0-9]{8}(?![A-Za-z0-9_-])"
+    },
+    {
+      "shop": "temu",
+      "shape": "PO, 3 digits and 17: PO-000-00000000000000000, often typed without the hyphens.",
+      "pattern": "(?:^|[^A-Za-z0-9_-])PO[- ]?[0-9]{3}[- ]?[0-9]{17}(?![A-Za-z0-9_-])"
+    }
+  ],
+  "numberWords": "track|parcel|shipment|sendung|paket|suivi|colis|tracciamento|spedizione|pacco|seguimiento|env[ií]o|paquete|seguimento|encomenda|śledzeni|przesyłk|paczk",
+  "examples": [
+    {
+      "text": "302-4571983-2294617",
+      "shop": "amazon"
+    },
+    {
+      "text": "Order #302-4571983-2294617 is confirmed",
+      "shop": "amazon"
+    },
+    {
+      "text": "D01-1234567-1234567",
+      "shop": "amazon"
+    },
+    {
+      "text": "30245719832294617",
+      "shop": null
+    },
+    {
+      "text": "Order 302-4571983-2294617, tracking 1ZDEMO202600000001",
+      "shop": null,
+      "carrier": "ups",
+      "why": "A real number beside the order number wins."
+    },
+    {
+      "text": "GSH0A1B2C3D4E5F",
+      "shop": "shein"
+    },
+    {
+      "text": "gsh0a1b2c3d4e5f",
+      "shop": "shein"
+    },
+    {
+      "text": "Your Shein order GSH0A1B2C3D4E5F has shipped",
+      "shop": "shein"
+    },
+    {
+      "text": "GSH0A1B2C3D4E5F6",
+      "shop": null,
+      "why": "A character too many or too few is no Shein order number."
+    },
+    {
+      "text": "GSH0A1B2C3D4E5",
+      "shop": null
+    },
+    {
+      "text": "261025ABCD1234",
+      "shop": "shopee"
+    },
+    {
+      "text": "261025abcd1234",
+      "shop": "shopee"
+    },
+    {
+      "text": "26102512345A78",
+      "shop": "shopee"
+    },
+    {
+      "text": "Shopee order 261025ABCD1234 is on its way",
+      "shop": "shopee"
+    },
+    {
+      "text": "26102512345678",
+      "shop": null,
+      "why": "14 digits that start like a date are a carrier's, as is a date no calendar has."
+    },
+    {
+      "text": "261325ABCD1234",
+      "shop": null
+    },
+    {
+      "text": "261032ABCD1234",
+      "shop": null
+    },
+    {
+      "text": "261025ABCD12345",
+      "shop": null,
+      "why": "A character too many or too few is no Shopee order number."
+    },
+    {
+      "text": "261025ABCD123",
+      "shop": null
+    },
+    {
+      "text": "PO-000-00000000000000000",
+      "shop": "temu"
+    },
+    {
+      "text": "PO00000000000000000000",
+      "shop": "temu"
+    },
+    {
+      "text": "po-000-00000000000000000",
+      "shop": "temu"
+    },
+    {
+      "text": "PO 000 00000000000000000",
+      "shop": "temu"
+    },
+    {
+      "text": "Your Temu order confirmation (#PO-000-12345678901234567)",
+      "shop": "temu"
+    },
+    {
+      "text": "Order PO-000-12345678901234567\nThanks for shopping with us",
+      "shop": "temu"
+    },
+    {
+      "text": "PO-000-000000000000000000",
+      "shop": null,
+      "why": "A digit too many or too few, or no PO, is no Temu order number."
+    },
+    {
+      "text": "000-00000000000000000",
+      "shop": null
+    },
+    {
+      "text": "XPO-000-00000000000000000",
+      "shop": null
+    },
+    {
+      "text": "PO0000000000000000000",
+      "shop": null,
+      "carrier": "australia-post",
+      "why": "A carrier's number that starts with PO stays a tracking number: here Australia Post's, a digit short of Temu's."
+    },
+    {
+      "text": "Order PO-000-00000000000000000, tracking 1ZDEMO202600000001",
+      "shop": null,
+      "carrier": "ups"
+    },
+    {
+      "text": "Parcel PO-000 12345678901234567",
+      "shop": "temu",
+      "why": "No part of an order number is read as a tracking number, however a label introduces it."
+    },
+    {
+      "text": "Parcel 1234567899, order PO-000 12345678901234567",
+      "shop": null,
+      "number": "1234567899"
+    },
+    {
+      "text": "Hi Alex, good news: your order has shipped!\nTrack it with DHL: 1234567899\nExpected delivery: Wednesday",
+      "shop": null,
+      "number": "1234567899",
+      "why": "A message's one number is read though its shape proves no carrier; the carriers are asked."
+    },
+    {
+      "text": "Tracking number: 01234567890123",
+      "shop": null,
+      "number": "01234567890123"
+    },
+    {
+      "text": "Your registration is complete. Parcel number 1234567899",
+      "shop": null,
+      "number": "1234567899"
+    },
+    {
+      "text": "Call us on 0441234567.\nYour parcel will arrive soon: 1234567899",
+      "shop": null,
+      "number": "1234567899",
+      "why": "Of two numbers, the one on the line that speaks of tracking."
+    },
+    {
+      "text": "Ihr Paket ist unterwegs: 1234567899\nFragen? 0441234567",
+      "shop": null,
+      "number": "1234567899"
+    },
+    {
+      "text": "Your order has shipped!\r\nTrack it with DHL: 1234567899\r\n",
+      "shop": null,
+      "number": "1234567899"
+    },
+    {
+      "text": "Track it with DHL: 1234567899\nhttps://example.test/track/9987654321",
+      "shop": null,
+      "number": "1234567899",
+      "why": "A number in a link is the link's, not the message's."
+    },
+    {
+      "text": "Call us on 1234567899 or 9987654321, any day.",
+      "shop": null,
+      "number": "",
+      "why": "Two numbers and nothing to tell them apart: neither is read."
+    },
+    {
+      "text": "Order confirmation",
+      "shop": null,
+      "number": "",
+      "why": "A word is never the number, though a carrier's rule may fit its length."
+    },
+    {
+      "text": "Thanks for your order! We'll let you know as soon as it ships.",
+      "shop": null,
+      "number": ""
+    },
+    {
+      "text": "Track it with DHL: 1234567899 (order PO-000-12345678901234567)",
+      "shop": null,
+      "number": "1234567899",
+      "why": "A number beside an order number is read, and the order is not noted."
+    },
+    {
+      "text": "Your order 302-4571983-2294617 has shipped.\nTrack it with DHL: 1234567899",
+      "shop": null,
+      "number": "1234567899"
+    },
+    {
+      "text": "Shein order GSH0A1B2C3D4E5F: your parcel 1234567899 is on its way",
+      "shop": null,
+      "number": "1234567899"
+    },
+    {
+      "text": "Order 261025ABCD1234\nTracking 1234567899",
+      "shop": null,
+      "number": "1234567899"
+    }
+  ],
+  "candidates": [
+    {
+      "source": "\\b(?:(?:FR|DE|BE|UK|GB|IT|ES|NL|AT|IE|PL|SE|PT|LU|DK|FI|CZ|SK|HU|RO|HR|SI|EE|LV|LT|GR|CY|MT|CH|NO|IS|LI|TR)(?:[\\s.-]*[0-9]){10}|TB[ACM](?:[\\s.-]*[0-9]){12})\\b",
+      "flags": "gi"
+    },
+    {
+      "source": "\\b\\d{4}\\/\\d{8}\\b",
+      "flags": "g"
+    },
+    {
+      "source": "\\b\\d{26}\\b",
+      "flags": "g"
+    },
+    {
+      "source": "\\bH\\d{15,19}\\b",
+      "flags": "gi"
+    },
+    {
+      "source": "\\b1Z[A-Z0-9]{16}\\b",
+      "flags": "gi"
+    },
+    {
+      "source": "\\b1G[A-Z0-9]{10}\\b",
+      "flags": "gi"
+    },
+    {
+      "source": "\\b[A-Z]{2}\\s*\\d(?:[\\s.-]?\\d){8}\\s*[A-Z]{2}\\b",
+      "flags": "gi"
+    },
+    {
+      "source": "\\b(?:JJD|JVGL)[A-Z0-9]{8,}\\b",
+      "flags": "gi"
+    },
+    {
+      "source": "\\b\\d(?:[\\s.-]?\\d){9,19}\\b",
+      "flags": "g"
+    },
+    {
+      "source": "\\b[A-Z0-9]{4,40}\\b",
+      "flags": "gi"
+    }
+  ]
+}

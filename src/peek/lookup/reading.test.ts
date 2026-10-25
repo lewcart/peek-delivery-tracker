@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { checkDigitTrouble, looksLikeNumber, numbersInText, readText, uncertainNumberInText } from './reading';
-import orderNumbers from '../../../shared/order-numbers.json';
+import { checkDigitTrouble, looksLikeNumber, numbersInText, readText } from './reading';
+import rules from '../../../shared/reading.json';
 
 // Every number here is fictional.
 describe('reading the field', () => {
@@ -13,23 +13,11 @@ describe('reading the field', () => {
     expect(readText('  ').match.trackingNumber).toBe('');
     // Six letters typed alone are a GLS Track ID; in a message they are a word.
     expect(readText('ABCDEF').match).toMatchObject({ trackingNumber: 'ABCDEF', source: 'number', confidence: 'low' });
-    expect(readText('Thanks for your order! We’ll let you know as soon as it ships.').match.trackingNumber).toBe('');
   });
 
   it('takes the one number a message introduces even when its shape proves no carrier', () => {
     const message = 'Hi Alex, good news: your order has shipped!\nTrack it with DHL: 1234567899\nExpected delivery: Wednesday';
     expect(readText(message).match).toMatchObject({ trackingNumber: '1234567899', carrier: 'unknown', confidence: 'low', source: 'text' });
-    expect(uncertainNumberInText('Tracking number: 01234567890123')?.trackingNumber).toBe('01234567890123');
-    // Two candidates: the one on the line that speaks of tracking.
-    expect(uncertainNumberInText('Call us on 0441234567.\nYour parcel number is 1234567899.')?.trackingNumber).toBe('1234567899');
-    // Two candidates and nothing to tell them apart: none is taken.
-    expect(uncertainNumberInText('1234567899 or 9987654321')).toBeNull();
-    // A word is never the number, though a carrier's rule may fit its length.
-    expect(readText('Order confirmation').match.trackingNumber).toBe('');
-    expect(uncertainNumberInText('Your registration is complete. Parcel number 1234567899')?.trackingNumber).toBe('1234567899');
-    expect(uncertainNumberInText('Order 302-4571983-2294617')).toBeNull();
-    // Nor is the part of a Temu order number after its PO, which leaves the tracking number beside it alone.
-    expect(uncertainNumberInText('Track it with DHL: 1234567899 (order PO-000-12345678901234567)')?.trackingNumber).toBe('1234567899');
   });
 
   it('lists every certain number in a text once, in the order written, links included', () => {
@@ -47,10 +35,11 @@ describe('reading the field', () => {
   });
 
   // The iPhone's Add sheet replays the same examples.
-  it.each(orderNumbers.examples)('tells a shop’s order number from a tracking number: $text', ({ text, shop, carrier }) => {
-    const reading = readText(text);
-    expect(reading.order).toBe(shop);
-    if (carrier) expect(reading.match).toMatchObject({ carrier, confidence: 'high' });
+  it.each(rules.examples)('reads a message’s number, or a shop’s order number: $text', (example) => {
+    const reading = readText(example.text);
+    expect(reading.order).toBe(example.shop);
+    if ('number' in example) expect(reading.match.trackingNumber).toBe(example.number);
+    if ('carrier' in example) expect(reading.match).toMatchObject({ carrier: example.carrier, confidence: 'high' });
   });
 
   it('sets a typed number in the label’s type, and prose as prose', () => {

@@ -19,7 +19,7 @@ enum FirstParcelRequest: Equatable {
         let pieces = items.compactMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty }
             .reduce(into: [String]()) { pieces, piece in if !pieces.contains(piece) { pieces.append(piece) } }
         let text = String(pieces.joined(separator: "\n").prefix(pasteLimit))
-        return catalog.parse(text).trackingNumber.isEmpty && catalog.order(in: text) == nil ? nil : .paste(text)
+        return catalog.read(text).trackingNumber.isEmpty && catalog.order(in: text) == nil ? nil : .paste(text)
     }
 }
 
