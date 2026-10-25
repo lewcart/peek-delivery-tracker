@@ -198,6 +198,11 @@ struct TrackingInputMatch: Equatable, Sendable {
     let source: Source
 }
 
+/// A shop whose order numbers Add tells from tracking numbers, as the front door does (`shared/order-numbers.json`).
+enum OrderShop: String, Decodable, Sendable {
+    case amazon, shein, shopee, temu
+}
+
 /// Carrier recognition in the Add sheet: a shape several carriers share is
 /// checked with them once the number is settled (the field loses focus, a
 /// paste, a scan, a shared number), never on each keystroke. It never holds
@@ -358,6 +363,7 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
         didSet {
             detections.removeAllObjects()
             parsedInputs.removeAllObjects()
+            orders.removeAllObjects()
         }
     }
 
@@ -368,6 +374,7 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
     }
     private let detections = NSCache<NSString, Memo<CarrierMatch>>()
     private let parsedInputs = NSCache<NSString, Memo<TrackingInputMatch>>()
+    private let orders = NSCache<NSString, Memo<OrderShop?>>()
     private static let expressions = NSCache<NSString, NSRegularExpression>()
 
     private static let refreshInterval: TimeInterval = 15 * 60
@@ -694,6 +701,17 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
         return match
     }
 
+    /// The shop whose order number the input is, read as the front door reads it (`readText` in
+    /// src/peek/lookup/reading.ts): a number a carrier claims with certainty wins; otherwise the
+    /// number parsed, or the whole text, is tried.
+    func order(in raw: String) -> OrderShop? {
+        if let memo = orders.object(forKey: raw as NSString) { return memo.value }
+        let match = parse(raw)
+        let order = match.confidence == .high ? nil : Self.orderShop(in: match.trackingNumber.nonEmpty ?? raw)
+        orders.setObject(Memo(order), forKey: raw as NSString)
+        return order
+    }
+
     private func parseTrimmed(_ input: String) -> TrackingInputMatch {
         for pasted in Self.matches(in: input, pattern: "https?://[^\\s<>\\\"']+") {
             let cleaned = pasted
@@ -771,11 +789,13 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
             }
         }
 
-        if let recognized = recognizedNumber(in: input) {
+        // No part of a shop's order number is read as a tracking number.
+        let prose = Self.withoutOrders(input)
+        if let recognized = recognizedNumber(in: prose) {
             return makeMatch(recognized, source: input == recognized ? .number : .text)
         }
 
-        if let labelled = Self.capture(input, pattern: Self.labelledNumberPattern, caseInsensitive: true) {
+        if let labelled = Self.capture(prose, pattern: Self.labelledNumberPattern, caseInsensitive: true) {
             // A sentence can end right after its number.
             let keyword = labelled.replacingOccurrences(of: "[.-]+$", with: "", options: .regularExpression)
             if Self.validInText(keyword) { return makeMatch(keyword, source: .text) }
@@ -981,6 +1001,37 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
     /// pickup point, which no carrier's detection claims. Only a carrier picked by hand takes one as its number.
     static func isPickupCode(_ normalized: String) -> Bool {
         matches(normalized, pattern: "^[0-9]{6}$")
+    }
+
+    /// Each shop's order number, tried in turn and read without regard to case: the front door's patterns.
+    static let orderNumbers: [(shop: OrderShop, pattern: String)] = {
+        struct File: Decodable {
+            struct Shop: Decodable {
+                let shop: OrderShop
+                let pattern: String
+            }
+            let shops: [Shop]
+        }
+        guard let url = Bundle.main.url(forResource: "OrderNumbers", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let file = try? JSONDecoder().decode(File.self, from: data) else { return [] }
+        return file.shops.map { ($0.shop, $0.pattern) }
+    }()
+
+    /// The shop whose order number a text holds.
+    static func orderShop(in text: String) -> OrderShop? {
+        orderNumbers.first { matches(text, pattern: $0.pattern, caseInsensitive: true) }?.shop
+    }
+
+    /// The text without its order numbers, so that no part of one is read as a tracking number.
+    private static func withoutOrders(_ text: String) -> String {
+        orderNumbers.reduce(text) { rest, order in
+            expression(order.pattern, caseInsensitive: true)?.stringByReplacingMatches(
+                in: rest,
+                range: NSRange(rest.startIndex..., in: rest),
+                withTemplate: " "
+            ) ?? rest
+        }
     }
 
     static func format(_ raw: String, carrier: CarrierID? = nil) -> String {
@@ -1419,8 +1470,8 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
         return result
     }
 
-    private static func matches(_ value: String, pattern: String) -> Bool {
-        guard let expression = expression(pattern) else { return false }
+    private static func matches(_ value: String, pattern: String, caseInsensitive: Bool = false) -> Bool {
+        guard let expression = expression(pattern, caseInsensitive: caseInsensitive) else { return false }
         return expression.firstMatch(
             in: value,
             range: NSRange(value.startIndex..., in: value)
@@ -1575,7 +1626,7 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
             .appending(path: "carrier-catalog-v5.json")
     }
 
-    private static let emptyMatch = TrackingInputMatch(
+    static let emptyMatch = TrackingInputMatch(
         trackingNumber: "",
         carrier: .unknown,
         confidence: .none,

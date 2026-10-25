@@ -68,7 +68,11 @@ it, copy its tracking number, change its carrier, archive it with Undo as a swip
 bring it back, and delete it once confirmed.
 
 Text or a link dropped on the deliveries or on + opens Add with it, as a paste or the Share
-extension does. A drop with no tracking number in it is refused.
+extension does. A drop with neither a tracking number nor a shop's order number in it is refused.
+
+Add holds back a pickup code and a shop's order number as the front door does, with the same
+patterns (`shared/order-numbers.json`): it asks no server about them, can't save them and says
+where the tracking number is instead.
 
 With a keyboard, ⌘N adds a parcel, ⌘F searches, ⌘R refreshes where its button shows, ⌘1 to ⌘3
 choose the tabs and ⌘, opens Settings. On the parcel shown, beside the list or over it, ⇧⌘C

@@ -2939,7 +2939,7 @@ extension ParcelLogicTests {
         XCTAssertEqual(TrackingNumberCopy.text("12345678001", carrier: .postlogistics), "12345678-001")
     }
 
-    func testTextDroppedOnTheDeliveriesOpensAddOnlyWhenItHoldsATrackingNumber() {
+    func testTextDroppedOnTheDeliveriesOpensAddOnlyWhenItHoldsATrackingOrOrderNumber() {
         let catalog = CarrierCatalog(cacheURL: nil)
         XCTAssertEqual(FirstParcelRequest.drop([" 1Z999AA10123456784\n"], catalog: catalog), .paste("1Z999AA10123456784"))
         let message = "Your order has shipped: 1Z999AA10123456784"
@@ -2948,6 +2948,9 @@ extension ParcelLogicTests {
         let link = "https://www.ups.com/track?tracknum=1Z999AA10123456784"
         XCTAssertEqual(FirstParcelRequest.drop([link, "Track your parcel", link], catalog: catalog),
                        .paste("\(link)\nTrack your parcel"))
+        // An order number opens Add, which says where to find the tracking number.
+        let order = "Order #302-4571983-2294617 is confirmed"
+        XCTAssertEqual(FirstParcelRequest.drop([order], catalog: catalog), .paste(order))
         // Nothing to track: the drop is refused, and Add stays closed.
         XCTAssertNil(FirstParcelRequest.drop([], catalog: catalog))
         XCTAssertNil(FirstParcelRequest.drop([" ", "\n"], catalog: catalog))

@@ -47,9 +47,9 @@ struct AddParcelView: View {
         self.onAdded = onAdded
         _label = State(initialValue: draft?.label ?? "")
         _trackingInput = State(initialValue: draft?.trackingInput ?? "")
-        // A shared number is settled as soon as the sheet opens.
+        // A shared text is settled as soon as the sheet opens.
         _recognition = State(initialValue: CarrierRecognition(
-            settledNumber: Self.trackingNumber(in: draft?.trackingInput ?? "").nonEmpty
+            settledNumber: draft.map { Self.trackingNumber(in: $0.trackingInput) }
         ))
     }
 
@@ -288,7 +288,7 @@ struct AddParcelView: View {
                     .strokeBorder(focusedField == .tracking ? ExperimentalPalette.ochre : Brand.separator.opacity(0.3), lineWidth: 1)
             }
 
-            if parsed.trackingNumber.isEmpty && !cleanedInput.isEmpty {
+            if parsed.trackingNumber.isEmpty && !cleanedInput.isEmpty && order == nil {
                 Text(localizer.text("add.notFound"))
                     .font(.caption)
                     .foregroundStyle(Brand.warning)
@@ -296,16 +296,31 @@ struct AddParcelView: View {
             }
             // The start of a longer number is still being typed: the notice waits for the number to settle.
             if pickupCode && recognition.settledNumber == normalizedNumber {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(localizer.text("add.pickupCode.title")).font(.caption.weight(.semibold))
-                    Text(localizer.text("add.pickupCode.body")).font(.caption)
+                heldBackNote(title: localizer.text("add.pickupCode.title"), body: localizer.text("add.pickupCode.body"))
+            }
+            // An order number is held back at once, and its notice waits in the same way.
+            if let order, recognition.settledNumber == normalizedNumber {
+                heldBackNote(title: localizer.text("door.order.\(order.rawValue).title"),
+                             body: localizer.text("door.order.\(order.rawValue).body"))
+                // Only Amazon has an orders page to link to: for Shein, Shopee and Temu the note says where to tap instead.
+                if order == .amazon {
+                    Link(localizer.text("add.openAmazonOrders"), destination: CarrierCatalog.amazonOrdersURL(""))
+                        .font(.subheadline)
                 }
-                .foregroundStyle(Brand.warning)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityElement(children: .combine)
             }
         }
         .foregroundStyle(Brand.ink)
+    }
+
+    /// Why the field holds no number to add, and what to paste instead.
+    private func heldBackNote(title: String, body: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption.weight(.semibold))
+            Text(body).font(.caption)
+        }
+        .foregroundStyle(Brand.warning)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
     }
 
     private var trackingLabel: some View {
@@ -634,12 +649,17 @@ struct AddParcelView: View {
         DataScannerViewController.isSupported && DataScannerViewController.isAvailable
     }
 
-    private var parsed: TrackingInputMatch { catalog.parse(trackingInput) }
+    /// The shop whose order number the field holds. No carrier tracks one, so nothing asks about it and it is not saved.
+    private var order: OrderShop? { catalog.order(in: trackingInput) }
+
+    /// The number in play: none for an order number.
+    private var parsed: TrackingInputMatch { order == nil ? catalog.parse(trackingInput) : CarrierCatalog.emptyMatch }
 
     private var normalizedNumber: String { CarrierCatalog.normalize(parsed.trackingNumber) }
 
     private static func trackingNumber(in input: String) -> String {
-        CarrierCatalog.normalize(CarrierCatalog.shared.parse(input).trackingNumber)
+        let catalog = CarrierCatalog.shared
+        return catalog.order(in: input) == nil ? CarrierCatalog.normalize(catalog.parse(input).trackingNumber) : ""
     }
 
     private var amazonNumber: Bool { catalog.isAmazonTrackingNumber(parsed.trackingNumber) }

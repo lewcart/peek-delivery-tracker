@@ -1893,6 +1893,56 @@ extension CarrierCatalogTests {
         XCTAssertEqual(mismatches, [], mismatches.prefix(10).joined(separator: "\n"))
     }
 
+    /// The front door's order-number examples (shared/order-numbers.json): Add holds back the same ones.
+    func testOrderNumbersReadAsTheFrontDoorReadsThem() throws {
+        struct Example: Decodable {
+            let text: String
+            let shop: OrderShop?
+            /// The carrier that claims the number read instead, with certainty.
+            let carrier: String?
+        }
+        struct File: Decodable {
+            let examples: [Example]
+        }
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "OrderNumbers", withExtension: "json"))
+        let file = try JSONDecoder().decode(File.self, from: Data(contentsOf: url))
+        XCTAssertEqual(CarrierCatalog.orderNumbers.map { $0.shop }, [.amazon, .shein, .shopee, .temu])
+        XCTAssertGreaterThan(file.examples.count, 20)
+        var mismatches: [String] = []
+        for example in file.examples {
+            let text = String(reflecting: example.text)
+            let order = catalog.order(in: example.text)
+            if order != example.shop {
+                mismatches.append("\(text): expected \(example.shop?.rawValue ?? "no shop"), got \(order?.rawValue ?? "no shop")")
+            }
+            if let carrier = example.carrier {
+                let match = catalog.parse(example.text)
+                if match.carrier.rawValue != carrier || match.confidence != .high {
+                    mismatches.append("\(text): expected \(carrier) to claim it, got \(match.carrier.rawValue)/\(match.confidence)")
+                }
+            }
+        }
+        XCTAssertEqual(mismatches, [], mismatches.prefix(10).joined(separator: "\n"))
+        // Each shop's notice is the front door's, in every language.
+        let languages = try JSONDecoder().decode([String: [String: String]].self, from: Data(
+            contentsOf: XCTUnwrap(Bundle.main.url(forResource: "Localization", withExtension: "json"))
+        ))
+        for (language, messages) in languages {
+            for (shop, _) in CarrierCatalog.orderNumbers {
+                XCTAssertNotNil(messages["door.order.\(shop.rawValue).title"], "\(language) \(shop)")
+                XCTAssertNotNil(messages["door.order.\(shop.rawValue).body"], "\(language) \(shop)")
+            }
+        }
+    }
+
+    /// A message's number is never part of a shop's order number, while the number beside one still is read.
+    func testNoPartOfAnOrderNumberIsReadAsATrackingNumber() {
+        XCTAssertEqual(catalog.order(in: "Parcel PO-000 12345678901234567"), .temu)
+        XCTAssertNotEqual(catalog.parse("Parcel PO-000 12345678901234567").trackingNumber, "PO-000")
+        XCTAssertEqual(catalog.parse("Parcel 1234567899, order PO-000 12345678901234567").trackingNumber, "1234567899")
+        XCTAssertNil(catalog.order(in: "Parcel 1234567899, order PO-000 12345678901234567"))
+    }
+
     /// The shared engine's patterns and separators are JavaScript's.
     func testPatternsAndSeparatorsReadAsInTheSharedEngine() {
         XCTAssertEqual(CarrierCatalog.normalize("\u{FEFF}ab 12.3-4\u{3000}5\u{0B}"), "AB12345")
