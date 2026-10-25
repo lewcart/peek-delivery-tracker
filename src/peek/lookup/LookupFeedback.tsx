@@ -199,7 +199,7 @@ export function LookupFeedback({ lookup, pointer, onSignIn, onPickCarrier, onSug
 
     {found.order && <DoorNote icon="receipt" tone="warm" title={t(`door.order.${found.order}.title`)} urgent={state.raised}>
       <p>{t(`door.order.${found.order}.body`)}</p>
-      {/* Temu documents no address for its orders page: the note says where to tap instead. */}
+      {/* Only Amazon has an orders page to link to: for Shein, Shopee and Temu the note says where to tap instead. */}
       {found.order === 'amazon'
         && <a className="door-note__action" href={amazonOrdersUrl('')} target="_blank" rel="noopener noreferrer">{t('add.openAmazonOrders')}<Icon name="arrow" /></a>}
     </DoorNote>}
