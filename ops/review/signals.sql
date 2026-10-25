@@ -162,7 +162,8 @@ order by i.active desc, i.last_notified_at desc;
 \echo '== Unfinished parcels a provider tracks, by the carrier that could take them (new: added in the window)'
 \echo '   carriers: no carrier known; adapters: the adapter refuses, fails or half-answers the number, answered it without'
 \echo '   movement, on local clocks only, without dates or behind a provider''s delivered or returned stage, or gave no'
-\echo '   direct answer in 30 days; captcha: a verification or captcha page stops the adapter; dormant: not checked for 24 h;'
+\echo '   direct answer in 30 days; captcha: a verification or captcha page stops the adapter; dormant: not checked for 24 h'
+\echo '   because nobody follows it (a lookup whose link nobody opened for 24 h and that has no alert: opening its link checks it);'
 \echo '   none: the carrier answers and the provider history is kept or fills in its partial answer, or the parcel'
 \echo '   already shows the newest scan of its answer set aside as older (answer shows an earlier leg);'
 \echo '   delivery-tracker: its adapter answers other parcels and was not asked for these (carrier not asked),'
@@ -176,6 +177,25 @@ from private.tracking_gaps
 where provider is not null
 group by 1, 2, 3, 4, 5
 order by parcels desc, could_take, provider;
+
+\echo '== Followed parcels not checked for 24 h: a scheduler fault, none expected (new: added in the window)'
+\echo '   an account''s parcel with a scan, or a lookup with an alert or a link opened in 24 h; never-checked Amazon parcels'
+\echo '   and routing deferrals left out. Lookups nobody follows leave the schedule (the dormant lane above).'
+select case when package.user_id is not null then 'account' else 'lookup' end as kind, package.carrier,
+       package.carrier_data->>'tracking_provider' as provider, package.sync_status,
+       count(*) filter (where package.created_at >= :since) as new, count(*) as parcels,
+       min(package.last_synced_at)::timestamp(0) as oldest_check
+from public.packages as package
+where package.archived_at is null and package.current_stage not in ('pending', 'delivered', 'returned')
+  and package.last_synced_at < now() - interval '24 hours' and package.sync_status is distinct from 'unsupported'
+  and not coalesce(case when pg_input_is_valid(package.carrier_data->'routing'->>'next_check_at', 'timestamptz')
+    then (package.carrier_data->'routing'->>'next_check_at')::timestamptz > now() end, false)
+  and (package.user_id is not null or (package.one_off and exists (
+    select 1 from public.parcel_links as link
+    where link.package_id = package.id and (link.last_opened_at > now() - interval '24 hours' or exists (
+      select 1 from public.parcel_link_alerts as alert where alert.link_id = link.id and (link.shared or alert.owner))))))
+group by 1, 2, 3, 4
+order by parcels desc, kind, carrier;
 
 \echo '== Reader feedback: answers other than right not reviewed yet (new: given or completed with a note in the window)'
 \echo '   carriers: no carrier found, or the wrong one; adapters: the carrier''s status, steps, times or places;'
