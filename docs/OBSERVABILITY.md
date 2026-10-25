@@ -976,6 +976,13 @@ source and the usage dashboard's PostgreSQL one at the top. Its "Silent carriers
 days: silence isn't success. Its "Review signals" row counts what the hourly review lists.
 The "Deploys" toggle marks app restarts, where the counters start again.
 
+The dashboards in `ops/grafana` are the source. After changing one, run
+`npm run grafana:dashboards` to see which dashboards and panels differ in Grafana, then
+`npm run grafana:dashboards -- --apply`. It saves the live dashboards on the host and writes
+each changed one over the version it read, so an edit made in Grafana meanwhile stops it;
+each keeps the data sources chosen there. It needs `GRAFANA_SSH_HOST` and `GRAFANA_CONTAINER`,
+as the alert sync does.
+
 ## Usage dashboard
 
 [ops/grafana/users-and-parcels.json](../ops/grafana/users-and-parcels.json) shows the

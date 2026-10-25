@@ -4,14 +4,14 @@
 // the rule group in one request; --status prints how each rule last evaluated.
 //
 // Requests run through curl inside the Grafana container, over ssh, so the admin
-// credentials never leave it. The host, container and data sources come from the
-// environment: GRAFANA_SSH_HOST, GRAFANA_CONTAINER, GRAFANA_PROMETHEUS_UID,
+// credentials never leave it (grafana-host.mjs). The host, container and data sources come
+// from the environment: GRAFANA_SSH_HOST, GRAFANA_CONTAINER, GRAFANA_PROMETHEUS_UID,
 // GRAFANA_LOKI_UID and GRAFANA_METRICS_UID (the PostgreSQL source that reads the
 // metrics schema). GRAFANA_BACKUP_DIR sets where backups go on the host.
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { backup, grafana, sortedKeys } from './grafana-host.mjs';
 
 const DATASOURCE_TYPES = { prometheus: 'prometheus', loki: 'loki', metrics: 'grafana-postgresql-datasource' };
 const DATASOURCE_ENV = { prometheus: 'GRAFANA_PROMETHEUS_UID', loki: 'GRAFANA_LOKI_UID', metrics: 'GRAFANA_METRICS_UID' };
@@ -75,12 +75,6 @@ export function provisionedGroup(alerts, datasources) {
   };
 }
 
-function sortedKeys(value) {
-  if (Array.isArray(value)) return value.map(sortedKeys);
-  if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.keys(value).sort().map(key => [key, sortedKeys(value[key])]));
-}
-
 /** What the source decides about a rule; Grafana adds fields of its own to what it stores. */
 export function comparableRule(rule) {
   return JSON.stringify(sortedKeys({
@@ -113,50 +107,6 @@ export function plan(group, liveRules) {
     update: [...desired.keys()].filter(uid => live.has(uid) && comparableRule(live.get(uid)) !== comparableRule(desired.get(uid))),
     remove: [...live.keys()].filter(uid => !desired.has(uid)),
   };
-}
-
-function required(name) {
-  const value = process.env[name];
-  if (!value) throw new Error(`Set ${name}`);
-  return value;
-}
-
-function ssh(command, input = '') {
-  // The rule list covers every folder in Grafana, well over spawnSync's default 1 MB.
-  const result = spawnSync('ssh', ['-o', 'BatchMode=yes', required('GRAFANA_SSH_HOST'), command],
-    { input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  if (result.error) throw new Error(`ssh failed: ${result.error.message}`);
-  if (result.status !== 0) throw new Error(`ssh failed: ${(result.stderr || result.stdout).trim()}`);
-  return result.stdout;
-}
-
-const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
-
-function grafana(method, apiPath, body, { allowMissing = false } = {}) {
-  const curl = [
-    'curl -sS -w "\\n%{http_code}"',
-    `-X ${method}`,
-    '-u "$GF_SECURITY_ADMIN_USER:$GF_SECURITY_ADMIN_PASSWORD"',
-    "-H 'Content-Type: application/json'",
-    body === undefined ? '' : '--data-binary @-',
-    quote(`http://localhost:3000${apiPath}`),
-  ].join(' ');
-  const output = ssh(`sudo -n docker exec -i ${quote(required('GRAFANA_CONTAINER'))} sh -c ${quote(curl)}`,
-    body === undefined ? '' : JSON.stringify(body)).trimEnd();
-  const status = Number(output.slice(output.lastIndexOf('\n') + 1));
-  const text = output.slice(0, output.lastIndexOf('\n'));
-  if (status === 404 && allowMissing) return null;
-  if (status < 200 || status >= 300) throw new Error(`${method} ${apiPath} answered ${status}: ${text}`);
-  return text ? JSON.parse(text) : null;
-}
-
-function backup(files) {
-  const directory = `${process.env.GRAFANA_BACKUP_DIR ?? DEFAULT_BACKUP_DIR}/${new Date().toISOString().replace(/[:.]/g, '-')}`;
-  for (const [name, content] of Object.entries(files)) {
-    const file = quote(`${directory}/${name}`);
-    ssh(`sudo -n sh -c ${quote(`umask 077 && mkdir -p ${quote(directory)} && cat > ${file}`)}`, `${JSON.stringify(content, null, 2)}\n`);
-  }
-  return directory;
 }
 
 function status(alerts) {
@@ -202,7 +152,7 @@ function main() {
     'alert-rules.json': grafana('GET', '/api/v1/provisioning/alert-rules'),
     'notification-policies.json': grafana('GET', '/api/v1/provisioning/policies'),
     'folder.json': folder,
-  })}`);
+  }, DEFAULT_BACKUP_DIR)}`);
   if (!folder) grafana('POST', '/api/folders', { uid: alerts.folderUid, title: alerts.folderTitle });
   grafana('PUT', `/api/v1/provisioning/folder/${alerts.folderUid}/rule-groups/${encodeURIComponent(alerts.ruleGroup)}`, group);
   console.log('Applied. Run with --status in a minute to see each rule evaluate.');
