@@ -2112,7 +2112,7 @@ export class TrackingSyncService {
       const removed = preserveSummary ? absorbed : [...absorbed, ...disputedRows];
       const keptEvents = eventsToPersist.filter((event) => !matches.skipped.has(String(event.provider_event_id))
         && !dated.skipped.has(String(event.provider_event_id)));
-      const persistedEvents = withIdentities(keptEvents, new Map([...matches.reused, ...dated.reused]), stored);
+      const persistedEvents = withIdentities(keptEvents, new Map([...matches.reused, ...dated.reused]), stored, retimed);
       // The universal rows the carriers' scans hold, so the timeline tells a provider's copies from them (providerCopies.ts).
       const history = directHistory(keptEvents, persistedEvents, previousData[DIRECT_HISTORY], stored);
       if (history) carrierData[DIRECT_HISTORY] = history;

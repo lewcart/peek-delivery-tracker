@@ -25,7 +25,8 @@
  *   milliseconds takes over the row of that second (Royal Mail's locker drop-off).
  * - Whatever the policy, a scan the carrier's own answer moved up to three
  *   hours later takes over the row of the earlier time that the answer no
- *   longer lists (`retimedScans`).
+ *   longer lists (`retimedScans`). The row keeps that earlier time as the one
+ *   it was first stored with (`RETIMED_FROM`).
  * - A row taken over keeps its old identity while its strings follow the
  *   scan. When a later check meets the scan again, a policy that matched the
  *   old strings (AliExpress's town in brackets) no longer matches, so a scan
@@ -67,6 +68,15 @@ import { isRecord, type JsonObject } from './types';
  * the key existed have none.
  */
 export const UNIVERSAL_PROVIDER = 'universal_provider';
+
+/**
+ * The `raw_data` key that keeps the time a row was first stored with, as its
+ * source gave it, once its carrier moved the scan later (`retimedScans`). The
+ * row keeps its identity and creation time, so without it a moved scan reads
+ * like one stored ahead of its time. Later checks carry it over while the row
+ * shows another time (`withIdentities`).
+ */
+export const RETIMED_FROM = 'retimed_from';
 
 /** Peek's words for a step its source gave none for. */
 export const UNWORDED_STEP = 'Tracking update';
@@ -1370,20 +1380,32 @@ export function withoutCopyDrift(
 /**
  * The events as persisted: a reused identity replaces the computed one. A
  * universal scan that rewrites a stored row naming no provider (a carrier
- * wrote it, or it was stored before rows named one) leaves it unnamed.
+ * wrote it, or it was stored before rows named one) leaves it unnamed. A scan
+ * that takes over the row of an earlier time (`retimed`) keeps the time that
+ * row was first stored with (`RETIMED_FROM`), and so does any scan that
+ * rewrites such a row at another time.
  */
 export function withIdentities(
   events: readonly JsonObject[],
   identities: ReadonlyMap<string, string>,
   stored: readonly JsonObject[] = [],
+  retimed: ReadonlyMap<string, string> = new Map(),
 ): JsonObject[] {
   const unnamed = new Set(stored.filter((row) => providerOf(row) === '').map(identity));
+  const rows = new Map(stored.map((row) => [identity(row), row]));
   return events.map((event) => {
     const reused = identities.get(identity(event));
     const persisted = reused ? { ...event, provider_event_id: reused } : event;
-    if (!unnamed.has(identity(persisted)) || providerOf(event) === '' || !isRecord(event.raw_data)) return persisted;
-    const raw = { ...event.raw_data };
-    delete raw[UNIVERSAL_PROVIDER];
+    const row = rows.get(identity(persisted));
+    const kept = row ? rawOf(row, RETIMED_FROM) : undefined;
+    const first = typeof kept === 'string' ? kept
+      : row && reused && retimed.get(identity(event)) === reused ? timeOf(row) || String(row.occurred_at ?? '') : '';
+    const moved = first !== '' && first !== timeOf(event);
+    const unnaming = unnamed.has(identity(persisted)) && providerOf(event) !== '';
+    if (!isRecord(persisted.raw_data) || (!moved && !unnaming)) return persisted;
+    const raw = { ...persisted.raw_data };
+    if (moved) raw[RETIMED_FROM] = first;
+    if (unnaming) delete raw[UNIVERSAL_PROVIDER];
     return { ...persisted, raw_data: raw };
   });
 }

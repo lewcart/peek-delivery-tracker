@@ -6017,6 +6017,7 @@ function eventStore() {
       time_zone_basis: (row.raw_data as JsonObject | undefined)?.time_zone_basis,
       time_provenance: (row.raw_data as JsonObject | undefined)?.time_provenance,
       provider_time_iso: (row.raw_data as JsonObject | undefined)?.provider_time_iso,
+      retimed_from: (row.raw_data as JsonObject | undefined)?.retimed_from,
     })),
     batch: () => (client.applyTrackingSync.mock.calls.at(-1)?.[2] ?? []) as JsonObject[],
   };
@@ -6275,29 +6276,37 @@ it('moves the row of a scan its carrier restates a little later, and keeps the n
   const arrived = scan('2026-10-22T21:56:00-07:00', 'Arrived at Facility');
   const departed = scan('2026-10-23T01:55:00-07:00', 'Departed Facility');
   const later = { ...departed, time: '2026-10-23T03:00:00-07:00' };
+  const again = { ...departed, time: '2026-10-23T04:00:00-07:00' };
   const nextDay = { ...departed, time: '2026-10-24T02:10:00-07:00' };
   const adapter = { fetch: vi.fn()
     .mockResolvedValueOnce(result(arrived, departed))
     .mockResolvedValueOnce(result(arrived, later))
     .mockResolvedValueOnce(result(arrived, later))
+    .mockResolvedValueOnce(result(arrived, again))
     .mockResolvedValue(result(arrived, nextDay)) };
   const service = new TrackingSyncService(store.client as unknown as SupabaseServiceClient, adapter, null,
     () => new Date('2026-10-24T12:00:00Z'));
   const load = () => ({ id: 'retimed-parcel', user_id: 'owner', carrier: 'dhl', tracking_number: 'TEST1234',
     current_stage: store.rows.size ? 'in_transit' : 'pending', [STORED_EVENT_IDENTITIES]: store.identities() });
   const departures = () => [...store.rows.values()].filter((row) => row.description === 'Departed Facility')
-    .map(({ id, occurred_at }) => ({ id, at: new Date(String(occurred_at)).toISOString() }));
+    .map(({ id, occurred_at, raw_data }) => ({ id, at: new Date(String(occurred_at)).toISOString(),
+      ...((raw_data as JsonObject).retimed_from ? { first: (raw_data as JsonObject).retimed_from } : {}) }));
 
   await service.syncPackage(load());
   expect(departures()).toEqual([{ id: 'row-2', at: '2026-10-23T08:55:00.000Z' }]);
   // The departure's row moves to the later time in place: no second row, nothing announced again.
+  // It keeps the time it was first stored with, so it does not read as a scan stored ahead of its time.
+  const moved = { id: 'row-2', at: '2026-10-23T10:00:00.000Z', first: departed.time };
   await expect(service.syncPackage(load())).resolves.toMatchObject({ updated: 0, unchanged: 1 });
-  expect(departures()).toEqual([{ id: 'row-2', at: '2026-10-23T10:00:00.000Z' }]);
+  expect(departures()).toEqual([moved]);
   await expect(service.syncPackage(load())).resolves.toMatchObject({ updated: 0, unchanged: 1 });
-  expect(departures()).toEqual([{ id: 'row-2', at: '2026-10-23T10:00:00.000Z' }]);
+  expect(departures()).toEqual([moved]);
+  // Moved again, it keeps its first time.
+  await expect(service.syncPackage(load())).resolves.toMatchObject({ updated: 0, unchanged: 1 });
+  expect(departures()).toEqual([{ ...moved, at: '2026-10-23T11:00:00.000Z' }]);
   // A day later it is another scan, and both stay.
   await expect(service.syncPackage(load())).resolves.toMatchObject({ updated: 1, unchanged: 0 });
-  expect(departures()).toEqual([{ id: 'row-2', at: '2026-10-23T10:00:00.000Z' }, { id: 'row-3', at: '2026-10-24T09:10:00.000Z' }]);
+  expect(departures()).toEqual([{ ...moved, at: '2026-10-23T11:00:00.000Z' }, { id: 'row-3', at: '2026-10-24T09:10:00.000Z' }]);
 });
 
 it('tells a check that stored a scan from one that rewrote the scans it had', async () => {

@@ -630,6 +630,25 @@ describe('a scan its carrier moves a little later', () => {
     expect(retimedScans([later], stored, 'usps').size).toBe(0);
   });
 
+  it('keeps the time the row was first stored with while the row shows another', () => {
+    const moved = retimedScans([label, arrived, later], stored, 'usps');
+    const [row] = withIdentities([later], moved, stored, moved);
+    expect(row).toMatchObject({ provider_event_id: 'usps:departed', raw_data: { time: later.raw_data.time, retimed_from: departed.raw_data.time } });
+    // Another take-over leaves no mark of its own.
+    expect(withIdentities([later], moved, stored)[0]!.raw_data).toEqual(later.raw_data);
+    // The next check meets the row under its old identity and keeps the mark; a second move keeps the first time.
+    const rows = [label, arrived, row!];
+    expect(withIdentities([later], restatedIdentities([label, arrived, later], rows), rows)[0]!.raw_data)
+      .toMatchObject({ retimed_from: departed.raw_data.time });
+    const again = at('2026-10-23T04:00:00-07:00', 'usps:departed-again');
+    const movedAgain = retimedScans([label, arrived, again], rows, 'usps');
+    expect(withIdentities([again], movedAgain, rows, movedAgain)[0]).toMatchObject({
+      provider_event_id: 'usps:departed', raw_data: { time: again.raw_data.time, retimed_from: departed.raw_data.time },
+    });
+    // Back at its first time, the row needs no mark.
+    expect(withIdentities([departed], new Map(), rows)[0]!.raw_data).toEqual(departed.raw_data);
+  });
+
   it('leaves two alike scans or rows, other sources, observations, days alone and matched scans alone', () => {
     expect(retimedScans([label, arrived, later, at('2026-10-23T03:30:00-07:00', 'usps:departed-again')], stored, 'usps').size).toBe(0);
     expect(retimedScans([label, arrived, later], [...stored, at('2026-10-23T01:56:00-07:00', 'usps:departed-twice')], 'usps').size).toBe(0);
