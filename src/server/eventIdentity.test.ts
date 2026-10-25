@@ -1486,10 +1486,29 @@ describe('a stage change the sync saw without a time', () => {
     expect(dating([clocked], [dated({ occurred_at: '2026-09-22T18:10:00Z' })])).toEqual([]);
   });
 
+  it('goes in words its source no longer gives, once the newest scan before it is of its stage', () => {
+    const reworded = (values: JsonObject = {}) => dated({ description: 'Order data received', ...values });
+    expect(dating([reworded()])).toEqual([['dpd-uk:observed', 'absorbed']]);
+    expect(dating([reworded({ provider_event_id: 'dpd-uk:booked', occurred_at: '2026-09-20T10:00:00Z', description: 'Label printed' }), reworded()]))
+      .toEqual([['dpd-uk:observed', 'absorbed']]);
+    const left = (events: JsonObject[], stored: JsonObject[] = [sighting]) => dating(events, stored).length;
+    // The answer still gives its words, in another row or stage.
+    expect(left([reworded(), dated({ provider_event_id: 'dpd-uk:again', stage: 'accepted', occurred_at: '2026-10-20T17:00:00Z' })])).toBe(0);
+    // A scan of another stage came between, the only scan of its stage came after it, or none came.
+    expect(left([reworded(), reworded({ provider_event_id: 'dpd-uk:picked', occurred_at: '2026-09-23T08:00:00Z', stage: 'accepted' })])).toBe(0);
+    expect(left([reworded({ occurred_at: '2026-10-20T17:00:00Z' })])).toBe(0);
+    expect(left([])).toBe(0);
+    // Another source's answer, or another universal provider's.
+    expect(left([reworded({ provider_event_id: 'dpd:registered' })])).toBe(0);
+    expect(left([reworded({ provider_event_id: 'unknown:registered', universal_provider: 'Ship24' })],
+      [{ ...sighting, provider_event_id: 'unknown:observed', universal_provider: 'ParcelsApp' }])).toBe(0);
+    // Another code.
+    expect(left([reworded({ provider_code: '02' })], [{ ...sighting, provider_code: '01' }])).toBe(0);
+  });
+
   it('stays when no one scan dates it', () => {
     const left = (events: JsonObject[], values: JsonObject = {}) => dating(events, [{ ...sighting, ...values }]).length;
     expect(left([dated({ stage: 'accepted' })])).toBe(0);
-    expect(left([dated({ description: 'Order details updated' })])).toBe(0);
     expect(left([dated({ raw_data: { provider_code: '02' } })], { provider_code: '01' })).toBe(0);
     expect(left([dated({ location: 'London' })], { location: 'Leeds' })).toBe(0);
     expect(left([dated({ occurred_at: '2026-10-20T17:00:00Z' })])).toBe(0);

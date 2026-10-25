@@ -1025,6 +1025,25 @@ describe('TrackingSyncService', () => {
     expect(absorbed.deleted).toEqual(['nacex:observed']);
   });
 
+  it('drops the stage change it saw without a time in words the carrier no longer gives, once a scan of that stage dates it', async () => {
+    const client = fakeClient();
+    // The scraper now words the scan the earlier check saw otherwise.
+    const answer: CarrierResult = { status: 'exception', current_stage: 'exception', last_status_text: 'Contact the agency',
+      last_update: '2026-10-19T14:00:00+02:00', events: [
+        { time: '2026-10-19T14:00:00+02:00', description: 'Contact the agency', stage: 'exception' },
+        { time: '2026-10-18T09:00:00+02:00', description: 'En reparto', stage: 'out_for_delivery' }] };
+    const service = new TrackingSyncService(client as unknown as SupabaseServiceClient, { fetch: vi.fn().mockResolvedValue(answer) },
+      null, () => new Date('2026-10-20T08:00:00Z'));
+    const observed = { provider_event_id: 'nacex:observed', occurred_at: '2026-10-19T17:00:00.000Z', stage: 'exception',
+      description: 'Contacta con agencia', observed_without_provider_timestamp: true };
+    const scan = { provider_event_id: 'nacex:reparto', occurred_at: '2026-10-18T07:00:00+00:00', stage: 'out_for_delivery', description: 'En reparto' };
+    await service.syncPackage({ id: 'reworded', carrier: 'nacex', tracking_number: '0000/00000000', current_stage: 'exception',
+      [STORED_EVENT_IDENTITIES]: [observed, scan] });
+    const [, , rows, , deleted] = client.applyTrackingSync.mock.calls.at(-1)! as unknown as [JsonObject, JsonObject, JsonObject[], string[], string[]];
+    expect(rows.map((row) => [row.occurred_at, row.description])).toContainEqual(['2026-10-19T12:00:00Z', 'Contact the agency']);
+    expect(deleted).toEqual(['nacex:observed']);
+  });
+
   it('consumes new-add query context before fetching and never repeats it on refresh', async () => {
     const candidates = ['dpd', 'seur', 'brt', 'relais-colis', 'ciblex', 'hermes-de'].map((carrier) => ({ carrier, needsInput: null, preferred: false }));
     vi.spyOn(scraper, 'recognitionCandidates').mockReturnValue(candidates);

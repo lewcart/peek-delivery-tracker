@@ -1136,7 +1136,8 @@ export interface DatedObservations {
  * sighting's source or dating a universal provider's sighting, takes the
  * stored sighting's row over, so it is not announced again; the row then
  * holds the scan as any row of that source does. Otherwise the sighting is
- * absorbed, or left out of the batch.
+ * absorbed, or left out of the batch. A stored sighting in words its source
+ * no longer gives is absorbed by the scan of its stage before it.
  */
 export function datedObservations(
   events: readonly JsonObject[],
@@ -1189,6 +1190,21 @@ export function datedObservations(
   for (const [row, matching] of pairs) {
     const scan = matching.length === 1 ? identity(matching[0]!) : '';
     if (scan && claims.get(scan) === 1 && !dated.reused.has(scan)) dated.reused.set(scan, identity(row));
+  }
+  // A stored sighting whose words its source's answer no longer lists, as when the scraper rewords a
+  // status, goes once a scan of that answer holds the change it saw: the answer's newest scan dated
+  // before it, from its universal provider if it has one, is of its stage and code.
+  const taken = new Set(dated.reused.values());
+  for (const sighting of stored) {
+    const id = identity(sighting);
+    if (!observedOnly(sighting) || ['', 'app'].includes(sourceOf(id)) || wordingOf(sighting) === '' || held.has(id)
+      || dated.absorbed.has(id) || taken.has(id)) continue;
+    const answer = events.filter((event) => sourceOf(identity(event)) === sourceOf(id) && providerOf(event) === providerOf(sighting));
+    if (answer.some((event) => wordingOf(event) === wordingOf(sighting))) continue;
+    const before = answer.filter((scan) => dates(scan) && instantOf(scan) <= instantOf(sighting));
+    const newest = Math.max(...before.map(instantOf));
+    const last = before.filter((scan) => instantOf(scan) === newest);
+    if (last.length > 0 && last.every((scan) => stageOf(scan) === stageOf(sighting) && codesAgree(scan, sighting))) dated.absorbed.add(id);
   }
   return dated;
 }
