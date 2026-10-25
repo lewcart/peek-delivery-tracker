@@ -29,12 +29,49 @@ group by signal, carrier, subject
 order by new desc, numbers desc, signal, carrier, subject;
 
 \echo '== Sync anomalies: checks in the window'
-select a.configured_carrier as carrier, coalesce(a.source_carrier, '-') as served_by, code as anomaly,
-       -- A worker that died mid-check is the app's; every other anomaly is a carrier's or provider's answer.
-       case when code = 'worker_abandoned_attempt' then 'delivery-tracker' else 'adapters' end as lane,
-       count(*) as checks, count(distinct a.package_id) as parcels
-from public.tracking_sync_attempts a cross join unnest(a.anomaly_codes) as code
-where a.started_at >= :since
+-- `looping_track` is no check's own: a parcel checked in the window whose moves in transit, each
+-- to a new place, come at one interval, to within 2 s, three times or more, the latest in the last
+-- 3 days. No network moves a parcel on at the same interval to the second: the track is generated.
+-- Intervals in whole minutes are left out, as a carrier that rounds its clock gives them.
+with checks as (
+  select package_id, configured_carrier as carrier, coalesce(source_carrier, '-') as served_by, anomaly_codes
+  from public.tracking_sync_attempts
+  where started_at >= :since
+),
+scans as (
+  select package_id, occurred_at, bool_and(stage = 'in_transit') as transit,
+         min(lower(trim(location))) as place, count(distinct lower(trim(location))) as places
+  from public.tracking_events
+  where package_id in (select package_id from checks)
+  group by package_id, occurred_at
+),
+moves as (
+  select package_id, occurred_at, extract(epoch from occurred_at - lag(occurred_at) over w)::bigint as gap,
+         transit and lag(transit) over w and places = 1 and lag(places) over w = 1 and place <> lag(place) over w as moved
+  from scans
+  window w as (partition by package_id order by occurred_at)
+),
+looping as (
+  select package_id
+  from (
+    select package_id, occurred_at,
+           count(*) over (partition by package_id order by gap range between 2 preceding and 2 following) as alike
+    from moves
+    where moved and gap between 3600 and 172800 and gap % 60 <> 0
+  ) as repeated
+  where alike >= 3
+  group by package_id
+  having max(occurred_at) >= now() - interval '3 days'
+)
+select carrier, served_by, anomaly,
+       -- A worker that died mid-check and a generated track are the app's; every other anomaly is a carrier's or provider's answer.
+       case when anomaly in ('worker_abandoned_attempt', 'looping_track') then 'delivery-tracker' else 'adapters' end as lane,
+       count(*) as checks, count(distinct package_id) as parcels
+from (
+  select c.carrier, c.served_by, code as anomaly, c.package_id from checks as c cross join unnest(c.anomaly_codes) as code
+  union all
+  select c.carrier, c.served_by, 'looping_track', c.package_id from checks as c join looping using (package_id)
+) as anomalies
 group by 1, 2, 3, 4
 order by checks desc, carrier, anomaly;
 

@@ -427,7 +427,8 @@ anomalies and health incidents.
 
 [ops/review/signals.sql](../ops/review/signals.sql) is the hourly review of every queue. For
 a window of hours (1 by default, 24 for the daily review) it lists routing signals, sync
-anomalies, open unmapped wording seen in the window (`new` when first seen in it; a provider's
+anomalies (with `looping_track` for a parcel whose moves in transit, each to a new place, repeat one
+interval to within 2 s three times or more: a generated track), open unmapped wording seen in the window (`new` when first seen in it; a provider's
 own wording as relayed by it, beside the carrier of its sample's parcel), new open support cases that still give a reason, health incidents notified in the
 window or open and failing in it (`rescued` when every check that failed still answered
 through another step; an open one nothing checked, or whose checks answered, waits unlisted
@@ -457,7 +458,7 @@ Each row names the lane that acts on it:
 - **delivery-tracker**: the app's routing, such as parcels left with a provider although
   their carrier's adapter answers other parcels and was not asked for them or had its answer
   set aside as older than the parcel's newest scan without the parcel showing that answer's
-  newest scan, a check whose worker died, or a reader's
+  newest scan, a check whose worker died, a generated track (`looping_track`), or a reader's
   answer that gives no reason.
 
 A parcel a provider tracks can also be **dormant**, not checked for 24 h because nobody
