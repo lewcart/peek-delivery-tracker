@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkDigitTrouble, looksLikeNumber, numbersInText, readText, uncertainNumberInText } from './reading';
+import orderNumbers from '../../../shared/order-numbers.json';
 
 // Every number here is fictional.
 describe('reading the field', () => {
@@ -45,49 +46,11 @@ describe('reading the field', () => {
     expect(numbersInText('RR123456785CH\nLX123456785DE').map(({ normalized }) => normalized)).toEqual(['RR123456785CH', 'LX123456785DE']);
   });
 
-  it('tells an Amazon order number from a tracking number', () => {
-    expect(readText('302-4571983-2294617')).toMatchObject({ order: 'amazon' });
-    expect(readText('Order #302-4571983-2294617 is confirmed').order).toBe('amazon');
-    expect(readText('D01-1234567-1234567').order).toBe('amazon');
-    expect(readText('30245719832294617').order).toBeNull();
-    // A real number beside the order number wins.
-    expect(readText('Order 302-4571983-2294617, tracking 1ZDEMO202600000001')).toMatchObject({ order: null, match: { carrier: 'ups' } });
-  });
-
-  it('tells a Shein order number from a tracking number', () => {
-    for (const text of ['GSH0A1B2C3D4E5F', 'gsh0a1b2c3d4e5f', 'Your Shein order GSH0A1B2C3D4E5F has shipped']) {
-      expect(readText(text).order, text).toBe('shein');
-    }
-    // A character too many or too few is no Shein order number.
-    expect(readText('GSH0A1B2C3D4E5F6').order).toBeNull();
-    expect(readText('GSH0A1B2C3D4E5').order).toBeNull();
-  });
-
-  it('tells a Shopee order number from a tracking number', () => {
-    for (const text of ['261025ABCD1234', '261025abcd1234', '26102512345A78', 'Shopee order 261025ABCD1234 is on its way']) {
-      expect(readText(text).order, text).toBe('shopee');
-    }
-    // 14 digits that start like a date are a carrier's, as is a date no calendar has.
-    expect(readText('26102512345678').order).toBeNull();
-    expect(readText('261325ABCD1234').order).toBeNull();
-    expect(readText('261032ABCD1234').order).toBeNull();
-    // A character too many or too few is no Shopee order number.
-    expect(readText('261025ABCD12345').order).toBeNull();
-    expect(readText('261025ABCD123').order).toBeNull();
-  });
-
-  it('tells a Temu order number from a tracking number, however it is typed', () => {
-    for (const text of ['PO-000-00000000000000000', 'PO00000000000000000000', 'po-000-00000000000000000', 'PO 000 00000000000000000',
-      'Your Temu order confirmation (#PO-000-12345678901234567)', 'Order PO-000-12345678901234567\nThanks for shopping with us']) {
-      expect(readText(text).order, text).toBe('temu');
-    }
-    // A digit too many or too few, or no PO, is no Temu order number.
-    expect(readText('PO-000-000000000000000000').order).toBeNull();
-    expect(readText('000-00000000000000000').order).toBeNull();
-    expect(readText('XPO-000-00000000000000000').order).toBeNull();
-    // A carrier's number that starts with PO stays a tracking number: here Australia Post's, a digit short of Temu's.
-    expect(readText('PO0000000000000000000')).toMatchObject({ order: null, match: { carrier: 'australia-post', confidence: 'high' } });
-    expect(readText('Order PO-000-00000000000000000, tracking 1ZDEMO202600000001')).toMatchObject({ order: null, match: { carrier: 'ups' } });
+  // The iPhone's Add sheet replays the same examples.
+  it.each(orderNumbers.examples)('tells a shop’s order number from a tracking number: $text', ({ text, shop, carrier }) => {
+    const reading = readText(text);
+    expect(reading.order).toBe(shop);
+    if (carrier) expect(reading.match).toMatchObject({ carrier, confidence: 'high' });
   });
 
   it('sets a typed number in the label’s type, and prose as prose', () => {

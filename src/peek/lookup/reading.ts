@@ -6,6 +6,7 @@ import {
   parseTrackingInput,
   type TrackingInputMatch,
 } from '../../lib/carriers';
+import orderNumbers from '../../../shared/order-numbers.json';
 
 /** One tracking number a text names, with what its shape says about the carrier. */
 export interface NumberInText {
@@ -28,26 +29,13 @@ export interface Reading {
 export type OrderShop = 'amazon' | 'shein' | 'shopee' | 'temu';
 
 const LINK = /https?:\/\/[^\s<>"']+/gi;
-const ORDER_NUMBERS: Record<OrderShop, RegExp> = {
-  /** 3-7-7 digits, or D01-… for digital orders. */
-  amazon: /(?:^|[^\w-])(?:\d{3}|D\d{2})-\d{7}-\d{7}(?![\w-])/i,
-  /** GSH and 12 letters or digits: GSH000000000000. */
-  shein: /(?:^|[^\w-])GSH[A-Z0-9]{12}(?![\w-])/i,
-  /**
-   * The order's date (YYMMDD) and 8 letters and digits: 261025ABCD1234. One of
-   * the 8 is a letter, so a carrier's 14 digits that start like a date stay a
-   * tracking number.
-   */
-  shopee: /(?:^|[^\w-])\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?=[A-Z0-9]{0,7}[A-Z])[A-Z0-9]{8}(?![\w-])/i,
-  /** PO, 3 digits and 17: PO-000-00000000000000000, often typed without the hyphens. */
-  temu: /(?:^|[^\w-])PO[- ]?\d{3}[- ]?\d{17}(?![\w-])/i,
-};
-const SHOPS = Object.keys(ORDER_NUMBERS) as OrderShop[];
+/** Each shop's order number, tried in turn and read without regard to case. The iPhone reads the same file. */
+const ORDER_NUMBERS = orderNumbers.shops.map(({ shop, pattern }) => ({ shop: shop as OrderShop, pattern: new RegExp(pattern, 'i') }));
 
 /** The shop whose order number a text holds. */
-const orderShop = (text: string) => SHOPS.find((shop) => ORDER_NUMBERS[shop].test(text)) ?? null;
+const orderShop = (text: string) => ORDER_NUMBERS.find(({ pattern }) => pattern.test(text))?.shop ?? null;
 
-const EVERY_ORDER_NUMBER = SHOPS.map((shop) => new RegExp(ORDER_NUMBERS[shop].source, 'gi'));
+const EVERY_ORDER_NUMBER = ORDER_NUMBERS.map(({ pattern }) => new RegExp(pattern.source, 'gi'));
 /** A line without its order numbers, so that no part of one is read as a tracking number. */
 const withoutOrders = (line: string) => EVERY_ORDER_NUMBER.reduce((rest, order) => rest.replace(order, ' '), line);
 
