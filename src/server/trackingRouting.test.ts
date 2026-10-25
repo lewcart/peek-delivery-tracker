@@ -1187,6 +1187,28 @@ describe('persistent tracking routing', () => {
       expect(direct.mock.calls.map(([, carrier]) => carrier)).toEqual(['asendia', 'dpd']);
       expect(result.result).toMatchObject({ auto_changed_from: 'asendia', auto_changed_to: 'dpd' });
     });
+    it('keeps a parcel whose provider-named carrier answers with the filed carrier\'s codes', async () => {
+      // Sixteen digits fit Correos Express, not Correos, whose localizador lists Correos Express's scans too.
+      const number = '0000000000000017';
+      const answer = (code: string, description: string): RoutedResult => ({ sourceCarrierId: 'correos-spain', swissPostReady: null,
+        handoffFallbackErrorType: null, result: { ...history(), events: [{ time: '2026-09-10T11:00:00Z', description, stage: 'in_transit', provider_code: code }] } });
+      const filed = parcel({ carrier: 'correos-express', tracking_number: number, carrier_data: {
+        routing: state({ configured_carrier: 'correos-express', discovered_carrier: 'correos-spain' }) } });
+      const check = async (code: string, description: string) => {
+        const { router, direct } = setup();
+        direct.mockImplementation(async (_lookup: JsonObject, carrier: string) => {
+          if (carrier === 'correos-express') throw notFound('Correos Express');
+          return answer(code, description);
+        });
+        return router.fetch(filed, false);
+      };
+      const kept = await check('X060000V', 'En destino');
+      expect(kept.sourceCarrierId).toBe('correos-spain');
+      expect(kept.result).not.toHaveProperty('auto_changed_to');
+      expect(kept.result.routing).toMatchObject({ configured_carrier: 'correos-express' });
+      // A code of Correos's own is a correction.
+      expect((await check('A010000V', 'Admitido')).result).toMatchObject({ auto_changed_from: 'correos-express', auto_changed_to: 'correos-spain' });
+    });
   });
   it('does not borrow verification inputs from another carrier', async () => {
     const { router, direct, universal } = setup();

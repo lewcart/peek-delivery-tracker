@@ -11,7 +11,7 @@ import { isRecord, type JsonObject } from './types';
 import { STORED_EVENT_IDENTITIES } from './supabase';
 import { priorityUniversalSource, universalPlan, universalSourceBudget } from 'universal-parcel-scraper';
 import type { UniversalSource } from 'universal-parcel-scraper';
-import { isCarrierFeedName, isKnownCarrierName } from 'universal-parcel-scraper/app';
+import { isCarrierFeedName, isKnownCarrierName, statusMapAnswer } from 'universal-parcel-scraper/app';
 import { brandCarrierIds, carrierBrand, carrierIdFromName } from 'universal-parcel-scraper/app';
 import { errorType, reportRoutingEvent } from './observability';
 import { recordChecksumRejection, recordProviderInput } from './metrics';
@@ -538,6 +538,19 @@ export function detectionNames(number: string, carrier: string): boolean {
   return detected.confidence === 'high' && detected.carrier === carrier;
 }
 /**
+ * Whether every coded scan of an answer, which has one at least, carries a code the
+ * filed carrier's own status map stages from the code alone: the scans are that
+ * carrier's, served by a tracker its group shares, as Correos's localizador lists
+ * Correos Express's. A carrier sharing the filed one's adapter reads the same map,
+ * which proves nothing.
+ */
+export function filedCarrierCodes(declared: string, carrier: string, result: CarrierResult): boolean {
+  if (!directCarrier(declared) || carrierAdapter(declared) === carrierAdapter(carrier)) return false;
+  const codes = (result.events ?? []).flatMap((event) => event.provider_code ? [event.provider_code] : []);
+  // A wording no map reads leaves the code alone to stage the scan.
+  return codes.length > 0 && codes.every((code) => statusMapAnswer({ carrier: declared, providerCode: code, description: '-' }).kind === 'mapped');
+}
+/**
  * Whether detection names this carrier for the number, prefers it, or lists it
  * first among the carriers recognition asks for the lookup country. In each
  * case the parcel turning out to be that carrier's shows no gap in the
@@ -804,8 +817,12 @@ export class TrackingRouter {
       // A carrier that answered for this number and handed the parcel on in the
       // same lookup is the parcel's carrier, the delivery carrier its last leg.
       const answeredFirst = value.earlierCarrierId === provider && !value.earlierFollowUp;
+      // A carrier only a provider named, not the number's shape, is no correction when
+      // the scans it answered with carry the filed carrier's codes.
+      const filedScans = provider === state.discovered_carrier && !detectionNames(number, provider)
+        && filedCarrierCodes(declared, provider, value.result);
       const swap = provider !== declared && directCarrier(provider) && (value.sourceCarrierId === provider || answeredFirst)
-        && state.confirmed_number === number && !metadata.original_carrier && !earlierLeg(provider, value);
+        && state.confirmed_number === number && !metadata.original_carrier && !earlierLeg(provider, value) && !filedScans;
       if (swap) {
         state.configured_carrier = provider;
         value.correction = { carrier: provider, trackingUrl: state.confirmed_tracking_url ?? null,
