@@ -71,6 +71,9 @@ describe('prometheus carrier metrics', () => {
     expect(metrics.stepOutcome('indeterminate', new IndeterminateError('seur', 'Outage page', { reason: 'maintenance_page' })))
       .toBe('indeterminate');
     expect(metrics.stepOutcome('indeterminate', new IndeterminateError('seur'))).toBe('indeterminate');
+    // DPD Germany placing the parcel with DPD France, which the next step asks.
+    expect(metrics.stepOutcome('indeterminate', new IndeterminateError('DPD Germany', 'Activity abroad', { reason: 'other_country' })))
+      .toBe('handed_off');
     metrics.prometheusStepRecorder.step({
       carrier: 'seur', step: 'direct', attempt: 1, outcome: 'indeterminate', errorType: 'IndeterminateError', durationMs: 200,
       fallbackFrom: null, fallbackReason: null, fallbackErrorType: null, error: unknown,

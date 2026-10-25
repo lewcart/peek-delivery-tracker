@@ -75,8 +75,12 @@ describe('sentryStepRecorder', () => {
       ...record, outcome: 'indeterminate', errorType: 'IndeterminateError',
       error: new IndeterminateError('seur', 'Unknown shipment', { reason: 'portal_not_found' }),
     });
+    sentryStepRecorder.lookup({
+      ...record, outcome: 'indeterminate', errorType: 'IndeterminateError',
+      error: new IndeterminateError('DPD Germany', 'Activity abroad', { reason: 'other_country' }),
+    });
     expect(observability.logOperationalEvent.mock.calls.map(([, fields]) => fields.outcome))
-      .toEqual(['not_found', 'no_history', 'input_required', 'error', 'error', 'no_history']);
+      .toEqual(['not_found', 'no_history', 'input_required', 'error', 'error', 'no_history', 'handed_off']);
     expect(metrics.count).toHaveBeenCalledWith('tracking.scrape.attempts', 1, {
       attributes: { carrier: 'ups', phase: 'total', outcome: 'not_found', error_type: 'NotFoundError' },
     });

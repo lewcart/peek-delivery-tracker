@@ -14,6 +14,14 @@ export const UNKNOWN_ITEM_REASONS: ReadonlySet<string> = new Set([
   'status_api_not_found', 'portal_not_found', 'no_history', 'webtrack_no_history',
 ]);
 
+/**
+ * A carrier's tracking that places the parcel with its group's unit in another
+ * country, which the lookup's next step asks: DPD Germany's guest API or app
+ * answering for a parcel DPD France now holds. The source answered; the
+ * parcel is no longer its own.
+ */
+export const HANDED_OFF_REASONS: ReadonlySet<string> = new Set(['other_country']);
+
 export { PLACEHOLDER_NUMBER } from '../lib/messages';
 
 /** A source's refusal of the number: one it does not issue, or a placeholder. A later release may take either. */

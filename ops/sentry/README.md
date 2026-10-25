@@ -43,6 +43,9 @@ failures age out of the window; a new failure meanwhile reminds as usual.
   listed without scans, record no sample: the carrier may not hold the parcel yet. An HTTP
   5xx or 429 behind them, or a browser capture that failed, still counts, as do transport,
   schema and rate-limit errors.
+- A direct step that places the parcel with the group's unit in another country (DPD
+  Germany's `other_country`, for a parcel DPD France now holds) records no sample: the
+  lookup's next step asks that unit, and the provider sample counts its answer.
 - A number the parcel's own carrier refuses as one it does not issue is the owner's to
   correct. The check stays an error or `waiting` for the parcel, and its refresh sample is
   healthy, filed as missing input, whether or not routing made the check. So is a number

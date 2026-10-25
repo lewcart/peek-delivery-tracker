@@ -24,7 +24,7 @@ function metric(operation: () => void): void {
 }
 
 /** Answers about the number rather than failures: the carrier or provider was reached and replied. */
-const ANSWERS = new Set(['not_found', 'no_history', 'input_required', 'invalid_input']);
+const ANSWERS = new Set(['not_found', 'no_history', 'input_required', 'invalid_input', 'handed_off']);
 
 function outcomeLabel(record: StepRecord | LookupRecord): string {
   if (record.outcome === 'ok') return 'success';

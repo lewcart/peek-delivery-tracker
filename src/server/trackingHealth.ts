@@ -2,7 +2,7 @@ import 'server-only';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { CarrierError, NoHistoryError, UpstreamHttpError } from 'universal-parcel-scraper';
 import type { LookupRecord, StepRecord } from 'universal-parcel-scraper/node';
-import { UNKNOWN_ITEM_REASONS } from './trackingFailure';
+import { HANDED_OFF_REASONS, UNKNOWN_ITEM_REASONS } from './trackingFailure';
 import type { JsonObject } from './types';
 
 export interface HealthSample extends JsonObject {
@@ -38,6 +38,7 @@ function category(record: StepRecord | LookupRecord): string {
   for (let depth = 0; current instanceof Error && depth < 8; depth++, current = current.cause) {
     if (current instanceof CarrierError) {
       if (current instanceof NoHistoryError || UNKNOWN_ITEM_REASONS.has(current.reason ?? '')) return 'not_found';
+      if (HANDED_OFF_REASONS.has(current.reason ?? '')) return 'handed_off';
       // So is a number that names several parcels, such as an Australia Post consignment of
       // two articles: the owner has to give one parcel's number. Counted as a failure, one such
       // parcel checked hourly kept the carrier's direct incident open.
@@ -79,8 +80,10 @@ function save(kind: 'provider' | 'direct', record: StepRecord | LookupRecord): v
   const key = `${kind}:${record.carrier}`;
   const previous = store.get(key);
   const outcome = category(record);
-  // Neither healthy nor failing: no sample.
-  if (inconclusive(record, outcome)) return;
+  // Neither healthy nor failing: no sample. Nor is a hand-off to the group's unit abroad, which
+  // the next step asks: counted as failures, three parcels bound for France made DPD Germany's
+  // direct step look broken on 95% of its checks.
+  if (outcome === 'handed_off' || inconclusive(record, outcome)) return;
   // A retry cannot count as another lookup or erase the original failed direct attempt: one
   // that answered only marks it recovered.
   if (previous && !previous.healthy) {

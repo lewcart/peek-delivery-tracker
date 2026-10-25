@@ -67,6 +67,24 @@ describe('tracking health evidence', () => {
     ]);
   });
 
+  it("leaves a hand-off to the group's unit abroad out of direct health, and counts the step's other failures", async () => {
+    const samples = new Map<string, HealthSample>();
+    const abroad = new IndeterminateError('DPD Germany', 'DPD returned activity in another country', { reason: 'other_country' });
+    const direct = { ...step, carrier: 'dpd-de', outcome: 'indeterminate' as const, errorType: 'IndeterminateError' };
+    await observeTrackingHealth(samples, async () => {
+      healthStepRecorder.step({ ...direct, error: abroad });
+      healthStepRecorder.step({ ...direct, step: 'abroad', attempt: 2, outcome: 'ok', errorType: null, fallbackFrom: 'direct' });
+      healthStepRecorder.lookup({ carrier: 'dpd-de', finalStep: 'abroad', outcome: 'ok', errorType: null, durationMs: 900, attempts: 2 });
+    });
+    expect([...samples.values()].map(({ kind, healthy }) => [kind, healthy])).toEqual([['provider', true]]);
+
+    const failed = new Map<string, HealthSample>();
+    await observeTrackingHealth(failed, async () => {
+      healthStepRecorder.step({ ...direct, error: new IndeterminateError('DPD Germany', 'DPD Germany returned no parcel scans') });
+    });
+    expect([...failed.values()]).toMatchObject([{ kind: 'direct', healthy: false, details: { category: 'indeterminate' } }]);
+  });
+
   it('counts a provider with no history for a new parcel as an answer, and a capture failure as a failure', async () => {
     const samples = new Map<string, HealthSample>();
     const noHistory = new NoHistoryError('Postal Ninja', 'Postal Ninja has no available tracking history');

@@ -923,7 +923,7 @@
         {
           "datasource": {"type": "prometheus", "uid": "${datasource}"},
           "refId": "A",
-          "expr": "(sum(increase(carrier_lookup_total{carrier=~\"$carrier\", outcome!~\"ok|not_found|no_history|input_required|invalid_input\"}[$__range])) or vector(0)) / sum(increase(carrier_lookup_total{carrier=~\"$carrier\"}[$__range]))",
+          "expr": "(sum(increase(carrier_lookup_total{carrier=~\"$carrier\", outcome!~\"ok|not_found|no_history|input_required|invalid_input|handed_off\"}[$__range])) or vector(0)) / sum(increase(carrier_lookup_total{carrier=~\"$carrier\"}[$__range]))",
           "instant": true,
           "range": false
         }
@@ -1862,6 +1862,10 @@
                 "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "purple"}}]
               },
               {
+                "matcher": {"id": "byName", "options": "handed_off"},
+                "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "light-green"}}]
+              },
+              {
                 "matcher": {"id": "byName", "options": "transport"},
                 "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
               },
@@ -1912,7 +1916,7 @@
             {
               "datasource": {"type": "prometheus", "uid": "${datasource}"},
               "refId": "A",
-              "expr": "sum by (carrier, outcome) (increase(carrier_lookup_total{carrier=~\"$carrier\", outcome!~\"ok|not_found|no_history|input_required|invalid_input\"}[1h]))",
+              "expr": "sum by (carrier, outcome) (increase(carrier_lookup_total{carrier=~\"$carrier\", outcome!~\"ok|not_found|no_history|input_required|invalid_input|handed_off\"}[1h]))",
               "legendFormat": "{{carrier}} {{outcome}}",
               "range": true
             }
@@ -2001,7 +2005,7 @@
             {
               "datasource": {"type": "prometheus", "uid": "${datasource}"},
               "refId": "A",
-              "expr": "sum by (carrier, step, error_type) (increase(carrier_step_total{carrier=~\"$carrier\", outcome!~\"ok|not_found|no_history|input_required|invalid_input\"}[1h]))",
+              "expr": "sum by (carrier, step, error_type) (increase(carrier_step_total{carrier=~\"$carrier\", outcome!~\"ok|not_found|no_history|input_required|invalid_input|handed_off\"}[1h]))",
               "legendFormat": "{{carrier}} {{step}} {{error_type}}",
               "range": true
             }

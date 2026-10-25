@@ -589,7 +589,8 @@ Key JSON events:
   an answer about the number: `not_found`, `no_history` (a provider has no scans for it
   yet, or a carrier's tracking does not know the item or lists it without a scan: an
   inconclusive answer with a reason in `UNKNOWN_ITEM_REASONS`, `src/server/trackingFailure.ts`),
-  `input_required` or `invalid_input`.
+  `input_required`, `invalid_input` or `handed_off` (the carrier places the parcel with its
+  group's unit in another country, which the next step asks: a reason in `HANDED_OFF_REASONS`).
   A `tracking_routing` line is a warning for `transport_fallback` and `provider_failed`,
   except a provider's `no_history` answer, which is info. One with an error has its
   `error_type` and, when the carrier gave one, its `error_reason` (such as `parcel_found`
@@ -881,7 +882,9 @@ container.
 A step or lookup `outcome`, and a fallback's `reason`, is `ok` or the scraper's error kind
 (`not_found`, `rate_limited`, `transport`…). A provider with no history for the number yet,
 or a carrier's tracking that does not know the item, is `no_history` rather than
-`indeterminate`, as routing and health monitoring count it.
+`indeterminate`, as routing and health monitoring count it. A step that hands the parcel to
+the group's unit abroad (DPD Germany placing it in France) is `handed_off`, which the
+dashboard's failure panels leave out.
 
 | Series | Answers |
 | --- | --- |
