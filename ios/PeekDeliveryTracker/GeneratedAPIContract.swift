@@ -1697,6 +1697,15 @@ struct EventPlace: Codable, Equatable, Hashable, Sendable {
     var region: String? = nil
 }
 
+struct ImportCharges: Codable, Equatable, Hashable, Sendable {
+    var currency: String
+    var customs: Double? = nil
+    var carrierFee: Double? = nil
+    var carrierFeeOnline: Double? = nil
+    var paid: Bool? = nil
+    var statusCode: String? = nil
+}
+
 struct TrackingEvent: Codable, Equatable, Hashable, Sendable, Identifiable {
     var id: UUID
     var packageID: UUID
@@ -2511,6 +2520,7 @@ struct CarrierData: Codable, Equatable, Hashable, Sendable {
     var receiverName: String? = nil
     var dimensionsText: String? = nil
     var weightKg: Double? = nil
+    var importCharges: ImportCharges? = nil
     var dpdPostcodeVerified: Bool? = nil
     var destinationCountry: String? = nil
     var routing: CarrierDataRouting? = nil
@@ -2537,6 +2547,7 @@ struct CarrierData: Codable, Equatable, Hashable, Sendable {
         case receiverName
         case dimensionsText
         case weightKg
+        case importCharges
         case dpdPostcodeVerified
         case destinationCountry
         case routing
@@ -2601,6 +2612,7 @@ struct PublicPackageCarrierData: Codable, Equatable, Hashable, Sendable {
     var pickupPoint: String? = nil
     var dimensionsText: String? = nil
     var weightKg: Double? = nil
+    var importCharges: ImportCharges? = nil
     var destinationCountry: String? = nil
 }
 
