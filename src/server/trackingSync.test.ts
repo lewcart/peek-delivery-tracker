@@ -1169,6 +1169,62 @@ describe('TrackingSyncService', () => {
     });
   });
 
+  describe('a return after the delivery', () => {
+    // A Poste Italiane parcel left at a pickup point and sent back; the number, wording and clocks are invented.
+    const delivery = [
+      { time: '2026-10-01T11:40:00+02:00', description: 'Consegnata al punto di ritiro', stage: 'delivered' },
+      { time: '2026-10-01T08:10:00+02:00', description: 'In consegna', stage: 'out_for_delivery' },
+      { time: '2026-09-30T20:00:00+02:00', description: 'In transito', stage: 'in_transit' },
+      { time: '2026-09-29T17:00:00+02:00', description: 'Accettata', stage: 'accepted' }];
+    const answer = (status: CarrierResult['status'], stage: string, ...newer: Array<{ time: string; description: string; stage: string }>): CarrierResult => {
+      const events = [...newer, ...delivery];
+      return { status, current_stage: stage, last_status_text: events[0]!.description, last_update: events[0]!.time, events };
+    };
+    const delivered = answer('delivered', 'delivered');
+    const parcel = () => {
+      const store = eventStore();
+      const client = Object.assign(store.client, {
+        acquireTrackingProvider: vi.fn().mockResolvedValue({ token: 'lease', retry_at: '' }),
+        finishTrackingProvider: vi.fn().mockResolvedValue(undefined) });
+      let saved: JsonObject = { id: 'sent-back', carrier: 'poste-italiane', tracking_number: `RA${s10('20481357')}IT`,
+        current_stage: 'pending', created_at: '2026-09-29T09:00:00Z' };
+      return async (at: string, carrier: CarrierResult) => {
+        const adapter = { fetch: vi.fn().mockResolvedValue(carrier), fetchUniversal: vi.fn().mockRejectedValue(new Error('not asked')) };
+        await new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null, () => new Date(at))
+          .syncPackage({ ...saved, [STORED_EVENT_IDENTITIES]: store.identities() });
+        saved = { ...saved, ...client.applyTrackingSync.mock.calls.at(-1)![1] };
+        const attempt = client.completeSyncAttempt.mock.calls.at(-1)![1] as JsonObject;
+        return { ...saved, stages: [...store.rows.values()].map((row) => row.stage), anomalies: attempt.anomaly_codes } as JsonObject;
+      };
+    };
+
+    it('takes the place of the delivery it came after, and stays once the sender has it back', async () => {
+      const check = parcel();
+      expect(await check('2026-10-01T18:00:00Z', delivered)).toMatchObject({ current_stage: 'delivered' });
+      const sentBack = await check('2026-10-09T10:00:00Z', answer('exception', 'returned',
+        { time: '2026-10-09T09:30:00+02:00', description: 'In consegna', stage: 'out_for_delivery' },
+        { time: '2026-10-08T15:00:00+02:00', description: 'In transito', stage: 'in_transit' },
+        { time: '2026-10-08T08:00:00+02:00', description: 'In restituzione al mittente', stage: 'returned' }));
+      expect(sentBack).toMatchObject({ current_stage: 'returned', last_status_text: 'In consegna', expected_delivery: null });
+      expect(sentBack.stages).toEqual(expect.arrayContaining(['delivered', 'returned', 'out_for_delivery']));
+      expect(sentBack.anomalies).not.toContain('terminal_stage_regression');
+      // The delivery to the sender ends the return: the parcel stays returned.
+      const back = await check('2026-10-10T10:00:00Z', answer('delivered', 'delivered',
+        { time: '2026-10-10T09:00:00+02:00', description: 'Consegnata al mittente', stage: 'delivered' },
+        { time: '2026-10-09T09:30:00+02:00', description: 'In consegna', stage: 'out_for_delivery' }));
+      expect(back).toMatchObject({ current_stage: 'returned', last_status_text: 'In consegna' });
+    });
+
+    it('does not take the place of a delivery at its instant or later', async () => {
+      const check = parcel();
+      await check('2026-10-01T18:00:00Z', delivered);
+      const same = await check('2026-10-02T10:00:00Z', answer('exception', 'returned',
+        { time: '2026-10-01T11:40:00+02:00', description: 'In restituzione al mittente', stage: 'returned' }));
+      expect(same).toMatchObject({ current_stage: 'delivered', last_status_text: 'Consegnata al punto di ritiro' });
+      expect(same.anomalies).toContain('terminal_stage_regression');
+    });
+  });
+
   describe('a provider\'s notice after the carrier\'s newest scan', () => {
     // A BRT import whose origin printed its label again after BRT's pre-advice; numbers, wording and clocks are invented.
     const own: CarrierResult = { status: 'pending', current_stage: 'registered', last_status_text: 'Shipping info sent to BRT',

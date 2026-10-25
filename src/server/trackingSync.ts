@@ -942,6 +942,19 @@ export function stageToSave(previousStage: string, selectedStage: string): strin
 }
 
 /**
+ * Whether an answer's return takes the place of the saved delivery: the answer reads as returned
+ * and its newest scan (`answeredAt`) came after every delivery the parcel's rows and the answer
+ * show, as for a parcel left at a pickup point, never collected and sent back. A return at a
+ * delivery's instant or before it, or with no dated delivery before it, changes nothing.
+ */
+export function returnAfterDelivery(previousStage: string, selectedStage: string | null,
+  rows: readonly JsonObject[], answeredAt: number): boolean {
+  if (previousStage !== 'delivered' || selectedStage !== 'returned') return false;
+  const deliveries = rows.filter((row) => row.stage === 'delivered').map((row) => Date.parse(String(row.occurred_at ?? '')));
+  return deliveries.length > 0 && deliveries.every((at) => at < answeredAt);
+}
+
+/**
  * Whether the stored rows past an answer of the parcel's own carrier are only a provider's
  * notices of a stage that answer shows: a label printed again at the origin (DPD China's
  * "Order Printed" for a parcel BRT shows accepted) moves the parcel no further, so the answer
@@ -1039,8 +1052,10 @@ export function detectSyncAnomalies(
     && selectedStage !== null
     && selectedStage !== previousStage
     // A carrier may report a problem after delivery (damage, wrong address,
-    // refusal). That is new information, not a rewritten history.
+    // refusal), or a return. That is new information, not a rewritten history.
     && selectedStage !== 'exception'
+    && !returnAfterDelivery(previousStage, selectedStage, [...storedEventIdentities(parcel), ...events],
+      Date.parse(eventTimestamp(result.last_update, timezone) ?? ''))
   ) {
     anomalies.add('terminal_stage_regression');
   }
@@ -1955,8 +1970,11 @@ export class TrackingSyncService {
       const unprovenProviderSummary = typeof result.tracking_provider === 'string' && !fetched.correction
         && directCarrier(String(parcel.carrier)) && answeredByCarrier(parcel) && previousStage !== 'pending'
         && Number.isFinite(previousEventTime) && !(returnedEventTime > previousEventTime);
+      // A delivered or returned parcel keeps its summary, unless the answer disputes a provider's
+      // delivery or brings the return that came after the delivery.
       const preserveSummary = keepSaved || olderSnapshot || unprovenUpuSummary || unprovenLocalSummary || unprovenProviderSummary
-        || (['delivered', 'returned'].includes(previousStage) && selectedStage !== previousStage && !disputedRows.length);
+        || (['delivered', 'returned'].includes(previousStage) && selectedStage !== previousStage && !disputedRows.length
+          && !returnAfterDelivery(previousStage, selectedStage, [...stored, ...events], returnedEventTime));
       const carrierData: JsonObject = Object.fromEntries(
         Object.entries(result).filter(([key, value]) => key !== 'events' && value != null),
       );
