@@ -42,10 +42,11 @@ describe('a delivery the parcel\'s own carrier disputes', () => {
   });
 
   it('stands when the carrier\'s newer scans are in no stage of their own', () => {
-    // Synthetic notices dated after the delivery at 18:00 UTC: one no rule reads, one the carrier says keeps the
-    // stage of the scan before it. Neither moved the parcel.
+    // Synthetic notices dated after the delivery at 18:00 UTC: one no rule reads, one the carrier stages in transit
+    // as no rule read it, one the carrier says keeps the stage of the scan before it. None moved the parcel.
     const delivering = { local_time: '2026-10-20T07:00:00', description: 'En reparto', stage: 'out_for_delivery' };
     for (const notice of [{ local_time: '2026-10-20T21:00:00', description: 'Fixture notice 7' },
+      { local_time: '2026-10-20T21:00:00', description: 'Fixture notice 7', stage: 'in_transit', stage_source: 'none' },
       { local_time: '2026-10-20T21:00:00', description: 'Fixture notice 8', stage: 'out_for_delivery', stage_source: 'none' }]) {
       const answer = own(notice, delivering);
       expect(carrierMovedAt('seur', answer)).toBe(Date.parse('2026-10-20T05:00:00Z'));
@@ -56,6 +57,18 @@ describe('a delivery the parcel\'s own carrier disputes', () => {
       { local_time: '2026-10-20T21:00:00', description: 'Your parcel is on its way' }]) {
       expect(withoutDisputedDelivery(provider('2026-10-20T18:00:00Z'), 'unknown', 'seur', own(moved, delivering))).not.toBeNull();
     }
+  });
+
+  it('is disputed by a scan the carrier puts in another stage although no rule read it', () => {
+    // A synthetic incident after the round that the carrier flags as a problem, and an unread scan it stages out for
+    // delivery after one in transit: the carrier's own judgement, not a notice keeping the stage before it.
+    const delivering = { local_time: '2026-10-20T07:00:00', description: 'En reparto', stage: 'out_for_delivery' };
+    const incident = { local_time: '2026-10-20T21:00:00', description: 'Fixture incident 3', stage: 'exception', stage_source: 'none' };
+    expect(carrierMovedAt('seur', own(incident, delivering))).toBe(Date.parse('2026-10-20T19:00:00Z'));
+    expect(withoutDisputedDelivery(provider('2026-10-20T18:00:00Z'), 'unknown', 'seur', own(incident, delivering))).not.toBeNull();
+    const sorted = { local_time: '2026-10-20T07:00:00', description: 'Fixture scan 4', stage: 'in_transit' };
+    const round = { local_time: '2026-10-20T21:00:00', description: 'Fixture scan 5', stage: 'out_for_delivery', stage_source: 'none' };
+    expect(carrierMovedAt('seur', own(round, sorted))).toBe(Date.parse('2026-10-20T19:00:00Z'));
   });
 
   it('reads a scan without a stage by its wording', () => {

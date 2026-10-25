@@ -339,9 +339,10 @@ and nothing typed is sent.
   the stage, an alert or an email. An earlier carrier's relay copy of a scan is served
   under that scan ([handoffs](ROUTING.md#handoffs-two-carriers)). A universal provider's
   copy of a confirmed carrier's scan is left out (`src/server/providerCopies.ts`). A scan
-  in no stage of its own (`stage_source` `none`: neither its carrier nor a wording rule gives
-  it one, or its carrier says it keeps the stage of the scan before it, as a notice to the
-  recipient does) reads as the stage its carrier left it in, else as in transit, unless that
+  in no stage of its own (`stage_source` `none` with no stage, in transit, or the stage of the
+  newest scan in a stage dated at or before it, which a notice to the recipient keeps; another
+  stage in `none` is the carrier's own judgement, such as an incident it flags as a problem,
+  and stands) reads as the stage its carrier left it in, else as in transit, unless that
   steps back from the newest scan in a stage its answer dates at or before it (out for
   delivery, a delivery, a pickup point, a missed attempt, a return or a problem). It is then
   stored as `pending`: it stays in the timeline as the carrier's news, but the parcel's stage,

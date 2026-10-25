@@ -198,6 +198,23 @@ describe('tracking event normalization', () => {
       ['Fixture scan 2', 'out_for_delivery', 'carrier_map'], ['Fixture scan', 'failed_attempt', 'carrier_map'],
     ]);
     expect(stages(notice('registered'))).toEqual([['Fixture notice 8', 'registered', 'none']]);
+    // A scan the carrier stages in transit as no rule read it is a scan no rule reads: pending after the round.
+    expect(stages(notice('in_transit'), { time: '2026-09-10T14:59:00Z', description: 'Fixture scan', stage: 'out_for_delivery' })).toEqual([
+      ['Fixture notice 8', 'pending', 'none'], ['Fixture scan', 'out_for_delivery', 'carrier_map'],
+    ]);
+    // Not a stage no rule read that differs from the scan before it, such as an incident the carrier flags as a
+    // problem after the round, or a scan it stages out for delivery after one in transit: its own judgement stands.
+    expect(stages(notice('exception'), { time: '2026-09-10T14:59:00Z', description: 'Fixture scan', stage: 'out_for_delivery' })).toEqual([
+      ['Fixture notice 8', 'exception', 'none'], ['Fixture scan', 'out_for_delivery', 'carrier_map'],
+    ]);
+    expect(stages(notice('out_for_delivery'), { time: '2026-09-10T14:59:00Z', description: 'Fixture scan', stage: 'in_transit' })).toEqual([
+      ['Fixture notice 8', 'out_for_delivery', 'none'], ['Fixture scan', 'in_transit', 'carrier_map'],
+    ]);
+    // Nor one that matches only a scan dated after it.
+    expect(stages({ time: '2026-09-10T16:00:00Z', description: 'Fixture scan', stage: 'exception' }, notice('exception'),
+      { time: '2026-09-10T14:59:00Z', description: 'Fixture scan 2', stage: 'out_for_delivery' }).map((row) => row[1])).toEqual([
+      'exception', 'exception', 'out_for_delivery',
+    ]);
   });
 
   it('dates scans a carrier gives by their day alone at that day, in its order, with no observed row', () => {

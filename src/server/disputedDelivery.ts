@@ -22,20 +22,43 @@ export function eventStage(event: JsonObject): string {
 const PAST_TRANSIT = new Set(['out_for_delivery', 'delivered', 'ready_for_pickup', 'failed_attempt', 'returned', 'exception']);
 
 /**
- * The stage a scan gives itself: the one its carrier declared, unless the carrier says the scan
- * only keeps the stage of the scan before it (`stage_source` `none`, a notice to the recipient),
- * else the one a wording rule reads it as. Null for a scan in no stage of its own.
+ * The stage each scan of one answer gives itself, given the instant each is dated at (NaN for a
+ * scan with no date): the one its carrier declared, else the one a wording rule reads it as; null
+ * for a scan in none. A declared stage the carrier says no rule read (`stage_source` `none`) is
+ * none when it is in transit, the reading of a scan no rule reads, or when it is a stage of the
+ * newest dated scans in a stage of their own at or before it: a notice to the recipient that
+ * keeps the stage of the scan before it. Any other is the carrier's own judgement, such as an
+ * incident it flags as a problem, and stands.
  */
-function ownStage(event: JsonObject): string | null {
-  const declared = String(event.stage ?? '');
-  if (VALID_STAGES.has(declared)) return event.stage_source === 'none' ? null : declared;
-  const wording = classifyStage(String(event.description ?? ''));
-  return wording.source === 'none' ? null : wording.stage;
+function ownStages(events: readonly JsonObject[], times: readonly number[]): (string | null)[] {
+  // undefined: a declared stage in none, decided from the scans before it.
+  const own = events.map((event): string | null | undefined => {
+    const declared = String(event.stage ?? '');
+    if (VALID_STAGES.has(declared)) return event.stage_source === 'none' ? undefined : declared;
+    const wording = classifyStage(String(event.description ?? ''));
+    return wording.source === 'none' ? null : wording.stage;
+  });
+  const at = (index: number) => Number.isFinite(times[index]) ? times[index] : Number.POSITIVE_INFINITY;
+  const open = own.flatMap((stage, index) => stage === undefined ? [index] : []).sort((a, b) => at(a) - at(b) || a - b);
+  for (const index of open) {
+    const declared = String(events[index].stage);
+    const before = new Set<string>();
+    let newest = Number.NEGATIVE_INFINITY;
+    for (const [other, stage] of Number.isFinite(times[index]) ? own.entries() : []) {
+      const time = times[other];
+      if (other === index || stage == null || stage === 'pending' || !Number.isFinite(time) || time > times[index] || time < newest) continue;
+      if (time > newest) before.clear();
+      before.add(stage);
+      newest = time;
+    }
+    own[index] = declared === 'in_transit' || before.has(declared) ? null : declared;
+  }
+  return own.map((stage) => stage ?? null);
 }
 
 /**
  * The stage each scan of one answer is stored in, given the instant each is dated at (null for
- * a scan with no date): `eventStage`, except for a dated scan in no stage of its own (`ownStage`).
+ * a scan with no date): `eventStage`, except for a dated scan in no stage of its own (`ownStages`).
  * That one reads as the stage its carrier left it in, else as in transit, news that the parcel
  * moves, unless that is a step back from the newest dated scan in a stage of its own at or
  * before it (out for delivery, a delivery, a pickup point, a missed attempt, a return or a
@@ -44,8 +67,8 @@ function ownStage(event: JsonObject): string | null {
  * stands for the stage it followed. A scan left pending is in no stage.
  */
 export function scanStages(events: readonly JsonObject[], instants: readonly (string | null)[]): string[] {
-  const read = events.map(ownStage);
   const times = events.map((_, index) => Date.parse(instants[index] ?? ''));
+  const read = ownStages(events, times);
   return read.map((stage, index) => {
     if (stage !== null) return stage;
     const declared = String(events[index].stage ?? '');
@@ -75,7 +98,7 @@ export function showsDelivery(answer: CarrierResult | null): boolean {
 
 /**
  * When a carrier's own answer last moved the parcel, as epoch milliseconds: its newest
- * scan in a stage of its own (`ownStage`), read on the carrier's clock. A scan in none, such as
+ * scan in a stage of its own (`ownStages`), read on the carrier's clock. A scan in none, such as
  * a notice no rule reads, is one `scanStages` stores pending after a delivery, so it moves
  * nothing. NaN when the answer shows a delivery or a return, or no dated scan in a stage: it
  * then disputes no delivery.
@@ -86,9 +109,9 @@ export function carrierMovedAt(carrier: string, answer: CarrierResult): number {
     return Number.NaN;
   }
   const zone = resultTimezone(carrier, answer);
-  const times = events.filter((event) => { const stage = ownStage(event); return stage !== null && stage !== 'pending'; })
-    .map((event) => scanTime(event, zone)).filter(Number.isFinite);
-  return times.length ? Math.max(...times) : Number.NaN;
+  const times = events.map((event) => scanTime(event, zone));
+  const moved = ownStages(events, times).flatMap((stage, index) => stage !== null && stage !== 'pending' && Number.isFinite(times[index]) ? [times[index]] : []);
+  return moved.length ? Math.max(...moved) : Number.NaN;
 }
 
 /**
