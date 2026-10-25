@@ -1889,9 +1889,9 @@ export class TrackingSyncService {
       const retimed = typeof result.tracking_provider === 'string' ? new Map<string, string>()
         : retimedScans(events, stored, sourceCarrierId, new Map([...reworded, ...shared.reused, ...shared.skipped]));
       const matches = { reused: new Map([...reworded, ...shared.reused, ...retimed]), skipped: shared.skipped };
-      // The parcel's own carrier listing fewer of the scans already stored (JRT dropping a parcel's
+      // The parcel's own carrier listing fewer of its own scans already stored (JRT dropping a parcel's
       // later scans and keeping the label's, sometimes with a label scan the rows lack) takes nothing
-      // back while each stored scan keeps its stage and no scan is newer than the stored progress: the
+      // back while each stored scan keeps its stage and no scan is newer than its stored progress: the
       // stored progress stays and the check answered. A newer scan in an earlier stage, or a stored
       // scan read in an earlier stage, still makes progress disappear.
       const storedIds = new Set(stored.map((event) => String(event.provider_event_id)));
@@ -1905,20 +1905,29 @@ export class TrackingSyncService {
         return row === undefined ? Date.parse(String(event.occurred_at ?? '')) < progressAt : storedStages.get(row) === event.stage;
       });
       const progressAt = latest(past(stored));
-      const fewerStoredScans = anomalies.includes('progress_disappeared') && sourceCarrierId === carrierId
-        && typeof result.tracking_provider !== 'string' && listsFewer(events, progressAt);
-      if (fewerStoredScans) anomalies = anomalies.filter((code) => code !== 'progress_disappeared');
+      // The answering source's own rows past the selected stage, and whether its answer leaves one out.
+      const ownRows = past(stored.filter((row) => String(row.provider_event_id).startsWith(`${sourceCarrierId}:`)));
+      const leftOut = ownRows.some((row) => !shown.has(String(row.provider_event_id)));
+      const carrierWithoutProgress = anomalies.includes('progress_disappeared') && sourceCarrierId === carrierId
+        && typeof result.tracking_provider !== 'string';
+      const fewerStoredScans = carrierWithoutProgress && leftOut && listsFewer(events, latest(ownRows));
+      // Progress that only other sources' rows show (ParcelsApp's copies of an origin leg GOFO never
+      // lists) is none the carrier takes back: the stored progress stays and the check answered, with
+      // no signal. A newer scan in an earlier stage, or a stored scan read in an earlier stage, still
+      // makes progress disappear.
+      const othersProgress = carrierWithoutProgress && ownRows.length === 0 && past(stored).length > 0
+        && listsFewer(events, progressAt);
+      if (fewerStoredScans || othersProgress) anomalies = anomalies.filter((code) => code !== 'progress_disappeared');
       // A delivery partner that falls behind rows of its own and no longer lists them withdraws scans the
       // same way (Posti back at its posting scan without its own scan in transit, or a summary back at
       // the drop-off after one in transit). The parcel holds its stage anyway: this only signals it.
-      const partnerRows = past(stored.filter((row) => String(row.provider_event_id).startsWith(`${sourceCarrierId}:`)));
-      const partnerWithdrew = sourceCarrierId !== carrierId && typeof result.tracking_provider !== 'string'
-        && partnerRows.some((row) => !shown.has(String(row.provider_event_id)))
-        && listsFewer(events.filter((event) => String(event.provider_event_id).startsWith(`${sourceCarrierId}:`)), latest(partnerRows));
+      const partnerWithdrew = sourceCarrierId !== carrierId && typeof result.tracking_provider !== 'string' && leftOut
+        && listsFewer(events.filter((event) => String(event.provider_event_id).startsWith(`${sourceCarrierId}:`)), latest(ownRows));
       const progressDisappeared = anomalies.includes('progress_disappeared');
       // A fallback that knows less is no error: what is saved stays, as with an older snapshot.
       const fallbackWithoutProgress = anomalies.includes('fallback_without_progress');
-      const keepSaved = progressDisappeared || fallbackWithoutProgress || fewerStoredScans || fetched.preserveHistory === true;
+      const keepSaved = progressDisappeared || fallbackWithoutProgress || fewerStoredScans || othersProgress
+        || fetched.preserveHistory === true;
       // Copies a universal provider read in the wrong zone must not make a result
       // look fresher, or the carrier's own reply older, than it is: neither those
       // the sync matched nor those it could not tell from the carrier's scans.

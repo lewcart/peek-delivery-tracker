@@ -4437,7 +4437,7 @@ describe('TrackingSyncService', () => {
     const answer = (...events: CarrierResult['events'] & object): CarrierResult => ({
       status: events[0]!.stage as CarrierResult['status'], current_stage: events[0]!.stage, last_status_text: events[0]!.description,
       last_update: events[0]!.time, events });
-    const tracked = async (carrierData: JsonObject = {}) => {
+    const tracked = async (carrierData: JsonObject = {}, first = answer(departed, accepted, relabel, label)) => {
       const store = eventStore();
       const adapter = { fetch: vi.fn() };
       let now = new Date('2026-10-21T12:00:00Z');
@@ -4452,8 +4452,8 @@ describe('TrackingSyncService', () => {
         const refresh = (store.client.recordTrackingHealth.mock.lastCall![2] as JsonObject[]).find((sample) => sample.kind === 'refresh');
         return { counts, parcel, refresh, attempt: store.client.completeSyncAttempt.mock.lastCall![1] as JsonObject };
       };
-      await check(answer(departed, accepted, relabel, label));
-      return { store, check };
+      await check(first);
+      return { store, check, save: (values: JsonObject) => { parcel = { ...parcel, ...values }; } };
     };
 
     it.each([
@@ -4497,6 +4497,39 @@ describe('TrackingSyncService', () => {
       const { check } = await tracked();
       const checked = await check(answer(...events));
       expect(checked.counts).toMatchObject({ errors: 1 });
+      expect(checked.attempt).toMatchObject({ outcome: 'error', anomaly_codes: ['progress_disappeared'], error_type: 'ProgressDisappeared' });
+      expect(checked.parcel).toMatchObject({ current_stage: 'in_transit', sync_status: 'error' });
+    });
+
+    // A carrier that only ever lists the label, and a universal provider's copies of an origin leg it never shows.
+    const providerOnly = async () => {
+      const { store, check, save } = await tracked({}, answer(relabel, label));
+      for (const [id, time, description] of [['unknown:inbound', '2026-10-20T08:00:00Z', 'Inbound at sorting center'],
+        ['unknown:outbound', '2026-10-20T20:00:00Z', 'Outbound from sorting center']]) {
+        store.rows.set(id!, { provider_event_id: id, occurred_at: time, stage: 'in_transit', description, location: 'Example Town',
+          raw_data: { time, stage: 'in_transit', description, universal_provider: 'ParcelsApp' } });
+      }
+      save({ current_stage: 'in_transit', last_status_text: 'Outbound from sorting center' });
+      return { store, check };
+    };
+
+    it('keeps progress only another source\'s rows show, without a signal or an error', async () => {
+      const { store, check } = await providerOnly();
+      const rows = structuredClone([...store.rows.values()]);
+      const checked = await check(answer(relabel, label));
+      expect(checked.counts).toMatchObject({ unchanged: 1, errors: 0 });
+      // None of the carrier's own scans is missing: nothing was withdrawn.
+      expect(checked.attempt).toMatchObject({ outcome: 'unchanged', anomaly_codes: [], error_type: null });
+      expect(checked.parcel).toMatchObject({ current_stage: 'in_transit', last_status_text: 'Outbound from sorting center',
+        sync_status: 'ok', sync_error: null });
+      expect(checked.parcel.carrier_data).not.toHaveProperty('scans_withdrawn');
+      expect(checked.refresh).toMatchObject({ healthy: true });
+      expect([...store.rows.values()]).toEqual(rows);
+    });
+
+    it('still finds that progress gone after a newer scan in an earlier stage', async () => {
+      const { check } = await providerOnly();
+      const checked = await check(answer({ stage: 'registered', description: 'Label printed again', time: '2026-10-21T08:00:00Z' }, relabel, label));
       expect(checked.attempt).toMatchObject({ outcome: 'error', anomaly_codes: ['progress_disappeared'], error_type: 'ProgressDisappeared' });
       expect(checked.parcel).toMatchObject({ current_stage: 'in_transit', sync_status: 'error' });
     });
