@@ -675,11 +675,13 @@ export function retimedScans(
  * to the second or minute the other falls in (UPS to the second, a provider to
  * the minute): with the same wording, or else alone in other wording when a
  * provider's copy and a carrier's scan meet, one to the minute and the other
- * to the second, in any stage and from no conflicting place (FedEx's own
- * wording of a scan a provider copied, 17TRACK's seconds on Shiprocket's
- * minutes). The `relaying` carrier, the one a parcel was handed over from,
- * retells the next one's scans to the minute, as India Post does La Poste's,
- * so its scan to the minute meets no copy to the second. Failing that, the same wording matches a
+ * to the second, or both in one second, one of them to the whole second, in
+ * any stage and from no conflicting place (FedEx's own wording of a scan a
+ * provider copied, 17TRACK's seconds on Shiprocket's minutes, ParcelsApp's
+ * whole second of CTT Express's milliseconds). The `relaying` carrier, the one
+ * a parcel was handed over from, retells the next one's scans to the minute,
+ * as India Post does La Poste's, or in the same second, so neither its scan to
+ * the minute nor one in the copy's second meets a copy to the second. Failing that, the same wording matches a
  * whole number of quarter hours up to 14 h away: the same scan read in the
  * wrong zone, a copy compared to the minute of a carrier's scan in whole
  * minutes (17TRACK's seconds on USPS's minute). Failing that, a carrier's row for a universal scan, or a
@@ -783,12 +785,15 @@ export function sharedScans(
     const place = placeWords(event);
     const truncated = occupied.has(at) ? [] : eligible.filter((row) => sameTruncated(at, instantOf(row)) && !shown.has(instantOf(row)));
     const minuted = truncated.filter((row) => sameWording(wordingOf(row), wording));
-    // Other wording, and any stage, only for a provider's copy and a carrier's scan, one of them to the minute.
+    // Other wording, and any stage, only for a provider's copy and a carrier's scan, one of them to the minute,
+    // or both in one second (ParcelsApp's whole second of CTT Express's milliseconds).
     // An earlier carrier's relay of a delivery scan (India Post's to the minute, Nova Poshta's) is no such pair.
     const restaged = stageOf(event) === '' ? [] : truncated.filter((row) => {
       if ((sourceOf(identity(row)) === UNIVERSAL) === universal || placesConflict(place, placeWords(row))) return false;
       const [copy, own] = universal ? [event, row] : [row, event];
-      return instantOf(copy) % MINUTE_MS === 0 || (instantOf(own) % MINUTE_MS === 0 && sourceOf(identity(own)) !== relaying);
+      const second = (at: number) => Math.floor(at / 1_000);
+      return instantOf(copy) % MINUTE_MS === 0 || (sourceOf(identity(own)) !== relaying
+        && (instantOf(own) % MINUTE_MS === 0 || second(instantOf(copy)) === second(instantOf(own))));
     });
     const apart = occupied.has(at) ? [] : eligible.filter((row) => !shown.has(instantOf(row)) && !placesConflict(place, placeWords(row)));
     const zoned = apart.filter((row) => zoneApart(at, instantOf(row)));

@@ -957,6 +957,30 @@ describe('scans a carrier and a universal provider both report', () => {
     expect(sharedScans([copy], [own, { ...own, provider_event_id: 'shiprocket:sorted', description: 'Sorted' }]).skipped.size).toBe(0);
   });
 
+  it('matches other wording in the second the other scan falls in, one of them to the whole second, whichever arrives first', () => {
+    // CTT Express keeps milliseconds; ParcelsApp keeps the whole second and words the scan its own way, unclassified.
+    const at = { location: 'Example Customs Centre' };
+    const own = row('ctt-express:waiting', '2026-01-21T08:20:57.063+00:00', 'Pendiente de recepción en CTT Express', 'registered');
+    const copy = { ...scan('unknown:waiting', '2026-01-21T08:20:57Z', 'Waiting for entry at CTT. The shipment details were received.', 'pending'), ...at };
+    const late = sharedScans([copy], [own]);
+    expect(pairs(late.skipped)).toEqual([['unknown:waiting', 'ctt-express:waiting']]);
+    expect(late.shifted.size).toBe(0);
+    const early = sharedScans([scan('ctt-express:waiting', '2026-01-21T08:20:57.063Z', own.description, 'registered')],
+      [{ ...row('unknown:waiting', '2026-01-21T08:20:57+00:00', copy.description, 'pending'), ...at }]);
+    expect(pairs(early.reused)).toEqual([['ctt-express:waiting', 'unknown:waiting']]);
+    expect(early.shifted.size).toBe(0);
+    const matched = (event: JsonObject, rows: JsonObject[] = [own], relaying: string | null = null) => {
+      const shared = sharedScans([event], rows, new Map(), relaying);
+      return shared.skipped.size + shared.reused.size;
+    };
+    // Not the next second, two times that both keep milliseconds, another place, a second row in the second, or a relay.
+    expect(matched({ ...copy, occurred_at: '2026-01-21T08:20:58Z' })).toBe(0);
+    expect(matched({ ...copy, occurred_at: '2026-01-21T08:20:57.500Z' })).toBe(0);
+    expect(matched(copy, [{ ...own, location: 'Madrid' }])).toBe(0);
+    expect(matched(copy, [own, row('ctt-express:sorted', '2026-01-21T08:20:57.800+00:00', 'Clasificado', 'in_transit')])).toBe(0);
+    expect(matched(copy, [own], 'ctt-express')).toBe(0);
+  });
+
   it('keeps every scan a carrier repeats in a minute, and an earlier carrier\'s relay of a delivery scan', () => {
     // The provider repeats a delivery a few seconds apart and shows both.
     const repeated = sharedScans([scan('unknown:first', '2026-01-14T10:37:00Z', 'Delivered', 'delivered'),
@@ -973,12 +997,13 @@ describe('scans a carrier and a universal provider both report', () => {
     const copy = { ...row('unknown:customs', '2026-01-05T17:11:33+00:00', 'Import formalities complete', 'in_transit'), location: 'FR' };
     const relay = { ...scan('india-post:inbound', '2026-01-05T17:11:00Z', 'Send item to domestic location (Inb)', 'in_transit'), location: 'Office' };
     expect(sharedScans([relay], [copy], new Map(), 'india-post').reused.size).toBe(0);
-    expect(sharedScans([{ ...relay, occurred_at: '2026-01-05T17:11:33.412Z' }], [copy]).reused.size).toBe(0);
+    expect(sharedScans([{ ...relay, occurred_at: '2026-01-05T17:11:33.412Z' }], [copy], new Map(), 'india-post').reused.size).toBe(0);
     expect(sharedScans([{ ...scan('unknown:customs', copy.occurred_at, copy.description, 'in_transit'), location: 'FR' }],
       [{ ...row('india-post:inbound', '2026-01-05T17:11:00+00:00', relay.description, 'in_transit'), location: 'Office' }],
       new Map(), 'india-post').skipped.size).toBe(0);
-    // With no handoff, a carrier's scan to the minute is the one the copy repeats.
+    // With no handoff, a carrier's scan to the minute, or in the copy's second, is the one the copy repeats.
     expect(sharedScans([relay], [copy]).reused.size).toBe(1);
+    expect(sharedScans([{ ...relay, occurred_at: '2026-01-05T17:11:33.412Z' }], [copy]).reused.size).toBe(1);
   });
 
   it('matches a zone off when only one of the times keeps milliseconds', () => {
