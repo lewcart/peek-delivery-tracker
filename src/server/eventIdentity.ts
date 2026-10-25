@@ -54,6 +54,7 @@
  *   stored (relayCopies.ts), but only the delivery carrier's scan takes over a
  *   universal copy (`relayedScans`).
  */
+import { createHash } from 'node:crypto';
 import { DateTime, FixedOffsetZone } from 'luxon';
 import { eventTimestamp, sameInstantIdentityPolicy, trackingPlace, type SameInstantIdentityPolicy, type SameInstantScan } from 'universal-parcel-scraper/app';
 import { isRecord, type JsonObject } from './types';
@@ -69,6 +70,22 @@ export const UNIVERSAL_PROVIDER = 'universal_provider';
 
 /** Peek's words for a step its source gave none for. */
 export const UNWORDED_STEP = 'Tracking update';
+
+/** A stored scan's identity: its source, its time as the source gave it, its place and its wording. */
+export function providerEventId(
+  carrierId: string,
+  rawTime: unknown,
+  location: string,
+  description: string,
+): string {
+  const material = JSON.stringify([
+    carrierId,
+    String(rawTime ?? ''),
+    location.trim(),
+    description.trim(),
+  ]);
+  return `${carrierId}:${createHash('sha256').update(material).digest('hex')}`;
+}
 
 function providerCode(row: JsonObject): string {
   const code = row.provider_code ?? (isRecord(row.raw_data) ? row.raw_data.provider_code : undefined);

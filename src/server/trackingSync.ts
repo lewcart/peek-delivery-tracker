@@ -37,7 +37,8 @@ import {
 import type { DeliveryEmailService } from './email/deliveryEmails';
 import { PushDispatchError, type CompositePushNotificationService } from './push';
 import { REDETECTION_PAGE, STORED_EVENT_IDENTITIES, SyncJobLeaseLost, type SupabaseServiceClient } from './supabase';
-import { clockDay, datedObservations, filledPlaceholders, misdatedCopies, requalifiedPlaces, restatedIdentities, retimedScans, sameInstantIdentities, scanDay, sharedScans, strippedMarkup, relayedScans, UNIVERSAL_PROVIDER, UNWORDED_STEP, withIdentities, withoutCopyDrift, withStatedClocks } from './eventIdentity';
+import { clockDay, datedObservations, filledPlaceholders, misdatedCopies, providerEventId, requalifiedPlaces, restatedIdentities, retimedScans, sameInstantIdentities, scanDay, sharedScans, strippedMarkup, relayedScans, UNIVERSAL_PROVIDER, UNWORDED_STEP, withIdentities, withoutCopyDrift, withStatedClocks } from './eventIdentity';
+export { providerEventId } from './eventIdentity';
 import {
   askedForCheck,
   providerFailureSummary,
@@ -577,21 +578,6 @@ export function isUnannouncedTrackingError(error: unknown): boolean {
     current = current instanceof Error ? current.cause : null;
   }
   return false;
-}
-
-export function providerEventId(
-  carrierId: string,
-  rawTime: unknown,
-  location: string,
-  description: string,
-): string {
-  const material = JSON.stringify([
-    carrierId,
-    String(rawTime ?? ''),
-    location.trim(),
-    description.trim(),
-  ]);
-  return `${carrierId}:${createHash('sha256').update(material).digest('hex')}`;
 }
 
 export function buildEvents(

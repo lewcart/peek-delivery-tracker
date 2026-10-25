@@ -183,3 +183,23 @@ iPhone's copy of how a number is normalized, of the shape a number may have, of 
 recognition asks carriers in and of the labels that introduce one in a message; change them with
 the scraper's. The iPhone tests also replay the scraper's checksum vectors, so a Swift checksum
 that answers differently from the scraper's fails.
+
+### Stored scans after a release
+
+A check rewrites the scans its source returns, but not a closed parcel's, nor scans a source no
+longer returns, and a wall clock dated again gets a new identity, so it is stored beside the old
+row rather than over it. After an adoption, a dry run replays production's stored scans through
+the release, asking no provider ([storedReplay.ts](../src/server/storedReplay.ts)): a deduced
+zone's wall clocks are dated again, and a scan's stage is read again from its source's status map
+and the wording rules.
+
+```bash
+node scripts/replay-stored-scans.mjs --query > export.sql   # run read-only on the database, one parcel a line
+node scripts/replay-stored-scans.mjs --from <previous version> --sql replay.sql < export.txt
+```
+
+`--from` replays the rows with the release the app had before too and keeps the rows it reads as
+they are stored: the ones this release changes. The report names rows by their ids' first eight
+characters and shows no number, place or wording. `replay.sql` updates those rows, each guarded
+on its stored values, in one transaction left open to roll back or commit. A row a fixed bug wrote
+is changed as any named-row fix is: a backup first, then a rolled-back run before the commit.
