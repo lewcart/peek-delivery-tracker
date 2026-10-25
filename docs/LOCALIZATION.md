@@ -16,8 +16,9 @@ translating it (not implemented).
   the place and the country's name in the reader's language closes it, so "Zürich, CH"
   reads "🇨🇭 Zürich, Switzerland" (the scraper's
   [`trackingLocation.ts`](https://github.com/plhery/universal-parcel-scraper/blob/main/places/trackingLocation.ts),
-  `TrackingLocation` in `PassportStatistics.swift`). Passport and Friends stamps count only
-  a final country field, which `private.passport_country` mirrors in SQL.
+  `TrackingLocation` in `PassportStatistics.swift`). Passport and Friends stamps count a
+  final country field, or a code that is also a state or canton once the scan was placed in
+  that country ([`scanPlace.ts`](../src/lib/scanPlace.ts)).
 - `TrackingInput` has no locale. UPU, EMS, Ship24, ParcelsApp, 17TRACK and Swiss Post are
   asked for English; La Poste for French. That doesn't guarantee the language of every
   event.

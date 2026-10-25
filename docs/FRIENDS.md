@@ -47,8 +47,11 @@ invitations and both sides of every friendship, and account deletion cascades th
 
 ## How it's enforced
 
-- The database computes summaries from the owner's tracking events. Client-sent statistics
-  are never accepted.
+- The database's friend functions decide which cards a caller sees and which share stats.
+  The server then works out each shared card's counts and stamps from the owner's parcels,
+  read and served as the owner's apps get them, with the app's own Passport code
+  (`sharedPassport` in [`passport.ts`](../src/lib/passport.ts)). Client-sent statistics are
+  never accepted.
 - Friend tables deny direct client access. The anonymous preview returns only the
   nickname of an unexpired invitation, and authenticated functions bind `auth.uid()` and
   return mutual friends only. Parcel RLS is unchanged.
@@ -65,8 +68,9 @@ Twelve shareable stamps: the original four plus `acrossBorders`, `aroundWorld`,
 `homeForHolidays`. They're derived from all of the owner's events, archived parcels
 included, and returned only when stats sharing is on.
 
-- Country stamps need explicit country evidence. Registration scans, ambiguous state or
-  canton codes, tied scans and returns don't count.
+- Country stamps need explicit country evidence. A code that is also a state or canton
+  ("Haiger, DE") counts once the scan was placed in that country. Registration scans,
+  unplaced state codes, tied scans and returns don't count.
 - Repeated delivery scans count once.
 - Calendar stamps use UTC, since Friends doesn't know the owner's timezone, so they can
   differ from the local Passport near midnight.

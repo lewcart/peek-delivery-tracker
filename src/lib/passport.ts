@@ -1,8 +1,12 @@
+import type { ApiFriendStamp, ApiFriendStats } from '../generated/apiContract';
+import { scanCountry } from './scanPlace';
 import { currentStage } from './stages';
-import type { ParcelWithEvents, Stage } from '../types';
+import type { ParcelWithEvents, Stage, TrackingEvent } from '../types';
 
-import { trackingLocationCountry } from 'universal-parcel-scraper/app';
 export { trackingLocationCountry as firstScanCountry } from 'universal-parcel-scraper/app';
+
+/** A scan's country as evidence: its final field, a code that is also a state counting once the scan was placed in that country. */
+const countryOf = (event: TrackingEvent) => scanCountry(event.location, event.place?.country);
 
 const stageOrder: Stage[] = ['registered', 'accepted', 'in_transit', 'customs', 'exception', 'out_for_delivery', 'failed_attempt', 'ready_for_pickup', 'delivered', 'returned'];
 
@@ -36,15 +40,15 @@ export function passportStatistics(parcels: readonly ParcelWithEvents[], timeZon
       deliveredDays.set(day, (deliveredDays.get(day) ?? 0) + 1);
       if (parts.some(({ type, value }) => type === 'month' && value === '12')) decemberDeliveryCount += 1;
       if (physical.some(({ event, date }) => event.stage === 'ready_for_pickup' && date < completion.date)) pickupDeliveryCount += 1;
-      const located = physical.filter(({ date }) => date <= completion.date).map(({ event, date }) => ({ country: trackingLocationCountry(event.location), date })).filter(({ country }) => country);
+      const located = physical.filter(({ date }) => date <= completion.date).map(({ event, date }) => ({ country: countryOf(event), date })).filter(({ country }) => country);
       // Different countries must be observed at different instants; tied scans do not prove travel.
       if (located.some((scan, index) => located.slice(0, index).some((prior) => prior.date < scan.date && prior.country !== scan.country))) crossBorderCount += 1;
     }
     if (!datesAreComplete || !first || !['accepted', 'in_transit'].includes(first.event.stage)) continue;
-    const country = trackingLocationCountry(first.event.location);
+    const country = countryOf(first.event);
     if (country) countries.set(country, (countries.get(country) ?? 0) + 1);
     if (stage !== 'delivered' || !completion || completion.date <= first.date) continue;
-    if (country && country === trackingLocationCountry(completion.event.location)) domesticDeliveryCount += 1;
+    if (country && country === countryOf(completion.event)) domesticDeliveryCount += 1;
     if (completion.date - first.date > 30 * 86400_000) longWaitDeliveryCount += 1;
     records.push({ parcelId: parcel.id, label: parcel.label, duration: completion.date - first.date, deliveredAt: completion.date });
   }
@@ -57,6 +61,29 @@ export function passportStatistics(parcels: readonly ParcelWithEvents[], timeZon
     averageDeliveryDuration: records.length ? records.reduce((sum, record) => sum + record.duration, 0) / records.length : null,
     fastestDelivery: records[0] ?? null,
     originCountries: [...countries].map(([code, count]) => ({ code, count })).sort((a, b) => b.count - a.count || a.code.localeCompare(b.code)),
+  };
+}
+
+/** What Friends shows of a Passport: its arrivals, the average journey in whole days and its stamps, the calendar ones in UTC. */
+export function sharedPassport(parcels: readonly ParcelWithEvents[]): ApiFriendStats {
+  const stats = passportStatistics(parcels, 'UTC');
+  const earned: ApiFriendStamp[] = [];
+  if (stats.deliveredCount >= 1) earned.push('first');
+  if (stats.deliveredCount >= 10) earned.push('ten');
+  if (stats.carrierCount >= 3) earned.push('connected');
+  if (stats.fastestDelivery && stats.fastestDelivery.duration <= 172800_000) earned.push('express');
+  if (stats.crossBorderCount >= 1) earned.push('acrossBorders');
+  if (stats.originCountries.length >= 5) earned.push('aroundWorld');
+  if (stats.deliveredCount >= 25) earned.push('theRegular');
+  if (stats.domesticDeliveryCount >= 1) earned.push('rightNextDoor');
+  if (stats.longWaitDeliveryCount >= 1) earned.push('worthTheWait');
+  if (stats.maxDeliveriesInOneDay >= 3) earned.push('busyDoorstep');
+  if (stats.pickupDeliveryCount >= 1) earned.push('pickedUp');
+  if (stats.decemberDeliveryCount >= 1) earned.push('homeForHolidays');
+  return {
+    deliveredCount: stats.deliveredCount,
+    averageDays: stats.averageDeliveryDuration == null ? null : Math.max(1, Math.ceil(stats.averageDeliveryDuration / 86400_000)),
+    stamps: earned,
   };
 }
 

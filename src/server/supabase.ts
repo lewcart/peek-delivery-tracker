@@ -1072,6 +1072,20 @@ export class SupabaseServiceClient extends SupabaseClient {
     return rows(await this.request(`/rest/v1/packages?${params}`))[0] ?? null;
   }
 
+  /** An account's parcels as its apps read them, archived ones included. */
+  async listAccountPackages(userId: string): Promise<JsonObject[]> {
+    const params = query({ select: PACKAGE_SELECT, user_id: `eq.${userId}`, order: 'created_at.desc' });
+    return rows(await this.request(`/rest/v1/packages?${params}`));
+  }
+
+  /** The accounts behind those Friends profiles that share their Passport, by profile id. */
+  async passportSharers(profileIds: string[]): Promise<Map<string, string>> {
+    if (!profileIds.length) return new Map();
+    const params = query({ select: 'id,user_id', id: `in.(${[...new Set(profileIds)].join(',')})`, share_stats: 'is.true' });
+    return new Map(rows(await this.request(`/rest/v1/friend_profiles?${params}`))
+      .flatMap((row) => typeof row.id === 'string' && typeof row.user_id === 'string' ? [[row.id, row.user_id] as const] : []));
+  }
+
   /**
    * Claims the scans to email now, delivered or ready to collect, at most
    * `limit` of them: a claimed parcel is never handed out again, to this

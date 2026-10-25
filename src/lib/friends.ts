@@ -5,7 +5,7 @@ import type { MessageKey } from '../i18n';
 import type { ParcelWithEvents } from '../types';
 import { authenticatedFetch, type ApiAuth } from './apiClient';
 import { currentStage } from './stages';
-import { passportStatistics } from './passport';
+import { sharedPassport } from './passport';
 
 export const friendStamps: Record<ApiFriendStamp, { title: MessageKey; explanation: MessageKey; icon: IconName; tone: string; numeral?: string }> = {
   first: { title: 'passport.firstArrival', explanation: 'passport.firstExplanation', icon: 'parcel', tone: 'green' },
@@ -23,24 +23,10 @@ export const friendStamps: Record<ApiFriendStamp, { title: MessageKey; explanati
 };
 export const friendTone = (id: string) => ['blue', 'lilac', 'peach', 'green'][parseInt(id.replaceAll('-', '').slice(0, 2), 16) % 4 || 0];
 export function ownFriendCard(parcels: readonly ParcelWithEvents[], profile: ApiFriendProfile): ApiFriendCard {
-  const stats = passportStatistics(parcels, 'UTC');
-  const earned: ApiFriendStamp[] = [];
-  if (stats.deliveredCount >= 1) earned.push('first');
-  if (stats.deliveredCount >= 10) earned.push('ten');
-  if (stats.carrierCount >= 3) earned.push('connected');
-  if (stats.fastestDelivery && stats.fastestDelivery.duration <= 172800_000) earned.push('express');
-  if (stats.crossBorderCount >= 1) earned.push('acrossBorders');
-  if (stats.originCountries.length >= 5) earned.push('aroundWorld');
-  if (stats.deliveredCount >= 25) earned.push('theRegular');
-  if (stats.domesticDeliveryCount >= 1) earned.push('rightNextDoor');
-  if (stats.longWaitDeliveryCount >= 1) earned.push('worthTheWait');
-  if (stats.maxDeliveriesInOneDay >= 3) earned.push('busyDoorstep');
-  if (stats.pickupDeliveryCount >= 1) earned.push('pickedUp');
-  if (stats.decemberDeliveryCount >= 1) earned.push('homeForHolidays');
   const week = new Date(); week.setUTCHours(0, 0, 0, 0); week.setUTCDate(week.getUTCDate() - (week.getUTCDay() + 6) % 7);
   return {
     id: '44000000-0000-4000-8000-000000000004', nickname: profile.nickname,
-    stats: profile.shareStats ? { deliveredCount: stats.deliveredCount, averageDays: stats.averageDeliveryDuration == null ? null : Math.max(1, Math.ceil(stats.averageDeliveryDuration / 86400_000)), stamps: earned } : null,
+    stats: profile.shareStats ? sharedPassport(parcels) : null,
     arrivedThisWeek: profile.shareArrival ? parcels.some((p) => currentStage(p.events) === 'delivered' && (() => {
       const arrived = Math.min(...p.events.filter((e) => e.stage === 'delivered').map((e) => Date.parse(e.occurredAt)));
       return arrived >= week.getTime() && arrived <= Date.now();

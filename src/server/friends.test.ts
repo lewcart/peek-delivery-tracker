@@ -6,10 +6,23 @@ import { GET as activityGET } from '../../app/api/friends/activity/route';
 import { SupabaseAuthenticator } from './auth';
 import { SupabaseError, SupabaseServiceClient, SupabaseUserClient } from './supabase';
 import { friendCard, friendsAction, friendsActionResponse, friendsSnapshot, friendsActivity } from './friends';
+import { withEventPlaces } from './eventPlaces';
+import { sharedPassport } from '../lib/passport';
+import { toParcel } from '../store/apiRepo';
+import type { ApiPackageRow } from '../generated/apiContract';
 
 const id = '11000000-0000-4000-8000-000000000001';
 const card = { id, nickname: 'Mila', stats: { deliveredCount: 12, averageDays: 3, stamps: ['first', 'ten'] }, arrivedThisWeek: null };
 const snapshot = { profile: { nickname: 'Alex', shareStats: true, shareArrival: false }, ownCard: card, friends: [card] };
+const owner = '11000000-0000-4000-8000-0000000000aa';
+/** A stored parcel row, as the database gives it to the server: each scan its stage, time and location. */
+function stored(index: number, scans: Array<[string, string, string?]>) {
+  const parcel = `12000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+  return { id: parcel, tracking_number: `PRIVATE${index}`, label: 'Private purchase', carrier: 'swiss-post', created_at: '2026-08-01T00:00:00Z', sync_status: 'ok',
+    tracking_events: scans.map(([stage, occurred_at, location], scan) => ({ id: `${parcel}-${scan}`, package_id: parcel, stage, description: stage, location: location ?? null, occurred_at, provider_event_id: `carrier:${index}:${scan}` })) };
+}
+/** Twelve three-day journeys arriving on different days: the card's 12 arrivals, 3 days and two stamps. */
+const parcels = Array.from({ length: 12 }, (_, index) => stored(index, [['accepted', `2026-08-${10 + index}T10:00:00Z`, 'Private address'], ['delivered', `2026-08-${13 + index}T10:00:00Z`]]));
 function call(body?: unknown, authenticated = true) {
   const request = new NextRequest('https://delivery.example/api/friends', { method: body ? 'POST' : 'GET', headers: authenticated ? { Authorization: 'Bearer friends-test-session' } : {}, ...(body ? { body: JSON.stringify(body) } : {}) });
   return (body ? POST : GET)(request, { params: Promise.resolve({}) });
@@ -18,6 +31,9 @@ beforeEach(() => {
   vi.stubEnv('SUPABASE_URL', 'https://database.example'); vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', 'public-key');
   vi.spyOn(console, 'log').mockImplementation(() => undefined); vi.spyOn(console, 'error').mockImplementation(() => undefined);
   vi.spyOn(SupabaseAuthenticator.prototype, 'validate').mockResolvedValue({ id, email: null, authenticatedAt: null, sessionId: null });
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service');
+  vi.spyOn(SupabaseServiceClient.prototype, 'passportSharers').mockImplementation(async (ids) => new Map(ids.filter((profile) => profile === id).map((profile) => [profile, owner])));
+  vi.spyOn(SupabaseServiceClient.prototype, 'listAccountPackages').mockResolvedValue(parcels);
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
@@ -25,13 +41,43 @@ describe('Friends privacy boundary', () => {
   it('shares all twelve known stamps while rejecting unknown or oversized collections', async () => {
     const stamps = ['first', 'ten', 'connected', 'express', 'acrossBorders', 'aroundWorld', 'theRegular', 'rightNextDoor', 'worthTheWait', 'busyDoorstep', 'pickedUp', 'homeForHolidays'];
     const full = { ...card, stats: { ...card.stats, deliveredCount: 25, stamps } };
-    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ ...snapshot, ownCard: full, friends: [full] });
-    const response = await call();
-    expect(response.status).toBe(200);
-    expect((await response.json()).friends[0].stats.stamps).toEqual(stamps);
+    expect(friendsSnapshot({ ...snapshot, ownCard: full, friends: [full] }).friends[0].stats?.stamps).toEqual(stamps);
     expect(() => friendCard({ ...full, stats: { ...full.stats, stamps: [...stamps, 'first'] } })).toThrow();
     expect(() => friendCard({ ...full, stats: { ...full.stats, stamps: ['centuryClub'] } })).toThrow();
     expect(friendCard({ ...full, stats: null }).stats).toBeNull();
+  });
+
+  it('works out a shared card with the app\'s Passport rules over its owner\'s parcels, and sends only its counts and stamps', async () => {
+    const hidden = '11000000-0000-4000-8000-000000000002', stopped = '11000000-0000-4000-8000-000000000003';
+    // The database's own stamps for the card are not the app's: the server's replace them.
+    const sql = { ...card, stats: { deliveredCount: 1, averageDays: 9, stamps: ['first', 'express'] } };
+    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue({ ...snapshot, ownCard: sql, friends: [sql, { ...card, id: hidden, stats: null }, { ...card, id: stopped }] });
+    const sharers = vi.mocked(SupabaseServiceClient.prototype.passportSharers);
+    const read = vi.mocked(SupabaseServiceClient.prototype.listAccountPackages);
+    const response = await call();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.ownCard).toEqual(card);
+    expect(body.ownCard.stats).toEqual(sharedPassport(parcels.map((row) => toParcel(withEventPlaces(row) as unknown as ApiPackageRow))));
+    // A card that shares nothing is not looked up; one whose owner stopped sharing in between loses its stats.
+    expect(body.friends).toEqual([card, { ...card, id: hidden, stats: null }, { ...card, id: stopped, stats: null }]);
+    expect(sharers).toHaveBeenCalledExactlyOnceWith([id, id, stopped]);
+    expect(read).toHaveBeenCalledExactlyOnceWith(owner);
+    expect(JSON.stringify(body)).not.toMatch(/PRIVATE|Private/);
+    expect(JSON.stringify(body)).not.toContain(owner);
+    // An accepted friend's card is worked out the same way.
+    vi.mocked(SupabaseUserClient.prototype.request).mockResolvedValue({ snapshot: { ...snapshot, ownCard: sql, friends: [sql] }, acceptedFriend: sql });
+    expect(await (await call({ action: 'accept_invite', code: 'a'.repeat(32) })).json()).toEqual({ snapshot, acceptedFriend: card });
+  });
+
+  it('counts a code that is also a state toward a friend\'s stamps only where the server placed the scan', async () => {
+    vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue(snapshot);
+    vi.mocked(SupabaseServiceClient.prototype.listAccountPackages).mockResolvedValue([
+      stored(0, [['accepted', '2026-08-04T10:00:00Z', 'Haiger, DE'], ['delivered', '2026-08-05T10:00:00Z', 'Koblenz, DE']]),
+    ]);
+    const served = toParcel(withEventPlaces(stored(0, [['accepted', '2026-08-04T10:00:00Z', 'Haiger, DE'], ['delivered', '2026-08-05T10:00:00Z', 'Koblenz, DE']])) as unknown as ApiPackageRow);
+    expect(served.events.map((event) => event.place?.country)).toEqual(['DE', 'DE']);
+    expect((await (await call()).json()).friends[0].stats.stamps).toEqual(['first', 'express', 'rightNextDoor']);
   });
 
   it('returns only shared nicknames and profile IDs in authenticated sender notices', async () => {
@@ -59,7 +105,6 @@ describe('Friends privacy boundary', () => {
   it('exports the owner’s profile and connections without copying friends’ statistics', async () => {
     vi.spyOn(SupabaseUserClient.prototype, 'request').mockResolvedValue(snapshot);
     vi.spyOn(SupabaseUserClient.prototype, 'listPackages').mockResolvedValue([]);
-    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service');
     vi.spyOn(SupabaseServiceClient.prototype, 'accountLastOpened').mockResolvedValue(null);
     const response = await exportGET(new NextRequest('https://delivery.example/api/account/export', { headers: { Authorization: 'Bearer friends-export-test' } }), { params: Promise.resolve({}) });
     expect(response.status).toBe(200);

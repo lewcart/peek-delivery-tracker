@@ -78,7 +78,7 @@ struct PassportStatistics {
                 if calendar.component(.month, from: completion.date) == 12 { december += 1 }
                 if physical.contains(where: { $0.event.stage == .readyForPickup && $0.date < completion.date }) { pickup += 1 }
                 let located = physical.filter { $0.date <= completion.date }.compactMap { scan -> (country: String, date: Date)? in
-                    guard let country = TrackingLocation.countryCode(in: scan.event.location) else { return nil }
+                    guard let country = TrackingLocation.countryCode(in: scan.event.location, placedIn: scan.event.place?.country) else { return nil }
                     return (country, scan.date)
                 }
                 if located.enumerated().contains(where: { index, scan in
@@ -90,7 +90,7 @@ struct PassportStatistics {
 
             // Never skip an unknown first scan and promote a destination scan into
             // an origin. City names and tracking-number suffixes are insufficient.
-            if let country = TrackingLocation.countryCode(in: first.event.location) {
+            if let country = TrackingLocation.countryCode(in: first.event.location, placedIn: first.event.place?.country) {
                 countries[country, default: 0] += 1
             }
 
@@ -98,8 +98,8 @@ struct PassportStatistics {
                   let completion else { continue }
             let duration = completion.date.timeIntervalSince(first.date)
             guard duration.isFinite, duration > 0 else { continue }
-            if let country = TrackingLocation.countryCode(in: first.event.location),
-               country == TrackingLocation.countryCode(in: completion.event.location) { domestic += 1 }
+            if let country = TrackingLocation.countryCode(in: first.event.location, placedIn: first.event.place?.country),
+               country == TrackingLocation.countryCode(in: completion.event.location, placedIn: completion.event.place?.country) { domestic += 1 }
             if duration > 30 * 86_400 { longWait += 1 }
             records.append(DeliveryRecord(
                 parcelID: parcel.id, label: parcel.label,
@@ -280,16 +280,30 @@ enum TrackingLocation {
 
     private static let finalCode = try! NSRegularExpression(pattern: "^(.*\\S)\\s*[,;|(]\\s*([A-Z]{2})\\)?$")
 
-    /// A final code that is also a state or canton ("Haiger, DE", "Wilmington, DE") names a
-    /// country only when the scan was placed in that country.
-    static func place(_ location: String, placedIn placed: String?) -> Place {
-        let written = place(location)
+    /// The final code of a location, with what comes before it, when it is the country the scan
+    /// was placed in. A code that is also a state, province or canton ("Haiger, DE", "Wilmington,
+    /// DE", "Toronto, CA", "Los Angeles, CA") is not read as a country on its own.
+    private static func placedCode(_ location: String, placedIn placed: String?) -> Place? {
         let text = location.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard written.country == nil, let placed,
+        guard let placed,
               let match = finalCode.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let name = Range(match.range(at: 1), in: text), let code = Range(match.range(at: 2), in: text),
-              text[code] == placed else { return written }
+              text[code] == placed else { return nil }
         return Place(country: placed, name: String(text[name]))
+    }
+
+    /// For display: a final code that is also a state or canton names a country only when the
+    /// scan was placed in that country.
+    static func place(_ location: String, placedIn placed: String?) -> Place {
+        let written = place(location)
+        return written.country == nil ? placedCode(location, placedIn: placed) ?? written : written
+    }
+
+    /// Passport evidence, with a final code that is also a state or canton counted once the scan
+    /// was placed in that country.
+    static func countryCode(in location: String?, placedIn placed: String?) -> String? {
+        guard let location else { return nil }
+        return countryCode(in: location) ?? placedCode(location, placedIn: placed)?.country
     }
 
     static func countryName(_ code: String, language: AppLanguage) -> String {

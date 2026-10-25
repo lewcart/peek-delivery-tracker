@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { firstScanCountry, formatJourneyDuration, passportStatistics } from './passport';
 import type { ParcelWithEvents, Stage } from '../types';
 
-function parcel(id: string, scans: Array<[Stage, string, string?]>, overrides: Partial<ParcelWithEvents> = {}): ParcelWithEvents {
+/** Each scan: its stage, time, location and the country the server placed it in. */
+function parcel(id: string, scans: Array<[Stage, string, string?, string?]>, overrides: Partial<ParcelWithEvents> = {}): ParcelWithEvents {
   return { id, label: id, syncStatus: 'ok', carrier: 'swiss-post', trackingNumber: '993412345612345678', createdAt: '2026-08-01T00:00:00Z',
-    events: scans.map(([stage, occurredAt, location], index) => ({ id: `${id}-${index}`, parcelId: id, stage, occurredAt, location, description: stage })), ...overrides };
+    events: scans.map(([stage, occurredAt, location, placed], index) => ({ id: `${id}-${index}`, parcelId: id, stage, occurredAt, location, description: stage,
+      ...(placed ? { place: { latitude: 0, longitude: 0, precision: 'country' as const, country: placed, name: placed } } : {}) })), ...overrides };
 }
 
 describe('passport journeys', () => {
@@ -21,6 +23,17 @@ describe('passport journeys', () => {
     expect(stats).toMatchObject({ deliveredCount: 2, activeCount: 1, carrierCount: 2, durationSampleCount: 2,
       averageDeliveryDuration: 36 * 3600_000, fastestDelivery: { parcelId: 'fast', duration: 22 * 3600_000 },
       originCountries: [{ code: 'FR', count: 2 }, { code: 'DE', count: 1 }] });
+  });
+
+  it('counts a code that is also a state only in the country the scan was placed in', () => {
+    const stats = passportStatistics([
+      parcel('germany', [['accepted', '2026-08-04T10:00:00Z', 'Haiger, DE', 'DE'], ['delivered', '2026-08-05T10:00:00Z', 'Koblenz, DE', 'DE']]),
+      parcel('canada', [['accepted', '2026-08-04T10:00:00Z', 'Toronto, CA', 'CA'], ['delivered', '2026-08-06T10:00:00Z']]),
+      // Delaware and California, placed in the United States, and a code nobody placed: none of them a country.
+      parcel('delaware', [['accepted', '2026-08-04T10:00:00Z', 'Wilmington, DE', 'US'], ['delivered', '2026-08-06T10:00:00Z', 'Los Angeles, CA', 'US']]),
+      parcel('unplaced', [['accepted', '2026-08-04T10:00:00Z', 'Hannover, DE'], ['delivered', '2026-08-06T10:00:00Z']]),
+    ], 'UTC');
+    expect(stats).toMatchObject({ originCountries: [{ code: 'CA', count: 1 }, { code: 'DE', count: 1 }], domesticDeliveryCount: 1, crossBorderCount: 0 });
   });
 
   it('does not manufacture durations from partial, invalid, or zero-length histories', () => {

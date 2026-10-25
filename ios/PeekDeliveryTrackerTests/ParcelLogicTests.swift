@@ -1210,6 +1210,29 @@ final class ParcelLogicTests: XCTestCase {
         XCTAssertEqual(stats.decemberDeliveryCount, 0)
     }
 
+    func testPassportCountsAStateCodeOnlyInTheCountryTheScanWasPlacedIn() {
+        func shipment(_ scans: [(TrackingStage, String, String?, String?)]) -> Parcel {
+            let id = UUID()
+            return makeParcel(id: id, events: scans.map { stage, date, location, placed in
+                var scan = event(id, stage, date)
+                scan.location = location
+                scan.place = placed.map { EventPlace(latitude: 0, longitude: 0, precision: .country, country: $0, name: $0) }
+                return scan
+            })
+        }
+        let stats = PassportStatistics(parcels: [
+            shipment([(.accepted, "2026-08-04T10:00:00Z", "Haiger, DE", "DE"), (.delivered, "2026-08-05T10:00:00Z", "Koblenz, DE", "DE")]),
+            shipment([(.accepted, "2026-08-04T10:00:00Z", "Toronto, CA", "CA"), (.delivered, "2026-08-06T10:00:00Z", nil, nil)]),
+            // Delaware and California, placed in the United States, and a code nobody placed: none of them a country.
+            shipment([(.accepted, "2026-08-04T10:00:00Z", "Wilmington, DE", "US"), (.delivered, "2026-08-06T10:00:00Z", "Los Angeles, CA", "US")]),
+            shipment([(.accepted, "2026-08-04T10:00:00Z", "Hannover, DE", nil), (.delivered, "2026-08-06T10:00:00Z", nil, nil)]),
+        ])
+        XCTAssertEqual(Set(stats.originCountries.map(\.code)), ["CA", "DE"])
+        XCTAssertEqual(stats.originCountries.map(\.count), [1, 1])
+        XCTAssertEqual(stats.domesticDeliveryCount, 1)
+        XCTAssertEqual(stats.crossBorderCount, 0)
+    }
+
     func testPassportWaitingStampRequiresMoreThanThirtyDays() {
         let id = UUID()
         let start = event(id, .accepted, "2026-11-01T00:00:00Z")

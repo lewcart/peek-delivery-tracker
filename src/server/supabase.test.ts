@@ -1031,3 +1031,34 @@ describe('notification reads', () => {
     expect(request).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('Friends passports', () => {
+  // Synthetic identifiers only.
+  const owner = '5c000000-0000-4000-a000-000000000001';
+  const parcel = '5c000000-0000-4000-a000-000000000002';
+  const service = () => new SupabaseServiceClient('https://database.example', 'service-key');
+  const user = () => new SupabaseUserClient('https://database.example', 'public-key', 'token');
+
+  it('reads a sharing friend\'s parcels as the friend\'s apps read them, archived ones included', async () => {
+    const client = service();
+    const profile = '11000000-0000-4000-8000-000000000001';
+    const request = vi.spyOn(client, 'request')
+      .mockResolvedValueOnce([{ id: profile, user_id: owner }, { id: 'malformed' }])
+      .mockResolvedValueOnce([{ id: parcel }]);
+    await expect(client.passportSharers([profile, profile])).resolves.toEqual(new Map([[profile, owner]]));
+    const sharers = new URL(`https://database.example${request.mock.calls[0]![0]}`);
+    expect(sharers.pathname).toBe('/rest/v1/friend_profiles');
+    expect(Object.fromEntries(sharers.searchParams)).toEqual({ select: 'id,user_id', id: `in.(${profile})`, share_stats: 'is.true' });
+    await expect(client.listAccountPackages(owner)).resolves.toEqual([{ id: parcel }]);
+    const parcels = new URL(`https://database.example${request.mock.calls[1]![0]}`).searchParams;
+    expect(parcels.get('user_id')).toBe(`eq.${owner}`);
+    expect(parcels.has('archived_at')).toBe(false);
+    const owned = user();
+    const ownerRequest = vi.spyOn(owned, 'request').mockResolvedValue([]);
+    await owned.listPackages(true);
+    expect(parcels.get('select')).toBe(new URL(`https://database.example${ownerRequest.mock.calls[0]![0]}`).searchParams.get('select'));
+    // No card shares its Passport: nothing to read.
+    await expect(client.passportSharers([])).resolves.toEqual(new Map());
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+});
