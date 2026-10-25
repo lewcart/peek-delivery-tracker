@@ -217,6 +217,8 @@
   "door.order.amazon.title": "On dirait un numéro de commande Amazon",
   "door.order.shein.body": "Dans Mes Commandes, appuie sur Suivi à côté de la commande : Shein y donne le transporteur et un numéro de suivi par colis. Colle plutôt celui-ci.",
   "door.order.shein.title": "On dirait un numéro de commande Shein",
+  "door.order.shopee.body": "Ouvre la commande dans Shopee : ses informations de livraison donnent le numéro de suivi, qui commence par BR au Brésil. Colle plutôt celui-ci.",
+  "door.order.shopee.title": "On dirait un numéro de commande Shopee",
   "door.order.temu.body": "Dans Vos commandes, appuie sur Suivre à côté de la commande : Temu y donne un numéro de suivi par colis. Colle plutôt celui-ci.",
   "door.order.temu.title": "On dirait un numéro de commande Temu",
   "door.paste.blocked.keys": "Ce navigateur n’a pas laissé Peek lire le presse-papiers. Clique dans le champ et colle directement.",

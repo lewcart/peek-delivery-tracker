@@ -42,6 +42,7 @@ export function GuideText({ blocks, locale, language = locale, t, links }: { blo
     order: {
       amazon: { title: t('door.order.amazon.title'), body: t('door.order.amazon.body') },
       shein: { title: t('door.order.shein.title'), body: t('door.order.shein.body') },
+      shopee: { title: t('door.order.shopee.title'), body: t('door.order.shopee.body') },
       temu: { title: t('door.order.temu.title'), body: t('door.order.temu.body') },
     },
   };

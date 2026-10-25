@@ -63,6 +63,19 @@ describe('reading the field', () => {
     expect(readText('GSH0A1B2C3D4E5').order).toBeNull();
   });
 
+  it('tells a Shopee order number from a tracking number', () => {
+    for (const text of ['261025ABCD1234', '261025abcd1234', '26102512345A78', 'Shopee order 261025ABCD1234 is on its way']) {
+      expect(readText(text).order, text).toBe('shopee');
+    }
+    // 14 digits that start like a date are a carrier's, as is a date no calendar has.
+    expect(readText('26102512345678').order).toBeNull();
+    expect(readText('261325ABCD1234').order).toBeNull();
+    expect(readText('261032ABCD1234').order).toBeNull();
+    // A character too many or too few is no Shopee order number.
+    expect(readText('261025ABCD12345').order).toBeNull();
+    expect(readText('261025ABCD123').order).toBeNull();
+  });
+
   it('tells a Temu order number from a tracking number, however it is typed', () => {
     for (const text of ['PO-000-00000000000000000', 'PO00000000000000000000', 'po-000-00000000000000000', 'PO 000 00000000000000000',
       'Your Temu order confirmation (#PO-000-12345678901234567)', 'Order PO-000-12345678901234567\nThanks for shopping with us']) {

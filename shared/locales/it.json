@@ -217,6 +217,8 @@
   "door.order.amazon.title": "Sembra un numero d’ordine Amazon",
   "door.order.shein.body": "In «I miei ordini», apri il tracciamento dell’ordine: Shein mostra il corriere e un codice di tracciamento per ogni pacco. Incolla quello.",
   "door.order.shein.title": "Sembra un numero d’ordine Shein",
+  "door.order.shopee.body": "Apri l’ordine su Shopee: le informazioni di spedizione mostrano il codice di tracciamento, che in Brasile inizia con BR. Incolla quello.",
+  "door.order.shopee.title": "Sembra un numero d’ordine Shopee",
   "door.order.temu.body": "In «I tuoi ordini», premi «Traccia» accanto all’ordine: Temu mostra un codice di tracciamento per ogni pacco. Incolla quello.",
   "door.order.temu.title": "Sembra un numero d’ordine Temu",
   "door.paste.blocked.keys": "Questo browser non ha permesso a Peek di leggere gli appunti. Fai clic nel campo e incolla lì.",

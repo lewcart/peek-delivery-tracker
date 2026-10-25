@@ -217,6 +217,8 @@
   "door.order.amazon.title": "Parece um número de pedido da Amazon",
   "door.order.shein.body": "Em «Meus pedidos», toca em «Rastrear» na encomenda: a Shein mostra a transportadora e um número de seguimento por volume. Cola esse.",
   "door.order.shein.title": "Parece um número de encomenda da Shein",
+  "door.order.shopee.body": "Abre o pedido na Shopee: as informações de envio mostram o número de seguimento, que no Brasil começa por BR. Cola esse.",
+  "door.order.shopee.title": "Parece um número de pedido da Shopee",
   "door.order.temu.body": "Em «As suas encomendas», toca em «Rastrear» ao lado da encomenda: a Temu mostra um número de seguimento por volume. Cola esse.",
   "door.order.temu.title": "Parece um número de encomenda da Temu",
   "door.paste.blocked.keys": "Este navegador não deixou o Peek ler a área de transferência. Clica no campo e cola aí.",

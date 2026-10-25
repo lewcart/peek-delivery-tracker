@@ -217,6 +217,8 @@
   "door.order.amazon.title": "To wygląda na numer zamówienia Amazon",
   "door.order.shein.body": "W „Moich zamówieniach” kliknij „Śledź” przy zamówieniu: Shein pokazuje tam przewoźnika i numer śledzenia każdej paczki. Wklej go zamiast numeru zamówienia.",
   "door.order.shein.title": "To wygląda na numer zamówienia Shein",
+  "door.order.shopee.body": "Otwórz zamówienie w Shopee: w informacjach o wysyłce jest numer śledzenia, który w Brazylii zaczyna się od BR. Wklej go zamiast numeru zamówienia.",
+  "door.order.shopee.title": "To wygląda na numer zamówienia Shopee",
   "door.order.temu.body": "W „Twoich zamówieniach” kliknij „Śledź” obok zamówienia: Temu pokazuje tam numer śledzenia każdej paczki. Wklej go zamiast numeru zamówienia.",
   "door.order.temu.title": "To wygląda na numer zamówienia Temu",
   "door.paste.blocked.keys": "Ta przeglądarka nie pozwoliła Peek odczytać schowka. Kliknij pole i wklej tam.",

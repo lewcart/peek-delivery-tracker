@@ -25,7 +25,7 @@ export interface Reading {
 }
 
 /** A shop whose order numbers the door tells from tracking numbers. */
-export type OrderShop = 'amazon' | 'shein' | 'temu';
+export type OrderShop = 'amazon' | 'shein' | 'shopee' | 'temu';
 
 const LINK = /https?:\/\/[^\s<>"']+/gi;
 const ORDER_NUMBERS: Record<OrderShop, RegExp> = {
@@ -33,6 +33,12 @@ const ORDER_NUMBERS: Record<OrderShop, RegExp> = {
   amazon: /(?:^|[^\w-])(?:\d{3}|D\d{2})-\d{7}-\d{7}(?![\w-])/i,
   /** GSH and 12 letters or digits: GSH000000000000. */
   shein: /(?:^|[^\w-])GSH[A-Z0-9]{12}(?![\w-])/i,
+  /**
+   * The order's date (YYMMDD) and 8 letters and digits: 261025ABCD1234. One of
+   * the 8 is a letter, so a carrier's 14 digits that start like a date stay a
+   * tracking number.
+   */
+  shopee: /(?:^|[^\w-])\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?=[A-Z0-9]{0,7}[A-Z])[A-Z0-9]{8}(?![\w-])/i,
   /** PO, 3 digits and 17: PO-000-00000000000000000, often typed without the hyphens. */
   temu: /(?:^|[^\w-])PO[- ]?\d{3}[- ]?\d{17}(?![\w-])/i,
 };
