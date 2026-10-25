@@ -981,6 +981,40 @@ describe('scans a carrier and a universal provider both report', () => {
     expect(matched(copy, [own], 'ctt-express')).toBe(0);
   });
 
+  describe('several rows in other wording in the scan\'s minute or second', () => {
+    // ParcelsApp dates two Chronopost scans to the minute and adds the reason to one; Chronopost dates both to the second.
+    const hub = { location: 'Example Hub' };
+    const moving = "Colis en cours d'acheminement";
+    const delayed = "Colis retardé durant l'acheminement";
+    const reason = `${delayed}. Livraison reportée de 24h`;
+    const copies = [
+      { ...row('unknown:moving', '2026-01-23T20:45:00+00:00', moving, 'in_transit'), ...hub },
+      { ...row('unknown:delayed', '2026-01-23T20:45:00+00:00', reason, 'in_transit'), ...hub },
+    ];
+    const scans = [
+      { ...scan('chronopost:moving', '2026-01-23T20:45:38Z', moving, 'in_transit'), ...hub },
+      { ...scan('chronopost:delayed', '2026-01-23T20:45:38Z', delayed, 'in_transit'), ...hub },
+    ];
+    const own = scans.map((event) => ({ ...row(event.provider_event_id, '2026-01-23T20:45:38+00:00', event.description, event.stage), ...hub }));
+
+    it('match the one whose wording opens with every word of the other\'s, whichever arrives first', () => {
+      expect(pairs(sharedScans(scans, copies).reused))
+        .toEqual([['chronopost:delayed', 'unknown:delayed'], ['chronopost:moving', 'unknown:moving']]);
+      const late = sharedScans([{ ...scan('unknown:delayed', '2026-01-23T20:45:00Z', reason, 'in_transit'), ...hub }], own);
+      expect(pairs(late.skipped)).toEqual([['unknown:delayed', 'chronopost:delayed']]);
+      // A copy in the carrier's own second, left out beside the carrier's rows there, repeats that one too.
+      const twin = sharedScans([{ ...scan('unknown:delayed', '2026-01-23T20:45:38Z', reason, 'in_transit'), ...hub }], own);
+      expect(pairs(twin.skipped)).toEqual([['unknown:delayed', 'chronopost:delayed']]);
+    });
+
+    it('stay unmatched when two open alike, or none opens with every word', () => {
+      const reasons = [...copies, { ...copies[1]!, provider_event_id: 'unknown:again', description: `${delayed}. Raison : météo` }];
+      expect(pairs(sharedScans(scans, reasons).reused)).toEqual([['chronopost:moving', 'unknown:moving']]);
+      const fewer = [copies[0]!, { ...copies[1]!, description: "Colis retardé à l'agence" }];
+      expect(pairs(sharedScans(scans, fewer).reused)).toEqual([['chronopost:moving', 'unknown:moving']]);
+    });
+  });
+
   it('keeps every scan a carrier repeats in a minute, and an earlier carrier\'s relay of a delivery scan', () => {
     // The provider repeats a delivery a few seconds apart and shows both.
     const repeated = sharedScans([scan('unknown:first', '2026-01-14T10:37:00Z', 'Delivered', 'delivered'),

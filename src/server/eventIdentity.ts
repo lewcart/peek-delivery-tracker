@@ -515,6 +515,24 @@ function sameWording(left: string, right: string): boolean {
 }
 
 /**
+ * Whether one wording opens with every word of the other, whatever the punctuation:
+ * ParcelsApp's "Colis retardé durant l'acheminement. Livraison reportée…" and
+ * Chronopost's "Colis retardé durant l'acheminement".
+ */
+function opensAlike(left: JsonObject, right: JsonObject): boolean {
+  const words = (row: JsonObject) => wordingOf(row).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const [first, second] = [words(left), words(right)];
+  const [shorter, longer] = first.length < second.length ? [first, second] : [second, first];
+  return shorter.length > 0 && shorter.every((word, index) => longer[index] === word);
+}
+
+/** Of several rows that could hold a scan, the one whose wording opens alike, when only one does. */
+function openingAlike(scan: JsonObject, rows: readonly JsonObject[]): JsonObject | undefined {
+  const alike = rows.filter((row) => opensAlike(scan, row));
+  return alike.length === 1 ? alike[0] : undefined;
+}
+
+/**
  * Two times of one second or minute, one of them that whole second or minute:
  * a source that keeps only seconds (ParcelsApp's copy of Nova Poshta's
  * milliseconds) or only minutes.
@@ -681,7 +699,11 @@ export function retimedScans(
  * whole second of CTT Express's milliseconds). The `relaying` carrier, the one
  * a parcel was handed over from, retells the next one's scans to the minute,
  * as India Post does La Poste's, or in the same second, so neither its scan to
- * the minute nor one in the copy's second meets a copy to the second. Failing that, the same wording matches a
+ * the minute nor one in the copy's second meets a copy to the second. Of
+ * several rows in other wording there, the one whose wording opens with every
+ * word of the scan's, or the scan's with every word of its, is the match
+ * (ParcelsApp dates two Chronopost scans to one minute, and adds the reason
+ * after "Colis retardé durant l'acheminement"). Failing that, the same wording matches a
  * whole number of quarter hours up to 14 h away: the same scan read in the
  * wrong zone, a copy compared to the minute of a carrier's scan in whole
  * minutes (17TRACK's seconds on USPS's minute). Failing that, a carrier's row for a universal scan, or a
@@ -713,7 +735,8 @@ export function retimedScans(
  * stay apart (FedEx's departure and "On the way"). A universal scan that copies
  * a row a carrier holds at its instant, by its prefix or because the row names
  * no provider, is left out, so an absorbed copy does not come back with the
- * provider's next answer.
+ * provider's next answer. Of several such rows it repeats the one whose wording
+ * opens alike, when one alone does, else the first.
  *
  * A row that only the scan's universal provider has written follows that
  * provider's clock instead (a scraper fix that reads its scans in another
@@ -808,7 +831,7 @@ export function sharedScans(
     return worded.length === 1 ? worded[0]
       : worded.length === 0 && staged ? exact[0]
         : minuted.length > 0 ? (minuted.length === 1 ? minuted[0] : undefined)
-          : restaged.length > 0 ? (restaged.length === 1 ? restaged[0] : undefined)
+          : restaged.length > 0 ? (restaged.length === 1 ? restaged[0] : openingAlike(event, restaged))
             : shifted.length === 1 ? shifted[0]
               : shifted.length === 0 && reclocked.length === 1 ? reclocked[0] : undefined;
   };
@@ -852,7 +875,10 @@ export function sharedScans(
   }
   // A copy of a scan a carrier holds stays out, so the copies it absorbed do not come back.
   const held = stored.filter((row) => heldByCarrier(row) && !observedOnly(row));
-  const heldCopy = (event: JsonObject) => held.find((row) => copies(event, row));
+  const heldCopy = (event: JsonObject) => {
+    const twins = held.filter((row) => copies(event, row));
+    return twins.length > 1 ? openingAlike(event, twins) ?? twins[0] : twins[0];
+  };
   for (const event of pending) {
     const id = identity(event);
     if (sourceOf(id) !== UNIVERSAL || shared.skipped.has(id) || shared.reused.has(id)) continue;
