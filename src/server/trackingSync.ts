@@ -837,6 +837,21 @@ export function carrierCopies(
   return copies;
 }
 
+/** The most characters of a provider code a review row stores. */
+const STORED_PROVIDER_CODE_LENGTH = 100;
+
+/**
+ * A provider code as its review row stores it: whole when it fits, otherwise its start and
+ * a short hash of the whole code, so two long codes that start alike stay apart. Counted in
+ * characters, as the database counts them.
+ */
+function storedProviderCode(code: string): string {
+  const characters = [...code];
+  if (characters.length <= STORED_PROVIDER_CODE_LENGTH) return code;
+  const hash = createHash('sha256').update(code).digest('hex').slice(0, 12);
+  return `${characters.slice(0, STORED_PROVIDER_CODE_LENGTH - hash.length - 1).join('')}…${hash}`;
+}
+
 /**
  * How one event's wording is observed: its key, carrier, code, stage source
  * and whether a map gave its stage; null without wording or stage. A universal
@@ -855,13 +870,15 @@ function observedWording(event: JsonObject, fallbackCarrierId: string, copies: R
   const carrier = (copy?.carrier ?? (eventId.split(':')[0] || fallbackCarrierId)).slice(0, 100);
   if (!carrier) return null;
   const code = copy ? copy.providerCode : raw.provider_code;
-  const providerCode = typeof code === 'string' && code ? code.slice(0, 100) : null;
+  const wholeCode = typeof code === 'string' && code ? code : null;
   const wording = observedTemplate(description);
+  // The maps read the whole code, and it keys the row: two codes that start alike never share one.
   const key = createHash('sha256')
-    .update(JSON.stringify([carrier, providerCode ?? '', wording]))
+    .update(JSON.stringify([carrier, wholeCode ?? '', wording]))
     .digest('hex');
-  const observation = { carrier, provider_code: providerCode, description_normalized: description, chosen_stage: chosenStage };
+  const observation = { carrier, provider_code: wholeCode, description_normalized: description, chosen_stage: chosenStage };
   const mapped = source === 'carrier_map' || (copy ? carrierMapAgrees(observation) : universalMapAgrees(observation));
+  const providerCode = wholeCode === null ? null : storedProviderCode(wholeCode);
   return { key, carrier, providerCode, description: wording, source, chosenStage, eventId, mapped };
 }
 

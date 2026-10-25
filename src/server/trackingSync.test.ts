@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { carrierResult } from '../test/carrierResults';
 import { CarrierError, ChallengeError } from 'universal-parcel-scraper';
 import { REGISTRY } from 'universal-parcel-scraper/node';
@@ -653,6 +654,33 @@ describe('status observation collection', () => {
       package_id: 'package-1',
     });
     expect(observations[0]?.observation_key).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('keys wording by the whole provider code and stores a long one shortened, apart from codes that start alike', () => {
+    const scan = (code: string, id: string) => ({
+      package_id: 'package-1', stage: 'in_transit', description: 'Synthetic hub scan',
+      provider_event_id: `australia-post:${id}`, raw_data: { stage_source: 'none', provider_code: code },
+    });
+    const label = 'ZZ-ER1 ' + 'synthetic milestone label '.repeat(4);
+    const fits = 'ZZ-ER2 ' + 'x'.repeat(93);
+    const rows = [scan(`${label}one`, 'a'), scan(`${label}two`, 'b'), scan(`${label}one`, 'c'), scan(fits, 'd')];
+    const observations = collectStatusObservations(rows, 'australia-post');
+    expect(observations).toHaveLength(3);
+    const [one, two, whole] = observations;
+    expect(new Set(observations.map((observation) => observation.observation_key)).size).toBe(3);
+    expect(one?.provider_code).toMatch(new RegExp(`^${label.slice(0, 87)}…[0-9a-f]{12}$`));
+    expect(two?.provider_code).toMatch(new RegExp(`^${label.slice(0, 87)}…[0-9a-f]{12}$`));
+    expect(one?.provider_code).toHaveLength(100);
+    expect(one?.provider_code).not.toBe(two?.provider_code);
+    // The same code gives the same key and stored code on every check.
+    expect(collectStatusObservations([rows[2]!], 'australia-post')).toMatchObject([
+      { observation_key: one?.observation_key, provider_code: one?.provider_code },
+    ]);
+    // A code that fits is kept whole, and keys its row as it always did.
+    expect(whole).toMatchObject({
+      provider_code: fits,
+      observation_key: createHash('sha256').update(JSON.stringify(['australia-post', fits, 'synthetic hub scan'])).digest('hex'),
+    });
   });
 
   it('attributes each wording to the carrier that served it and bounds one sync', () => {

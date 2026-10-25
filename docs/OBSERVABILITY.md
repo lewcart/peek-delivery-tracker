@@ -329,7 +329,9 @@ holds, with that row's code and stage, when it keeps the row's words or the map 
 copy's, and an unmatched copy whose words the map of a carrier of the parcel stages as the
 provider did. A third carrier's scan a provider relays stays under `unknown`.
 There is one row per carrier, provider code and normalized
-description. Wording that names a shop or a postcode is kept as one template instead
+description. A code longer than the row's 100 characters keys the row whole and is stored as
+its start and a short hash of the whole code, so codes that start alike keep their own rows.
+Wording that names a shop or a postcode is kept as one template instead
 (`PLACE_WORDINGS` in `src/server/trackingSync.ts`, such as `received at <store> local express
 <postcode>`): every place shares its row, which the review closes once, and no place is stored.
 The maps still read the wording itself. `count` and `last_seen` grow on repeat sightings. It holds no tracking number
@@ -353,8 +355,9 @@ rows, once, a minute after it starts, with the support case replay above. A row 
 stages closes as `mapped`, its note naming the stage, and the stage it was last seen with
 when that differs: the stored scans of finished parcels may then need a repair. A row the
 map leaves unmapped on purpose closes as `ignored` with the map's note. Both record the
-version. A row that version itself saw unmapped stays open, since its map covers it only
-sometimes. Wording no map knows stays open until reviewed by hand, or until it expires.
+version. The replay reads a shortened code as one no map lists; a check that maps the whole
+code closes its row. A row that version itself saw unmapped stays open, since its map covers
+it only sometimes. Wording no map knows stays open until reviewed by hand, or until it expires.
 
 Every check of a parcel records its wording again, and a followed parcel is checked at least
 weekly. A carrier's wording that no check has shown for 8 days is on no followed parcel,
