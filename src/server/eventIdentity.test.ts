@@ -332,6 +332,29 @@ describe('a scan whose source\'s feeds put different offsets on its wall clock',
   });
 });
 
+describe('a scan its source dates in two feeds, to the minute and to the second', () => {
+  // DPD Germany's app service dates a scan to the minute in its own words; its guest API dates
+  // it to the second, with DPD's code and no place (synthetic wording and place).
+  const app = (id: string, time: string, extra: JsonObject = {}) => ({ provider_event_id: `dpd-de:${id}`, occurred_at: time,
+    stage: 'out_for_delivery', description: 'Paket ist in Zustellung', location: 'Example Depot', ...extra });
+  const guestRow = { provider_event_id: 'dpd-de:guest', occurred_at: '2026-10-20T08:15:37.000Z', stage: 'out_for_delivery',
+    description: 'Out for delivery', location: '', raw_data: { provider_code: '13' } };
+  const appScan = app('app', '2026-10-20T08:15:00.000Z');
+
+  it('lets one feed\'s scan take over the row the other stored less than a minute away', () => {
+    expect([...sameInstantIdentities([appScan], [guestRow], 'dpd-de')]).toEqual([['dpd-de:app', 'dpd-de:guest']]);
+  });
+
+  it('needs less than a minute, the policy\'s match, a row no scan of the batch carries, one match each way and a source that opts in', () => {
+    expect(sameInstantIdentities([app('late', '2026-10-20T08:16:37.000Z')], [guestRow], 'dpd-de').size).toBe(0);
+    expect(sameInstantIdentities([app('stage', '2026-10-20T08:15:00.000Z', { stage: 'in_transit' })], [guestRow], 'dpd-de').size).toBe(0);
+    expect(sameInstantIdentities([appScan, guestRow], [guestRow], 'dpd-de').size).toBe(0);
+    expect(sameInstantIdentities([appScan, app('again', '2026-10-20T08:15:59.000Z')], [guestRow], 'dpd-de').size).toBe(0);
+    const other = (row: JsonObject) => ({ ...row, provider_event_id: String(row.provider_event_id).replace('dpd-de:', 'dhl-express:') });
+    expect(sameInstantIdentities([other(appScan)], [other(guestRow)], 'dhl-express').size).toBe(0);
+  });
+});
+
 describe('a scan its source restates with or without its milliseconds', () => {
   // Royal Mail first dated a locker drop-off to the millisecond, then to the second (synthetic place).
   const description = 'Sender advised item dropped off at parcel locker';

@@ -111,9 +111,10 @@ function byInstant(rows: readonly JsonObject[]): Map<number, JsonObject[]> {
  * one new scan and one candidate there. Ambiguous scans are inserted as before.
  *
  * A policy's `relabelledFrom` zone adds a pass for the scans and rows left,
- * matched by `relabelled`, and its `matchWallClock` another, matched by
- * `sameWallClock`. A last pass, for every policy, matches the scans and rows
- * left by `restatedSecond`.
+ * matched by `relabelled`, its `matchWallClock` another, matched by
+ * `sameWallClock`, and its `matchWithinMinute` another, for rows less than a
+ * minute away that its `matches` accepts. A last pass, for every policy,
+ * matches the scans and rows left by `restatedSecond`.
  */
 export function sameInstantIdentities(
   events: readonly JsonObject[],
@@ -152,6 +153,10 @@ export function sameInstantIdentities(
   const zone = relabelledFrom(policy);
   if (zone) matchLeft(reused, unmatched, candidates, (scan, row) => relabelled(zone, scan, row));
   if (matchesWallClock(policy)) matchLeft(reused, unmatched, candidates, sameWallClock);
+  const { matches } = policy;
+  if (matchesWithinMinute(policy) && matches) {
+    matchLeft(reused, unmatched, candidates, (scan, row) => withinMinute(scan, row) && matches(scanEvidence(scan), scanEvidence(row)));
+  }
   matchLeft(reused, unmatched, candidates, (scan, row) => restatedSecond(policy, scan, row));
   return reused;
 }
@@ -241,6 +246,17 @@ function relabelled(zone: string, scan: JsonObject, row: JsonObject): boolean {
 /** Whether a policy's source can put different offsets on one scan's wall clock. Policies from scraper releases before the field say nothing. */
 function matchesWallClock(policy: SameInstantIdentityPolicy): boolean {
   return (policy as { matchWallClock?: unknown }).matchWallClock === true;
+}
+
+/** Whether a policy's source dates one scan apart in two feeds, to the minute and to the second. Policies from scraper releases before the field say nothing. */
+function matchesWithinMinute(policy: SameInstantIdentityPolicy): boolean {
+  return (policy as { matchWithinMinute?: unknown }).matchWithinMinute === true;
+}
+
+/** Two instants less than a minute apart. */
+function withinMinute(scan: JsonObject, row: JsonObject): boolean {
+  const [shown, saved] = [instantOf(scan), instantOf(row)];
+  return Number.isFinite(shown) && Number.isFinite(saved) && Math.abs(shown - saved) < MINUTE_MS;
 }
 
 const EXPLICIT_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/i;
