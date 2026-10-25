@@ -168,6 +168,38 @@ describe('tracking event normalization', () => {
     ]);
   });
 
+  it('reads a notice that keeps the stage of the scan before it as that stage, unless that steps back', () => {
+    // Synthetic notices a carrier marks as keeping the stage of the scan before it (`stage_source` `none`).
+    const notice = (stage: string) => ({ time: '2026-09-10T15:08:00Z', description: 'Fixture notice 8', stage, stage_source: 'none' });
+    const stages = (...events: JsonObject[]) => buildEvents({ id: 'package-1', carrier: 'dpd' }, { status: 'unknown', events })
+      .map((row) => [row.description, row.stage, (row.raw_data as JsonObject).stage_source]);
+    // After a label, an acceptance, in transit or at customs, it keeps the stage it was left in.
+    for (const stage of ['registered', 'accepted', 'in_transit', 'customs']) {
+      expect(stages(notice(stage), { time: '2026-09-10T08:00:00Z', description: 'Fixture scan', stage })).toEqual([
+        ['Fixture notice 8', stage, 'none'], ['Fixture scan', stage, 'carrier_map'],
+      ]);
+    }
+    // After the round, a delivery, a pickup point, a missed attempt, a return or a problem it is pending: the
+    // scan it follows stays the newest in that stage, so its wording and time stand for the stage, not the notice's.
+    for (const stage of ['out_for_delivery', 'delivered', 'ready_for_pickup', 'failed_attempt', 'returned', 'exception']) {
+      expect(stages(notice(stage), { time: '2026-09-10T14:59:00Z', description: 'Fixture scan', stage })).toEqual([
+        ['Fixture notice 8', 'pending', 'none'], ['Fixture scan', stage, 'carrier_map'],
+      ]);
+    }
+    // A notice is in no stage of its own, so a later one still reads past the scan before both.
+    expect(stages({ ...notice('delivered'), time: '2026-09-10T16:00:00Z', description: 'Fixture notice 9' }, notice('delivered'),
+      { time: '2026-09-10T14:59:00Z', description: 'Fixture scan', stage: 'delivered' }).map((row) => row[1])).toEqual([
+      'pending', 'pending', 'delivered',
+    ]);
+    // Not a scan in a stage of its own after the round, which the carrier mapped, nor a notice with
+    // nothing dated in a stage before it.
+    expect(stages({ time: '2026-09-10T15:08:00Z', description: 'Fixture scan 2', stage: 'out_for_delivery', stage_source: 'carrier_map' },
+      { time: '2026-09-10T14:59:00Z', description: 'Fixture scan', stage: 'failed_attempt' })).toEqual([
+      ['Fixture scan 2', 'out_for_delivery', 'carrier_map'], ['Fixture scan', 'failed_attempt', 'carrier_map'],
+    ]);
+    expect(stages(notice('registered'))).toEqual([['Fixture notice 8', 'registered', 'none']]);
+  });
+
   it('dates scans a carrier gives by their day alone at that day, in its order, with no observed row', () => {
     // NACEX heads its history with calendar days and gives no clock (synthetic scans).
     const rows = buildEvents({ id: 'package-1', carrier: 'nacex', current_stage: 'in_transit' }, {
@@ -1151,7 +1183,7 @@ describe('TrackingSyncService', () => {
   describe('a delivery only a provider reported', () => {
     // A BRT import a provider marked delivered the day BRT took it over; numbers, wording and clocks are invented.
     const registered = { local_time: '2026-10-12T10:10:00', description: 'Shipping info sent to BRT', stage: 'registered' };
-    const own = (status: CarrierResult['status'], text: string, ...newer: Array<{ local_time: string; stage: string; description: string }>): CarrierResult => ({
+    const own = (status: CarrierResult['status'], text: string, ...newer: Array<{ local_time: string; stage?: string; stage_source?: string; description: string }>): CarrierResult => ({
       status, current_stage: newer[0]?.stage ?? status, last_status_text: text, last_update: null,
       last_update_local: newer[0]?.local_time ?? registered.local_time, events: [...newer, registered] });
     const provider = (status: CarrierResult['status'], delivered: string): CarrierResult => ({
@@ -1198,6 +1230,22 @@ describe('TrackingSyncService', () => {
       expect(reopened).toMatchObject({ current_stage: 'in_transit', last_status_text: 'In viaggio' });
       expect(reopened.stages).not.toContain('delivered');
       expect(reopened.carrier_data).not.toHaveProperty('unconfirmed_delivery_until');
+    });
+
+    it('stays delivered, checked again, when the carrier\'s only scans after it are notices in no stage of their own', async () => {
+      // Synthetic notices BRT dates after the provider's delivery: one no rule reads, one that keeps the stage of the
+      // scan before it. Neither moves the parcel, so neither disputes the delivery.
+      for (const notice of [{ local_time: '2026-10-20T18:00:00', description: 'Fixture notice 7' },
+        { local_time: '2026-10-20T18:00:00', description: 'Fixture notice 8', stage: 'registered', stage_source: 'none' }]) {
+        const checked = await parcel()('2026-10-20T19:00:00Z', own('in_transit', notice.description, notice), provider('delivered', '2026-10-20T14:32:00Z'));
+        expect(checked).toMatchObject({ current_stage: 'delivered', carrier_data: { unconfirmed_delivery_until: '2026-10-23T19:00:00.000Z' } });
+        expect(checked.stages).toContain('delivered');
+      }
+      // A scan the carrier gives a stage of its own after the delivery still disputes it.
+      const moved = { local_time: '2026-10-20T18:00:00', description: 'Fixture scan 9', stage: 'in_transit', stage_source: 'carrier_map' };
+      const disputed = await parcel()('2026-10-20T19:00:00Z', own('in_transit', moved.description, moved), provider('delivered', '2026-10-20T14:32:00Z'));
+      expect(disputed).toMatchObject({ current_stage: 'in_transit' });
+      expect(disputed.stages).not.toContain('delivered');
     });
 
     it('stays delivered when the carrier\'s newest scan is older, and ends the follow-up once the carrier shows it', async () => {

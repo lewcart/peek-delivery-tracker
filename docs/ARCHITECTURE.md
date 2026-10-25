@@ -339,12 +339,14 @@ and nothing typed is sent.
   the stage, an alert or an email. An earlier carrier's relay copy of a scan is served
   under that scan ([handoffs](ROUTING.md#handoffs-two-carriers)). A universal provider's
   copy of a confirmed carrier's scan is left out (`src/server/providerCopies.ts`). A scan
-  neither its carrier nor a wording rule gives a stage (`stage_source` `none`) reads as in
-  transit, unless that steps back from the newest scan in a stage its answer dates at or
-  before it (out for delivery, a delivery, a pickup point, a missed attempt, a return or a
-  problem). It is then stored as `pending`: it stays in the timeline as the carrier's news,
-  but the parcel's stage, the apps' headline, alerts and the delivery email go by the newest
-  scan in a stage, which a pending scan never makes look out of date. A scan
+  in no stage of its own (`stage_source` `none`: neither its carrier nor a wording rule gives
+  it one, or its carrier says it keeps the stage of the scan before it, as a notice to the
+  recipient does) reads as the stage its carrier left it in, else as in transit, unless that
+  steps back from the newest scan in a stage its answer dates at or before it (out for
+  delivery, a delivery, a pickup point, a missed attempt, a return or a problem). It is then
+  stored as `pending`: it stays in the timeline as the carrier's news, but the parcel's stage,
+  the apps' headline, alerts and the delivery email go by the newest scan in a stage, which a
+  pending scan never makes look out of date. A scan
   the carrier dated by its day alone, or on a wall clock in no zone, is served with that
   `day`: the apps list it under that day without a time, and the delivery email names that day. `src/server/eventPlaces.ts` applies this to every parcel and link the API serves; the
   account export keeps every stored row. Scans of one instant read by delivery progress
