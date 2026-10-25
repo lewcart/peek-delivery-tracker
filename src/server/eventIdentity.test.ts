@@ -1541,6 +1541,14 @@ describe('an earlier carrier relaying the delivery carrier\'s scans', () => {
     const minute = [at('gofo:sort', '2026-01-12T08:20:00Z', 'Processed at GOFO Sort Center', 'Miami, FL', 'accepted')];
     expect([...relayedScans([at('nova-poshta:sort', '2026-01-12T08:20:00Z', 'Sorted', 'Miami Gardens, FL')], minute)])
       .toEqual(['nova-poshta:sort']);
+    // One of the two keeps minutes only, the other seconds: in that minute, in any stage, from places whose names do
+    // not conflict, as relayCopies.ts pairs them. A postcode or an office number names no other place.
+    const minutes = [
+      at('nova-poshta:to-the-minute', '2026-01-14T09:31:00Z', 'Customs clearance in progress', 'Hollywood, FL', 'customs'),
+      at('nova-poshta:to-the-second', '2026-01-12T08:20:41Z', 'Sorted', '00011'),
+    ];
+    expect([...relayedScans(minutes, [...delivery, ...minute.map((row) => ({ ...row, location: '00022' }))])])
+      .toEqual(['nova-poshta:to-the-minute', 'nova-poshta:to-the-second']);
   });
 
   it('leaves its own scans: another second, another place, another stage on a minute\'s first second, or an observation', () => {
@@ -1553,6 +1561,11 @@ describe('an earlier carrier relaying the delivery carrier\'s scans', () => {
       // A carrier keeping minutes gives every scan a minute's first second: in another stage, with no place in
       // common, the two are scans of their own.
       at('nova-poshta:minute', '2026-01-12T08:20:00Z', 'Sorted', ''),
+      // Nor is a minute's first second and a scan with seconds one when their places' names conflict, or in the
+      // next minute.
+      at('nova-poshta:lviv-minute', '2026-01-14T09:31:00Z', 'Left the sorting center', 'Lviv'),
+      at('nova-poshta:next-minute', '2026-01-14T09:32:00Z', 'Arrived at the address depot', 'Hollywood, FL'),
+      at('nova-poshta:minute-before', '2026-01-12T08:19:59Z', 'Sorted', 'Miami, FL'),
     ];
     const minute = [...delivery, at('gofo:sort', '2026-01-12T08:20:00Z', 'Processed at GOFO Sort Center', 'Miami, FL', 'accepted')];
     expect(relayedScans(own, minute).size).toBe(0);

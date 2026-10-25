@@ -38,7 +38,7 @@
  */
 import { CARRIER_DEFINITIONS, type CarrierId } from 'universal-parcel-scraper';
 import { trackingPlace } from 'universal-parcel-scraper/app';
-import { placesConflict, placeWords } from './eventIdentity';
+import { placesConflict, placeWords, sameMinuteScan } from './eventIdentity';
 import { isRecord, type JsonObject } from './types';
 
 /** A copy is stamped within this of the scan it repeats, either way. */
@@ -96,28 +96,13 @@ function sameSecond(copy: { at: number; words: string[] }, scan: { at: number; w
   return second(copy.at) % 60 !== 0 || copy.words.some((word) => scan.words.includes(word));
 }
 
-/** A place's words that name it, without its codes: a postcode or an office number names no other place. */
-function names(words: readonly string[]): string[] {
-  return words.filter((word) => !/\d/.test(word));
-}
-
-/**
- * Whether two scans of one minute are one, told by a carrier that keeps minutes only and one that keeps seconds: one
- * on the minute's first second and the other within it, from places whose names do not conflict.
- */
-function sameMinute(copy: { at: number; words: string[] }, scan: { at: number; words: string[] }): boolean {
-  const first = (at: number) => Math.floor(at / SECOND_MS) % 60 === 0;
-  return Math.floor(copy.at / MINUTE_MS) === Math.floor(scan.at / MINUTE_MS) && first(copy.at) !== first(scan.at)
-    && !placesConflict(names(copy.words), names(scan.words));
-}
-
 /**
  * The relay pairs of a handed-over parcel, each copy with the id of the scan it repeats. The earlier carrier's scans
  * repeat a scan of another source at the same stage within a minute, or in any stage at the same second, the closest
  * pairs first. Then, in any stage, a row on a minute's first second repeats one with seconds within that minute
- * (`sameMinute`). Then a row of the new
- * carrier placed only in a country the earlier carrier delivers in, and the new carrier does not, repeats the earlier
- * carrier's latest scan of its stage, when it follows every such scan by up to three hours but not by whole hours.
+ * (`sameMinuteScan`, which the sync's `relayedScans` shares). Then a row of the new carrier placed only in a country
+ * the earlier carrier delivers in, and the new carrier does not, repeats the earlier carrier's latest scan of its
+ * stage, when it follows every such scan by up to three hours but not by whole hours.
  * A scan is in one pair at most, so two scans of one minute that the earlier carrier tells once stay two rows.
  */
 export function relayCopies(row: JsonObject): Map<string, string> {
@@ -135,7 +120,7 @@ export function relayCopies(row: JsonObject): Map<string, string> {
       && ((scan.stage === copy.stage && Math.abs(scan.at - copy.at) <= RELAY_WINDOW_MS) || sameSecond(copy, scan)))
     .map((scan) => ({ copy, scan, gap: Math.abs(scan.at - copy.at) })));
   const minutes = scans.filter((copy) => copy.source === earlier).flatMap((copy) => scans
-    .filter((scan) => scan.source !== earlier && sameMinute(copy, scan))
+    .filter((scan) => scan.source !== earlier && sameMinuteScan(copy.at, copy.words, scan.at, scan.words))
     .map((scan) => ({ copy, scan, gap: Math.abs(scan.at - copy.at) })));
   const current = currentCarrier(row);
   const exchanged = scans.filter((copy) => copy.source === current && copy.country !== null

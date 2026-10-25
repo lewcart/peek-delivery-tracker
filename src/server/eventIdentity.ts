@@ -1210,6 +1210,19 @@ export function datedObservations(
 }
 
 /**
+ * Whether two scans of one minute are one, told by a carrier that keeps minutes only and one that keeps seconds: one
+ * on the minute's first second and the other within it, from places whose names, without their codes, do not
+ * conflict (a postcode or an office number names no other place). Two scans on the minute's first second, or two
+ * with seconds, are no such pair.
+ */
+export function sameMinuteScan(at: number, words: readonly string[], other: number, otherWords: readonly string[]): boolean {
+  const first = (time: number) => Math.floor(time / 1_000) % 60 === 0;
+  const names = (place: readonly string[]) => place.filter((word) => !/\d/.test(word));
+  return Math.floor(at / MINUTE_MS) === Math.floor(other / MINUTE_MS) && first(at) !== first(other)
+    && !placesConflict(names(words), names(otherWords));
+}
+
+/**
  * The identities of the earlier carrier's scans in a handoff's batch that
  * relay a delivery scan: Nova Poshta tells each GOFO scan in its own words at
  * the same second and place. A relay falls in the same second as a delivery
@@ -1217,15 +1230,21 @@ export function datedObservations(
  * may differ. The stages may differ too, as relayCopies.ts pairs the two (JS
  * Express calls La Poste's return notice an exception), except on a minute's
  * first second, which a carrier keeping minutes gives every scan: there the
- * stages agree or the places share a word. Left out of `sharedScans`, a relay
- * stays a row of the earlier carrier, which relayCopies.ts pairs with the
- * scan, and the delivery scan takes over a universal copy alone.
+ * stages agree or the places share a word. A relay also falls in the minute
+ * of a delivery scan, in any stage, when one of the two keeps minutes only and
+ * the other seconds (`sameMinuteScan`, Hrvatska pošta's minute of Royal Mail's
+ * customs scan). Left out of `sharedScans`, a relay stays a row of the earlier
+ * carrier, which relayCopies.ts pairs with the scan, and the delivery scan
+ * takes over a universal copy alone: the copy on the minute's first second
+ * that the relay would otherwise take at its own instant, or the copy of the
+ * relay's second that a scan on the minute would then reach.
  */
 export function relayedScans(earlier: readonly JsonObject[], delivery: readonly JsonObject[]): Set<string> {
   const scans = delivery.filter((row) => !observedOnly(row) && Number.isFinite(instantOf(row)));
   const second = (row: JsonObject) => Math.floor(instantOf(row) / 1_000);
   const relays = (row: JsonObject, scan: JsonObject) => {
     const [words, scanWords] = [placeWords(row), placeWords(scan)];
+    if (sameMinuteScan(instantOf(row), words, instantOf(scan), scanWords)) return true;
     return second(scan) === second(row) && !placesConflict(scanWords, words) && (stagesAgree(stageOf(scan), stageOf(row))
       || second(row) % 60 !== 0 || words.some((word) => scanWords.includes(word)));
   };

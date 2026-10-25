@@ -3742,6 +3742,34 @@ describe('TrackingSyncService', () => {
     expect(saved).toHaveLength(3);
   });
 
+  it('lets the delivery scan take over a universal copy at a handoff when one carrier keeps the minute and the other the second', async () => {
+    const hub = { location: 'Springfield Gardens, NY', stage: 'in_transit' };
+    const handoff = async (relayAt: string, scanAt: string, copy: JsonObject) => {
+      const client = fakeClient();
+      const adapter = { fetch: vi.fn()
+        .mockResolvedValueOnce({ status: 'in_transit', last_update: relayAt,
+          delivery_carrier: 'gofo', delivery_tracking_number: 'GFUS01000000000001', events: [
+            { time: '2026-01-10T10:00:00Z', description: 'Left the sorting center', location: 'Lviv', stage: 'in_transit' },
+            { time: relayAt, description: 'Arrived at the depot', ...hub, stage: 'customs' },
+          ] })
+        .mockResolvedValueOnce({ status: 'in_transit', last_update: scanAt, events: [
+          { time: scanAt, description: 'Arrived at GOFO Regional Hub', ...hub },
+        ] }) };
+      await new TrackingSyncService(client as unknown as SupabaseServiceClient, adapter, null)
+        .syncPackage({ id: 'relayed', carrier: 'nova-poshta', tracking_number: '59500000000012',
+          [STORED_EVENT_IDENTITIES]: [{ provider_event_id: 'unknown:copy', ...hub, ...copy }] });
+      return client.insertEvents.mock.calls[0][0].map((event: JsonObject) => [String(event.provider_event_id).split(':')[0], event.description]);
+    };
+    const kept = [['nova-poshta', 'Left the sorting center'], ['nova-poshta', 'Arrived at the depot'], ['unknown', 'Arrived at GOFO Regional Hub']];
+    // The origin keeps the minute: taking a provider's copy at its own instant, its relay would leave the delivery scan
+    // a row of its own that nothing pairs.
+    expect(await handoff('2026-01-11T21:11:00Z', '2026-01-11T21:11:25Z',
+      { occurred_at: '2026-01-11T21:11:00+00:00', description: 'Arrived at GOFO Regional Hub' })).toEqual(kept);
+    // The delivery carrier keeps the minute: the relay's copy to the second is the delivery scan's to take.
+    expect(await handoff('2026-01-11T21:11:25Z', '2026-01-11T21:11:00Z',
+      { occurred_at: '2026-01-11T21:11:25+00:00', description: 'Arrived at the depot' })).toEqual(kept);
+  });
+
   it('lets the delivery scan take over a universal copy at a handoff when the origin relays it in another stage', async () => {
     const client = fakeClient();
     const adapter = { fetch: vi.fn()
