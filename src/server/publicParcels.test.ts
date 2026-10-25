@@ -408,6 +408,17 @@ describe('a gift on its way', () => {
       shown: [blurredIn(null, null, 'accepted'), kept('in_transit', 'Depot 7', 'no place')],
     },
     {
+      name: 'a scan in no stage from after the carrier had the parcel is its news, one from before is not',
+      events: () => journey(
+        scan('pending', null), scan('accepted', 'Hamburg, DE'), scan('in_transit', 'Zürich, CH'), scan('failed_attempt', 'Zürich, CH'),
+        scan('pending', 'Zürich, CH'),
+      ),
+      shown: [
+        blurredIn('DE', 'Germany', 'accepted'), kept('in_transit', 'Zürich, CH', 'city Zürich'),
+        kept('failed_attempt', 'Zürich, CH', 'city Zürich'), kept('pending', 'Zürich, CH', 'city Zürich'),
+      ],
+    },
+    {
       name: 'nothing but the announcement: no scan at all',
       events: () => journey(scan('pending', null), scan('registered', 'Hamburg, DE')),
       shown: [],

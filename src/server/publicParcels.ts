@@ -280,7 +280,9 @@ function countryPlace(country: string): ApiTrackingEventRow['place'] {
  * comes from stays a country.
  *
  * - Scans from before the carrier had the parcel (`pending`, `registered`) are
- *   left out.
+ *   left out. A scan in no stage (`pending`) from after its first scan in a later
+ *   stage is the carrier's news, a notice after a missed attempt, say, and is
+ *   shown as the parcel's own page shows it.
  * - The origin country is the country of the earliest located scan.
  * - When the parcel leaves that country, or is bound for another one, every
  *   scan located in the origin country is blurred, and so is every scan
@@ -308,9 +310,10 @@ export function giftEvents(
     if (event.place) return event.place.country === origin;
     return abroad === -1 || position.get(event)! < abroad;
   };
+  const taken = journey.findIndex((event) => event.stage !== 'pending' && event.stage !== 'registered');
   const place = origin === null ? null : countryPlace(origin);
   return events
-    .filter((event) => event.stage !== 'pending' && event.stage !== 'registered')
+    .filter((event) => event.stage !== 'registered' && (event.stage !== 'pending' || (taken !== -1 && position.get(event)! > taken)))
     .map((event) => blurred(event)
       ? { ...event, description: GIFT_ORIGIN_DESCRIPTION, location: origin, place }
       : event);
