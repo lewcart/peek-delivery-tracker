@@ -1692,6 +1692,7 @@ struct EventPlace: Codable, Equatable, Hashable, Sendable {
     var country: String
     var name: String
     var site: String? = nil
+    var region: String? = nil
 }
 
 struct TrackingEvent: Codable, Equatable, Hashable, Sendable, Identifiable {

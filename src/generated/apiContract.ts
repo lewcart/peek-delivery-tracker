@@ -32256,6 +32256,7 @@ export interface ApiEventPlace {
   "country": string;
   "name": string;
   "site"?: string;
+  "region"?: string;
 }
 
 export interface ApiTrackingEventRow {

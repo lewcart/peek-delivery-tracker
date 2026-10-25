@@ -35032,6 +35032,11 @@
             "type": "string",
             "minLength": 1,
             "description": "The facility the point is on, when it has a name of its own (\"Zürich-Mülligen\"). Shown where there is room; name stays the town."
+          },
+          "region": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The state or province of a place that names no town, by the code the carrier prints (\"WA\"), whose clock it keeps."
           }
         }
       },
