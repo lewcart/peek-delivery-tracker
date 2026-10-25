@@ -35,7 +35,7 @@ import {
   shouldReportRepeatedFailure,
 } from './observability';
 import type { DeliveryEmailService } from './email/deliveryEmails';
-import { PushDispatchError, type CompositePushNotificationService } from './push';
+import { PushDispatchError, type CompositePushNotificationService, type PushChannel, type PushSummary } from './push';
 import { REDETECTION_PAGE, STORED_EVENT_IDENTITIES, SyncJobLeaseLost, type SupabaseServiceClient } from './supabase';
 import { clockDay, datedObservations, filledPlaceholders, misdatedCopies, providerEventId, requalifiedPlaces, restatedIdentities, retimedScans, sameInstantIdentities, scanDay, sharedScans, strippedMarkup, relayedScans, UNIVERSAL_PROVIDER, UNWORDED_STEP, withIdentities, withoutCopyDrift, withStatedClocks } from './eventIdentity';
 export { providerEventId } from './eventIdentity';
@@ -528,10 +528,24 @@ export interface SyncSummary extends JsonObject {
   unsupported: number;
   superseded: number;
   notifications_sent: number;
+  notifications_sent_web: number;
+  notifications_sent_native: number;
+  notifications_sent_live_activity: number;
+  notifications_sent_link_alert: number;
   notification_errors: number;
   subscriptions_expired: number;
   emails_sent: number;
   email_errors: number;
+}
+
+/** Adds what a push dispatch did to the job's counts, each channel's sends beside the total. */
+function addPushSummary(summary: SyncSummary, push: PushSummary): void {
+  summary.notifications_sent += push.sent;
+  summary.notification_errors += push.failed;
+  summary.subscriptions_expired += push.expired;
+  for (const [channel, sent] of Object.entries(push.sentByChannel ?? {}) as [PushChannel, number][]) {
+    summary[`notifications_sent_${channel}`] += sent;
+  }
 }
 
 export function emptySyncSummary(): SyncSummary {
@@ -544,6 +558,10 @@ export function emptySyncSummary(): SyncSummary {
     unsupported: 0,
     superseded: 0,
     notifications_sent: 0,
+    notifications_sent_web: 0,
+    notifications_sent_native: 0,
+    notifications_sent_live_activity: 0,
+    notifications_sent_link_alert: 0,
     notification_errors: 0,
     subscriptions_expired: 0,
     emails_sent: 0,
@@ -1434,9 +1452,7 @@ export class TrackingSyncService {
     if (!this.notifier) return;
     try {
       const push = await this.notifier.dispatch(signal);
-      summary.notifications_sent += push.sent;
-      summary.notification_errors += push.failed;
-      summary.subscriptions_expired += push.expired;
+      addPushSummary(summary, push);
       // A failed send stays pending and the next dispatch tries it again, which heals a push
       // service's blip: only deliveries that fail again are reported.
       this.#pushFailureStreak = push.failed > 0 ? this.#pushFailureStreak + 1 : 0;
@@ -1449,11 +1465,7 @@ export class TrackingSyncService {
       }
     } catch (error) {
       signal?.throwIfAborted();
-      if (error instanceof PushDispatchError) {
-        summary.notifications_sent += error.summary.sent;
-        summary.notification_errors += error.summary.failed;
-        summary.subscriptions_expired += error.summary.expired;
-      }
+      if (error instanceof PushDispatchError) addPushSummary(summary, error.summary);
       summary.notification_errors += 1;
       captureOperationalError(error, { component: 'push', operation: 'dispatch' });
     }

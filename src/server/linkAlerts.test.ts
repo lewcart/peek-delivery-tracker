@@ -407,7 +407,7 @@ describe('alerts beside the account notifications', () => {
     const order: string[] = [];
     const channel = (name: string, sent: number) => ({ dispatch: async () => { order.push(name); return summary(sent); } }) as never;
     const composite = new CompositePushNotificationService(channel('web', 2), channel('native', 1), channel('live', 0), channel('links', 3));
-    expect(await composite.dispatch()).toEqual(summary(6));
+    expect(await composite.dispatch()).toEqual({ ...summary(6), sentByChannel: { live_activity: 0, web: 2, native: 1, link_alert: 3 } });
     expect(order).toEqual(['live', 'web', 'native', 'links']);
   });
 
@@ -416,7 +416,7 @@ describe('alerts beside the account notifications', () => {
     const composite = new CompositePushNotificationService(
       { dispatch: async () => summary(2) } as never, null, null, { dispatch: async () => { throw outage; } } as never,
     );
-    await expect(composite.dispatch()).rejects.toMatchObject({ errors: [outage], summary: summary(2) });
+    await expect(composite.dispatch()).rejects.toMatchObject({ errors: [outage], summary: { ...summary(2), sentByChannel: { web: 2 } } });
   });
 
   it('exists exactly when this server sends Web Push or APNs', async () => {

@@ -2072,6 +2072,10 @@ struct SyncSummary: Codable, Equatable, Hashable, Sendable {
     var unsupported: Int? = nil
     var superseded: Int? = nil
     var notificationsSent: Int? = nil
+    var notificationsSentWeb: Int? = nil
+    var notificationsSentNative: Int? = nil
+    var notificationsSentLiveActivity: Int? = nil
+    var notificationsSentLinkAlert: Int? = nil
     var notificationErrors: Int? = nil
     var subscriptionsExpired: Int? = nil
     var emailsSent: Int? = nil

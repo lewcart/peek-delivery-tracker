@@ -32531,6 +32531,10 @@ export interface ApiSyncSummary {
   "unsupported"?: number;
   "superseded"?: number;
   "notifications_sent"?: number;
+  "notifications_sent_web"?: number;
+  "notifications_sent_native"?: number;
+  "notifications_sent_live_activity"?: number;
+  "notifications_sent_link_alert"?: number;
   "notification_errors"?: number;
   "subscriptions_expired"?: number;
   "emails_sent"?: number;

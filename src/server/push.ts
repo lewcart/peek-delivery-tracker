@@ -258,7 +258,12 @@ export interface PushSummary {
   sent: number;
   failed: number;
   expired: number;
+  /** What each channel that dispatched sent: the composite's count, by the channel names its logs use. */
+  sentByChannel?: Partial<Record<PushChannel, number>>;
 }
+
+/** An account's browsers, its iPhones, its Live Activities, and the alerts of parcel links over either push. */
+export type PushChannel = 'web' | 'native' | 'live_activity' | 'link_alert';
 
 function emptySummary(): PushSummary {
   return { attempted: 0, sent: 0, failed: 0, expired: 0 };
@@ -1262,10 +1267,11 @@ export class CompositePushNotificationService {
 
   async dispatch(signal?: AbortSignal): Promise<PushSummary> {
     signal?.throwIfAborted();
-    const combined = emptySummary();
+    const combined: PushSummary & { sentByChannel: Partial<Record<PushChannel, number>> } = { ...emptySummary(), sentByChannel: {} };
     const errors: unknown[] = [];
     // Accounts first: a parcel link's alerts come on top of its owner's notifications.
-    for (const service of [this.liveActivities, this.web, this.native, this.linkAlerts]) {
+    const channels = [['live_activity', this.liveActivities], ['web', this.web], ['native', this.native], ['link_alert', this.linkAlerts]] as const;
+    for (const [channel, service] of channels) {
       if (!service) continue;
       try {
         const summary = await service.dispatch(signal);
@@ -1273,6 +1279,7 @@ export class CompositePushNotificationService {
         combined.sent += summary.sent;
         combined.failed += summary.failed;
         combined.expired += summary.expired;
+        combined.sentByChannel[channel] = summary.sent;
       } catch (error) {
         signal?.throwIfAborted();
         // One channel's outage or schema drift must not hold back the others.

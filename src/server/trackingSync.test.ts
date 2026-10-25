@@ -2010,7 +2010,7 @@ describe('TrackingSyncService', () => {
     const adapter = { fetch: vi.fn(async (_carrier: string, number: string) => number === 'TEST0001'
       ? { status: 'in_transit' }
       : await new Promise<JsonObject>((resolve) => { answer = resolve; })) };
-    const notifier = { dispatch: vi.fn().mockResolvedValue({ sent: 1, failed: 0, expired: 0 }) };
+    const notifier = { dispatch: vi.fn().mockResolvedValue({ sent: 1, failed: 0, expired: 0, sentByChannel: { web: 1, native: 0 } }) };
     const emails = { dispatch: vi.fn().mockResolvedValue({ sent: 1, failed: 0, skipped: 0 }) };
     const client = fakeClient([
       { id: 'quick', user_id: 'first', carrier: 'ctt', tracking_number: 'TEST0001' },
@@ -2022,8 +2022,9 @@ describe('TrackingSyncService', () => {
     expect(notifier.dispatch).toHaveBeenCalledOnce();
     expect(adapter.fetch).toHaveBeenCalledTimes(2);
     answer({ status: 'in_transit' });
-    // The run's own dispatch follows the reconciliation, and the counts add up.
-    await expect(running).resolves.toMatchObject({ checked: 2, updated: 2, notifications_sent: 2, emails_sent: 2 });
+    // The run's own dispatch follows the reconciliation, and the counts add up, each channel's too.
+    await expect(running).resolves.toMatchObject({ checked: 2, updated: 2, notifications_sent: 2, emails_sent: 2,
+      notifications_sent_web: 2, notifications_sent_native: 0, notifications_sent_live_activity: 0, notifications_sent_link_alert: 0 });
     expect(notifier.dispatch).toHaveBeenCalledTimes(2);
     expect(notifier.dispatch.mock.invocationCallOrder[1]).toBeGreaterThan(client.autoLinkPackages.mock.invocationCallOrder.at(-1)!);
   });

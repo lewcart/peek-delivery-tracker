@@ -627,6 +627,9 @@ Key JSON events:
   them. Alert when they repeat for two minutes (`failing_for_ms` of 120000 or more).
   `sync_claim_recovered` follows with the first claim that works again and says how long
   the streak lasted;
+- `sync_job_completed` (by `job_id`): the job's `SyncSummary` counts
+  ([contracts/openapi.json](../contracts/openapi.json)), with what each push channel sent
+  (`web`, `native`, `live_activity`, `link_alert`) beside the `notifications_sent` total;
 - `sync_job_failed`, `sync_job_finish_failed` (by `job_id`). Alert on these. A scheduled
   run whose worker died three times is logged as failed by the next run, with
   `error_type` `WorkerLeaseExpired`;

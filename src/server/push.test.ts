@@ -275,6 +275,6 @@ describe('push channel isolation', () => {
     const error = await composite.dispatch().catch((reason: unknown) => reason);
     expect(error).toBeInstanceOf(PushDispatchError);
     expect((error as PushDispatchError).errors).toEqual([outage]);
-    expect((error as PushDispatchError).summary).toEqual(summary(3));
+    expect((error as PushDispatchError).summary).toEqual({ ...summary(3), sentByChannel: { web: 2, native: 1 } });
   });
 });

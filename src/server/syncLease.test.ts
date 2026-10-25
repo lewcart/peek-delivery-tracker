@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { SyncJobWorker, type BackgroundState } from './background';
 import { SupabaseServiceClient } from './supabase';
-import { TrackingSyncService, type SyncSummary } from './trackingSync';
+import { emptySyncSummary, TrackingSyncService, type SyncSummary } from './trackingSync';
 import type { SyncRunContext } from './trackingAudit';
 
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
@@ -30,7 +30,7 @@ it.each([false, true])('renews a long-running job and stops writes after renewal
   expect(context.lease).toEqual({ jobId: 'job', workerId: worker.workerId });
   expect(context.signal?.aborted).toBe(loseLease);
   if (!loseLease) expect(state.workerHeartbeat).toBeGreaterThan(heartbeat!);
-  complete({ checked: 1, updated: 1, unchanged: 0, waiting: 0, errors: 0, unsupported: 0, superseded: 0, notifications_sent: 0, notification_errors: 0, subscriptions_expired: 0, emails_sent: 0, email_errors: 0 });
+  complete({ ...emptySyncSummary(), checked: 1, updated: 1 });
   await vi.advanceTimersByTimeAsync(1);
   if (loseLease) expect(finish).not.toHaveBeenCalled();
   else expect(finish).toHaveBeenCalledOnce();
@@ -50,8 +50,7 @@ it.each([[10, null, 'package'], [-20, null, 'package'], [-30, null, 'release'], 
   vi.spyOn(client, 'getPackage').mockResolvedValue({ id: 'package' });
   vi.spyOn(client, 'finishSyncJob').mockResolvedValue();
   const service = new TrackingSyncService(client);
-  const check = vi.spyOn(service, 'syncPackage').mockResolvedValue({ checked: 1, updated: 0, unchanged: 1, waiting: 0, errors: 0, unsupported: 0,
-    superseded: 0, notifications_sent: 0, notification_errors: 0, subscriptions_expired: 0, emails_sent: 0, email_errors: 0 });
+  const check = vi.spyOn(service, 'syncPackage').mockResolvedValue({ ...emptySyncSummary(), checked: 1, unchanged: 1 });
   const worker = new SyncJobWorker(service, state);
   worker.start();
   await vi.advanceTimersByTimeAsync(1);

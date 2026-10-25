@@ -36255,6 +36255,22 @@
           "notifications_sent": {
             "type": "integer"
           },
+          "notifications_sent_web": {
+            "type": "integer",
+            "description": "Of notifications_sent, those sent to accounts' browsers."
+          },
+          "notifications_sent_native": {
+            "type": "integer",
+            "description": "Of notifications_sent, those sent to accounts' iPhones."
+          },
+          "notifications_sent_live_activity": {
+            "type": "integer",
+            "description": "Of notifications_sent, the Live Activity updates."
+          },
+          "notifications_sent_link_alert": {
+            "type": "integer",
+            "description": "Of notifications_sent, the alerts of parcel links, by either push."
+          },
           "notification_errors": {
             "type": "integer"
           },
