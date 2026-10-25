@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkDigitTrouble, looksLikeNumber, numbersInText, readText } from './reading';
+import { checkDigitTrouble, looksLikeNumber, readText } from './reading';
 import { isPickupCode, normalizeTrackingNumber } from '../../lib/carriers';
 import rules from '../../../shared/reading.json';
 
@@ -21,18 +21,9 @@ describe('reading the field', () => {
     expect(readText(message).match).toMatchObject({ trackingNumber: '1234567899', carrier: 'unknown', confidence: 'low', source: 'text' });
   });
 
-  it('lists every certain number in a text once, in the order written, links included', () => {
-    const text = 'Your order ships in 3 parcels:\nUPS 1ZDEMO202600000001\nUPS 1ZDEMO202600000029\nSwiss Post 99.34.123456.78901234\nagain: 1zdemo202600000001';
-    expect(numbersInText(text).map(({ normalized, match }) => [normalized, match.carrier])).toEqual([
-      ['1ZDEMO202600000001', 'ups'], ['1ZDEMO202600000029', 'ups'], ['993412345678901234', 'swiss-post'],
-    ]);
-    expect(readText(text).numbers).toHaveLength(3);
-    expect(numbersInText('https://www.dhl.com/track?tracking-id=1234567899 and 1ZDEMO202600000001').map(({ normalized }) => normalized))
-      .toEqual(['1234567899', '1ZDEMO202600000001']);
-    // One number is not a choice.
-    expect(readText('1ZDEMO202600000001').numbers).toEqual([]);
-    // Numbers on neighbouring lines never run together.
-    expect(numbersInText('RR123456785CH\nLX123456785DE').map(({ normalized }) => normalized)).toEqual(['RR123456785CH', 'LX123456785DE']);
+  // The iPhone's Add sheet lists the same numbers.
+  it.each(rules.several)('lists every certain number in a text once, in the order written: $text', (example) => {
+    expect(readText(example.text).numbers.map(({ normalized, match }) => ({ number: normalized, carrier: match.carrier }))).toEqual(example.numbers);
   });
 
   // The iPhone's Add sheet replays the same examples.

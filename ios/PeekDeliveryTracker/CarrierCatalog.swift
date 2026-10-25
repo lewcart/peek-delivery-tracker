@@ -203,6 +203,13 @@ enum OrderShop: String, Decodable, Sendable {
     case amazon, shein, shopee, temu
 }
 
+/// One tracking number a text names, with what its shape says about the carrier.
+struct NumberInText: Equatable, Sendable {
+    /// The number without spaces, dots or dashes: what makes two spellings the same number.
+    let normalized: String
+    let match: TrackingInputMatch
+}
+
 /// A postal number whose check digit doesn't add up, which Add asks about as the front door does.
 struct CheckDigitTrouble: Equatable, Sendable {
     /// The number with a lookalike letter read as its digit, or back, when that one adds up.
@@ -371,6 +378,7 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
             parsedInputs.removeAllObjects()
             readings.removeAllObjects()
             orders.removeAllObjects()
+            numbersRead.removeAllObjects()
         }
     }
 
@@ -383,6 +391,7 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
     private let parsedInputs = NSCache<NSString, Memo<TrackingInputMatch>>()
     private let readings = NSCache<NSString, Memo<TrackingInputMatch>>()
     private let orders = NSCache<NSString, Memo<OrderShop?>>()
+    private let numbersRead = NSCache<NSString, Memo<[NumberInText]>>()
     private static let expressions = NSCache<NSString, NSRegularExpression>()
 
     private static let refreshInterval: TimeInterval = 15 * 60
@@ -729,6 +738,44 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
         let order = match.confidence == .high ? nil : Self.orderShop(in: match.trackingNumber.nonEmpty ?? raw)
         orders.setObject(Memo(order), forKey: raw as NSString)
         return order
+    }
+
+    /// Every number a text names with certainty, in the order written, when it names two or more: Add lists them
+    /// to choose from, as the front door does (`numbersInText` in src/peek/lookup/reading.ts). Links count through
+    /// their own number; each line is read on its own, so numbers on neighbouring lines never run together.
+    func numbers(in raw: String) -> [NumberInText] {
+        if let memo = numbersRead.object(forKey: raw as NSString) { return memo.value }
+        var found: [NumberInText] = []
+        func keep(_ match: TrackingInputMatch) {
+            let normalized = Self.normalize(match.trackingNumber)
+            guard !normalized.isEmpty, !found.contains(where: { $0.normalized == normalized }) else { return }
+            found.append(NumberInText(normalized: normalized, match: match))
+        }
+        for line in raw.components(separatedBy: "\n") {
+            for link in Self.matches(in: line, pattern: Self.linkPattern, caseInsensitive: true) {
+                let match = parse(link)
+                if !match.trackingNumber.isEmpty { keep(match) }
+            }
+            let prose = Self.blanking(Self.linkPattern, in: line, caseInsensitive: true)
+            var candidates: [(range: NSRange, number: String)] = []
+            for shape in Self.candidatePatterns {
+                for hit in Self.hits(in: prose, pattern: shape.pattern, caseInsensitive: shape.caseInsensitive) {
+                    let number = hit.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard detect(number).confidence == .high else { continue }
+                    // A shape inside another certain one is the same number read twice.
+                    let overlaps = candidates.contains {
+                        hit.range.location < NSMaxRange($0.range) && NSMaxRange(hit.range) > $0.range.location
+                    }
+                    if !overlaps { candidates.append((hit.range, number)) }
+                }
+            }
+            for candidate in candidates.sorted(by: { $0.range.location < $1.range.location }) {
+                keep(makeMatch(candidate.number, source: .text))
+            }
+        }
+        let numbers = found.count > 1 ? found : []
+        numbersRead.setObject(Memo(numbers), forKey: raw as NSString)
+        return numbers
     }
 
     private func parseTrimmed(_ input: String) -> TrackingInputMatch {
@@ -1610,9 +1657,18 @@ final class CarrierCatalog: ObservableObject, @unchecked Sendable {
         pattern: String,
         caseInsensitive: Bool = false
     ) -> [String] {
+        hits(in: value, pattern: pattern, caseInsensitive: caseInsensitive).map(\.text)
+    }
+
+    /// Each match with where it stands in the value.
+    private static func hits(
+        in value: String,
+        pattern: String,
+        caseInsensitive: Bool = false
+    ) -> [(range: NSRange, text: String)] {
         guard let expression = expression(pattern, caseInsensitive: caseInsensitive) else { return [] }
-        return expression.matches(in: value, range: NSRange(value.startIndex..., in: value)).compactMap {
-            Range($0.range, in: value).map { String(value[$0]) }
+        return expression.matches(in: value, range: NSRange(value.startIndex..., in: value)).compactMap { match in
+            Range(match.range, in: value).map { (match.range, String(value[$0])) }
         }
     }
 

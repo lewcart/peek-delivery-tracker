@@ -698,6 +698,7 @@ private struct DeliveryListView: View {
             if showingAdd && scenePhase == .active { addedParcelID = id }
         })
             .environmentObject(store)
+            .environmentObject(session)
             .environmentObject(localizer)
     }
 

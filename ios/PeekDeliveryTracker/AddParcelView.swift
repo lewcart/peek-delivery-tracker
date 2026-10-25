@@ -9,6 +9,7 @@ struct AddParcelView: View {
     private let scanning: Bool
 
     @EnvironmentObject private var store: ParcelStore
+    @EnvironmentObject private var session: SessionStore
     @EnvironmentObject private var localizer: Localizer
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -32,6 +33,8 @@ struct AddParcelView: View {
     @State private var refusedQuestion: NumberRefusalRequest?
     /// The number whose check digit was questioned and then added as typed.
     @State private var asTyped: String?
+    /// The number chosen among several in one text.
+    @State private var pick: String?
     @FocusState private var focusedField: Field?
 
     @ObservedObject private var catalog = CarrierCatalog.shared
@@ -282,6 +285,8 @@ struct AddParcelView: View {
                 duplicateParcelID = nil
                 errorMessage = nil
                 carrierOverride = nil
+                // A number chosen among several stays chosen while the text still names it.
+                if !several.contains(where: { $0.normalized == pick }) { pick = nil }
             }
             .padding(14)
             .background(Brand.paper, in: RoundedRectangle(cornerRadius: 14))
@@ -315,8 +320,13 @@ struct AddParcelView: View {
                 heldBackNote(title: localizer.text("door.typo.check"),
                              body: localizer.text(typo.suggestion == nil ? "door.typo.compare" : "door.typo.letter"))
                 if let suggestion = typo.suggestion {
-                    Button(localizer.text("door.typo.suggest", ["number": suggestion])) { use(suggestion) }
-                        .font(.subheadline)
+                    Button { use(suggestion) } label: {
+                        Text(Self.suggestionLabel(suggestion, typed: normalizedNumber) {
+                            localizer.text("door.typo.suggest", ["number": $0])
+                        })
+                    }
+                    .font(.subheadline)
+                    .accessibilityLabel(localizer.text("door.typo.suggest", ["number": suggestion]))
                 }
                 Button(localizer.text("door.typo.asTyped")) {
                     asTyped = normalizedNumber
@@ -376,15 +386,19 @@ struct AddParcelView: View {
         let automatic = catalog.tracksAutomatically(resolvedCarrier)
 
         return VStack(alignment: .leading, spacing: 10) {
-            carrierLine
+            if several.isEmpty {
+                carrierLine
 
-            if parsed.source == .link || parsed.source == .text {
-                Label(CarrierCatalog.format(parsed.trackingNumber, carrier: resolvedCarrier), systemImage: "barcode")
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
-                    .accessibilityLabel(localizer.text(parsed.source == .link ? "add.foundLink" : "add.foundText", [
-                        "number": CarrierCatalog.format(parsed.trackingNumber, carrier: resolvedCarrier),
-                    ]))
+                if parsed.source == .link || parsed.source == .text {
+                    Label(CarrierCatalog.format(parsed.trackingNumber, carrier: resolvedCarrier), systemImage: "barcode")
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                        .accessibilityLabel(localizer.text(parsed.source == .link ? "add.foundLink" : "add.foundText", [
+                            "number": CarrierCatalog.format(parsed.trackingNumber, carrier: resolvedCarrier),
+                        ]))
+                }
+            } else {
+                numberChoice
             }
 
             if !automatic || shippingConfirmed {
@@ -417,6 +431,72 @@ struct AddParcelView: View {
             }
         }
         .foregroundStyle(Brand.ink)
+    }
+
+    /// Several numbers in one text, in the order written: the first is added unless another is chosen, as on the
+    /// front door. Each one's carrier is certain, so the carrier line gives way to the list.
+    private var numberChoice: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(localizer.text("door.several.title.many", ["count": several.count]))
+                .font(.subheadline.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(several, id: \.normalized) { number in
+                numberRow(number, chosen: number.normalized == picked?.normalized)
+            }
+            // Someone signed in keeps them together already.
+            if store.isGuest {
+                let question = Text(localizer.text("door.several.question")).foregroundStyle(.secondary)
+                let signIn = Button(localizer.text("door.several.signIn")) {
+                    dismiss()
+                    session.showSignIn()
+                }
+                .fontWeight(.medium)
+                .underline()
+                .frame(minHeight: 44)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) { question; signIn }
+                    VStack(alignment: .leading, spacing: 0) { question.padding(.top, 6); signIn }
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    private func numberRow(_ number: NumberInText, chosen: Bool) -> some View {
+        let carrier = number.match.carrier
+        let name = catalog.info(for: carrier, language: localizer.language).displayName
+        let printed = CarrierCatalog.format(number.match.trackingNumber, carrier: carrier)
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        return Button { choose(number) } label: {
+            HStack(spacing: 12) {
+                CarrierTruckMark(identity: CarrierVisualIdentity.of(carrier, language: localizer.language))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name).font(.subheadline.weight(.semibold))
+                    Text(printed)
+                        .font(.caption.monospaced().weight(.medium))
+                        .foregroundStyle(Brand.inkSoft)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(chosen ? ExperimentalPalette.ochre : Brand.separator)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(minHeight: 56)
+            .background(chosen ? ExperimentalPalette.ochreSurface : Brand.paper, in: shape)
+            .overlay(shape.strokeBorder(chosen ? ExperimentalPalette.ochre : Brand.separator.opacity(0.3), lineWidth: chosen ? 1.5 : 1))
+            .contentShape(shape)
+        }
+        .buttonStyle(TactileButtonStyle(scale: 0.98))
+        .foregroundStyle(Brand.ink)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(name)
+        .accessibilityValue(printed)
+        .accessibilityAddTraits(chosen ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("addParcel.number.\(number.normalized)")
     }
 
     /// One quiet line under the number: the carrier once one is known, and
@@ -635,7 +715,7 @@ struct AddParcelView: View {
                     ProgressView().tint(Brand.onAccent)
                     Text(localizer.text("add.adding"))
                 } else {
-                    Text(localizer.text("app.addParcel"))
+                    Text(localizer.text(several.isEmpty ? "app.addParcel" : "door.several.track"))
                 }
             }
             .font(.headline)
@@ -665,24 +745,50 @@ struct AddParcelView: View {
         DataScannerViewController.isSupported && DataScannerViewController.isAvailable
     }
 
-    /// The shop whose order number the field holds. No carrier tracks one, so nothing asks about it and it is not saved.
-    private var order: OrderShop? { catalog.order(in: trackingInput) }
+    /// Every number the field names with certainty, when it names two or more: one is to be chosen.
+    private var several: [NumberInText] { catalog.numbers(in: trackingInput) }
 
-    /// The number in play: none for an order number.
-    private var parsed: TrackingInputMatch { order == nil ? catalog.read(trackingInput) : CarrierCatalog.emptyMatch }
+    /// The number chosen among several: the first, unless another was chosen.
+    private var picked: NumberInText? { several.first { $0.normalized == pick } ?? several.first }
+
+    /// The shop whose order number the field holds. No carrier tracks one, so nothing asks about it and it is not saved.
+    /// A text that names several numbers is about them.
+    private var order: OrderShop? { picked == nil ? catalog.order(in: trackingInput) : nil }
+
+    /// The number in play: the one chosen among several, or none for an order number.
+    private var parsed: TrackingInputMatch {
+        picked?.match ?? (order == nil ? catalog.read(trackingInput) : CarrierCatalog.emptyMatch)
+    }
 
     private var normalizedNumber: String { CarrierCatalog.normalize(parsed.trackingNumber) }
 
     private static func trackingNumber(in input: String) -> String {
         let catalog = CarrierCatalog.shared
+        if let first = catalog.numbers(in: input).first { return first.normalized }
         return catalog.order(in: input) == nil ? CarrierCatalog.normalize(catalog.read(input).trackingNumber) : ""
     }
 
     private var amazonNumber: Bool { catalog.isAmazonTrackingNumber(parsed.trackingNumber) }
 
-    /// A postal number whose check digit doesn't add up, until it is added as typed.
+    /// A postal number whose check digit doesn't add up, until it is added as typed. A number chosen among several
+    /// is certain of its carrier.
     private var typo: CheckDigitTrouble? {
-        normalizedNumber.isEmpty || asTyped == normalizedNumber ? nil : catalog.checkDigitTrouble(normalizedNumber)
+        normalizedNumber.isEmpty || picked != nil || asTyped == normalizedNumber ? nil : catalog.checkDigitTrouble(normalizedNumber)
+    }
+
+    /// "Did you mean …?", with the number set in monospace and each character the suggestion changes marked, as on
+    /// the front door.
+    static func suggestionLabel(_ suggestion: String, typed: String, sentence: (String) -> String) -> AttributedString {
+        let parts = sentence("\u{0}").components(separatedBy: "\u{0}")
+        var number = AttributedString()
+        let typed = Array(typed)
+        for (index, character) in suggestion.enumerated() {
+            var piece = AttributedString(String(character))
+            if index >= typed.count || typed[index] != character { piece.backgroundColor = ExperimentalPalette.ochreSurface }
+            number += piece
+        }
+        number.font = Font.subheadline.monospaced()
+        return AttributedString(parts.first ?? "") + number + AttributedString(parts.dropFirst().joined())
     }
 
     /// Six digits are a pickup code unless a carrier picked by hand takes them as its number.
@@ -912,6 +1018,19 @@ struct AddParcelView: View {
         focusedField = nil
         errorMessage = nil
         duplicateParcelID = nil
+    }
+
+    /// Chooses one of several numbers in the text: the carriers are asked about it at once, and the keyboard
+    /// leaves the list and the button in view.
+    private func choose(_ number: NumberInText) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) {
+            pick = number.normalized
+        }
+        focusedField = nil
+        carrierOverride = nil
+        errorMessage = nil
+        duplicateParcelID = nil
+        recognition.settledNumber = number.normalized
     }
 
     /// Puts the number the check digit suggests in the field, as a paste would.

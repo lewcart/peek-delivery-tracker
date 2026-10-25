@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import PeekDeliveryTracker
 
@@ -2006,6 +2007,54 @@ extension CarrierCatalogTests {
         for example in file.checkDigits {
             let expected = example.trouble ? CheckDigitTrouble(suggestion: example.suggestion) : nil
             XCTAssertEqual(catalog.checkDigitTrouble(example.number), expected, example.number)
+        }
+    }
+
+    /// "Did you mean …?" marks the characters the suggestion changes, and only those, as the front door does.
+    func testSuggestionMarksTheCharactersItChanges() {
+        let cases = [
+            (typed: "LX1234567B5DE", suggestion: "LX123456785DE", marked: ["8"]),
+            (typed: "1X123456785DE", suggestion: "IX123456785DE", marked: ["I"]),
+            (typed: "RR12345678SCH", suggestion: "RR123456785CH", marked: ["5"]),
+            (typed: "LXZ234567B5DE", suggestion: "LX223456785DE", marked: ["2", "8"]),
+        ]
+        for example in cases {
+            let label = AddParcelView.suggestionLabel(example.suggestion, typed: example.typed) { "Meinten Sie \($0) wirklich?" }
+            XCTAssertEqual(String(label.characters), "Meinten Sie \(example.suggestion) wirklich?")
+            let marked = label.runs[AttributeScopes.SwiftUIAttributes.BackgroundColorAttribute.self]
+                .filter { $0.0 != nil }
+                .map { String(label[$0.1].characters) }
+            XCTAssertEqual(marked, example.marked, example.typed)
+            // The number is set in monospace; the words around it are not.
+            let set = label.runs[AttributeScopes.SwiftUIAttributes.FontAttribute.self]
+                .filter { $0.0 != nil }
+                .map { String(label[$0.1].characters) }
+            XCTAssertEqual(set, [example.suggestion], example.typed)
+        }
+    }
+
+    /// The front door's lists of several numbers in one text (shared/reading.json): Add lists the same, in the
+    /// same order, and the first is the one it adds unless another is chosen.
+    func testSeveralNumbersAreListedAsTheFrontDoorListsThem() throws {
+        struct Number: Decodable, Equatable {
+            let number: String
+            let carrier: String
+        }
+        struct Example: Decodable {
+            let text: String
+            let numbers: [Number]
+        }
+        struct File: Decodable {
+            let several: [Example]
+        }
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "Reading", withExtension: "json"))
+        let file = try JSONDecoder().decode(File.self, from: Data(contentsOf: url))
+        XCTAssertGreaterThan(file.several.count, 5)
+        for example in file.several {
+            let listed = catalog.numbers(in: example.text)
+            XCTAssertEqual(listed.map { Number(number: $0.normalized, carrier: $0.match.carrier.rawValue) }, example.numbers,
+                           String(reflecting: example.text))
+            XCTAssertTrue(listed.allSatisfy { $0.match.confidence == .high }, String(reflecting: example.text))
         }
     }
 
