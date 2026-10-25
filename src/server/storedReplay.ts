@@ -2,11 +2,14 @@
  * Replays stored scans through the installed scraper release, asking no provider: what the release
  * would write for each stored row of a carrier's or universal provider's scan, from the row's own
  * fields. Two things a release changes replay so. A wall clock the app dated on a zone it deduced
- * is dated again (`dateLocalClocks`); a scan whose time came with its offset keeps it. A scan's
- * stage is read again from what its source's status map says of its code and wording
- * (`statusMapAnswer`): a stage the map now gives otherwise, a notice the map says keeps the stage
- * it had, which takes the stage the sync gave the source's scan before it, and, where the map
- * knows neither, the wording rules for a scan its adapter gave no stage. A notice stored as one
+ * is dated again (`dateLocalClocks`); a scan whose time came with its offset keeps it, as does one
+ * on its carrier's home clock, which the stored row cannot tell from a clock its adapter states
+ * itself (ZTO International dates every scan on Shanghai's). A scan's stage is read again from
+ * what its source's status map says of its code and wording (`statusMapAnswer`): a stage the map
+ * now gives otherwise, a notice the map says keeps the stage it had, which takes the stage its
+ * adapter gave the source's scan before it and is stored as the sync stores it (`scanStages`:
+ * pending after the delivery round), and, where the map knows neither, the wording rules for a
+ * scan its adapter gave no stage. A notice stored as one
  * keeps its stage, as do differences that come only from the order of the scans around a row:
  * the next check of the parcel settles those. Peek's own rows and the stage changes it saw without
  * a scan time are left out. It is a dry run: it lists the rows that would change and the SQL that
@@ -15,8 +18,9 @@
  */
 import { classifyStage, type CarrierResult } from 'universal-parcel-scraper';
 import { statusMapAnswer } from 'universal-parcel-scraper/app';
-import { dateLocalClocks } from 'universal-parcel-scraper/places';
+import { carrierHomeZone, dateLocalClocks } from 'universal-parcel-scraper/places';
 import { STAGES } from '../generated/apiContract';
+import { scanStages } from './disputedDelivery';
 import { providerEventId } from './eventIdentity';
 import { isRecord, type JsonObject } from './types';
 
@@ -55,6 +59,8 @@ export interface StageChange extends Change {
   code: string | null;
   /** Where the new stage comes from: the map, a notice keeping the stage before it, or the wording. */
   reason: 'mapped' | 'notice' | 'wording';
+  /** The stage its adapter would give the scan, which the sync keeps in the row's raw data; null for none. */
+  declared: string | null;
   stageSource: string;
 }
 export type ReplayedChange = ClockChange | StageChange;
@@ -74,7 +80,8 @@ const VALID_STAGES = new Set<string>(STAGES);
 
 const sourceOf = (scan: StoredScan) => scan.providerEventId.slice(0, Math.max(0, scan.providerEventId.indexOf(':')));
 const text = (value: unknown) => typeof value === 'string' ? value : null;
-const deduced = (scan: StoredScan) => text(scan.raw.local_time) !== null && DEDUCED.has(String(scan.raw.time_zone_basis));
+const deduced = (scan: StoredScan) => text(scan.raw.local_time) !== null && DEDUCED.has(String(scan.raw.time_zone_basis))
+  && !(scan.raw.time_zone_basis === 'carrier' && scan.raw.time_zone === carrierHomeZone(sourceOf(scan)));
 
 /** Every stored row of the parcel the installed release would write otherwise. */
 export function replayParcel(parcel: StoredParcel): ReplayedChange[] {
@@ -124,32 +131,40 @@ function replayedClocks(parcel: StoredParcel, source: string, ordered: StoredSca
 }
 
 function replayedStages(parcel: StoredParcel, source: string, ordered: StoredScan[]): StageChange[] {
-  const changes: StageChange[] = [];
-  // The stage the sync gives the scan before, the one a notice keeps.
+  // What the adapter would give each scan, as the sync reads the answer: its stage and how it came by it.
+  const scans: JsonObject[] = [];
+  const reasons: (StageChange['reason'] | null)[] = [];
+  // The stage the adapter gives the scan before, the one a notice keeps.
   let previous: string | null = null;
   for (const scan of ordered) {
-    const code = text(scan.raw.provider_code);
-    const answer = statusMapAnswer({ carrier: source, providerCode: code, description: scan.description });
+    const answer = statusMapAnswer({ carrier: source, providerCode: text(scan.raw.provider_code), description: scan.description });
     const declared = VALID_STAGES.has(String(scan.raw.stage)) ? String(scan.raw.stage) : null;
-    let to = scan.stage;
+    const wording = classifyStage(scan.description);
+    let given: JsonObject = { ...(declared ? { stage: declared } : {}), stage_source: scan.raw.stage_source ?? null };
     let reason: StageChange['reason'] | null = null;
     if (answer.kind === 'mapped') {
-      if (answer.stage !== declared) [to, reason] = [answer.stage, 'mapped'];
+      if (answer.stage !== declared) [given, reason] = [{ stage: answer.stage, stage_source: 'carrier_map' }, 'mapped'];
     } else if (answer.kind === 'intentional_gap' && KEEPS_STAGE.test(answer.note)) {
       // A notice stored as one kept the stage its adapter saw before it, which the stored rows may not show.
-      if (!(declared && scan.raw.stage_source === 'none')) [to, reason] = [previous ?? 'registered', 'notice'];
-    } else if (answer.kind === 'unknown' && !declared) {
-      const wording = classifyStage(scan.description);
-      if (wording.source !== 'none') [to, reason] = [wording.stage, 'wording'];
+      if (!(declared && scan.raw.stage_source === 'none')) [given, reason] = [{ stage: previous ?? 'registered', stage_source: 'none' }, 'notice'];
+    } else if (answer.kind === 'unknown' && !declared && wording.source !== 'none') {
+      reason = 'wording';
     }
-    previous = to;
-    if (!reason || to === scan.stage) continue;
-    changes.push({
-      kind: 'stage', parcel: parcel.id, row: scan.id, source, open: parcel.open, from: scan.stage, to, code, reason,
-      stageSource: reason === 'mapped' ? 'carrier_map' : reason === 'wording' ? classifyStage(scan.description).source : 'none',
-    });
+    previous = text(given.stage) ?? (reason === 'wording' ? wording.stage : scan.stage);
+    scans.push({ ...given, description: scan.description });
+    reasons.push(reason);
   }
-  return changes;
+  const stages = scanStages(scans, ordered.map((scan) => scan.occurredAt));
+  return ordered.flatMap((scan, index): StageChange[] => {
+    const reason = reasons[index];
+    const to = stages[index];
+    if (!reason || to === scan.stage) return [];
+    return [{
+      kind: 'stage', parcel: parcel.id, row: scan.id, source, open: parcel.open, from: scan.stage, to,
+      code: text(scan.raw.provider_code), reason, declared: text(scans[index].stage),
+      stageSource: reason === 'mapped' ? 'carrier_map' : reason === 'wording' ? classifyStage(scan.description).source : 'none',
+    }];
+  });
 }
 
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
@@ -166,8 +181,8 @@ export function replaySql(changes: readonly ReplayedChange[]): string {
    where id = ${literal(change.row)} and occurred_at = ${literal(change.from)} and provider_event_id = ${literal(change.previousProviderEventId)};
   get diagnostics n = row_count; total := total + n;`
     : `  update public.tracking_events set stage = ${literal(change.to)},
-    raw_data = raw_data || ${literal(JSON.stringify(change.reason === 'mapped' || change.reason === 'notice'
-      ? { stage: change.to, stage_source: change.stageSource } : { stage_source: change.stageSource }))}::jsonb
+    raw_data = raw_data || ${literal(JSON.stringify(change.declared
+      ? { stage: change.declared, stage_source: change.stageSource } : { stage_source: change.stageSource }))}::jsonb
    where id = ${literal(change.row)} and stage = ${literal(change.from)};
   get diagnostics n = row_count; total := total + n;`);
   return `\\set ON_ERROR_STOP on

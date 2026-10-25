@@ -28,6 +28,19 @@ describe('stored scan replay', () => {
     expect(changes).toEqual([expect.objectContaining({ row: 'read', from: 'in_transit', to: 'registered', reason: 'notice', stageSource: 'none' })]);
   });
 
+  it('stores a notice after the delivery round as the sync does, pending', () => {
+    const changes = replayParcel(parcel(
+      scan('delivered', 'dpd-de', '2026-10-18T10:00:00Z', 'delivered', 'Delivered', { provider_code: 'DELIVERED', stage: 'delivered' }),
+      scan('mapped', 'dpd-de', '2026-10-18T11:00:00Z', 'delivered', 'Delivery notice sent', { provider_code: 'MSDLO', stage: 'delivered' }),
+      scan('pending', 'dpd-de', '2026-10-18T12:00:00Z', 'pending', 'Delivery notice sent again', { provider_code: 'MSDLO', stage_source: 'wording:language' }),
+    ));
+
+    expect(changes).toEqual([expect.objectContaining({ row: 'mapped', from: 'delivered', to: 'pending', reason: 'notice', declared: 'delivered', stageSource: 'none' })]);
+    const sql = replaySql(changes);
+    expect(sql).toContain("set stage = 'pending'");
+    expect(sql).toContain(`'{"stage":"delivered","stage_source":"none"}'::jsonb`);
+  });
+
   it('dates a wall clock again on the zone the release deduces, with the identity the sync would give it', () => {
     const [change] = replayParcel(parcel(
       scan('clock', 'poczta-polska', '2026-10-20T10:00:00Z', 'in_transit', 'Posted abroad', { local_time: '2026-10-20T10:00:00', time_zone: 'UTC', time_zone_basis: 'carrier', stage: 'in_transit' }),
@@ -45,6 +58,15 @@ describe('stored scan replay', () => {
       scan('seen', 'gofo', '2026-10-19T10:00:00Z', 'in_transit', 'Arrived at GOFO Regional Origin Hub', { provider_code: '202', observed_without_provider_timestamp: true }),
       scan('stated', 'poczta-polska', '2026-10-20T10:00:00Z', 'in_transit', 'Posted abroad', { time: '2026-10-20T10:00:00Z', stage: 'in_transit' }),
     ))).toEqual([]);
+  });
+
+  it("leaves a scan on its carrier's home clock, which its adapter may state itself", () => {
+    expect(replayParcel(parcel({
+      ...scan('home', 'zto-international', '2026-10-20T02:00:00Z', 'in_transit', 'Arrived at the sorting centre', {
+        local_time: '2026-10-20T10:00:00', time: '2026-10-20T10:00:00+08:00', time_zone: 'Asia/Shanghai', time_zone_basis: 'carrier', stage: 'in_transit',
+      }),
+      location: 'Bangkok, Thailand',
+    }))).toEqual([]);
   });
 
   it('writes one transaction, left open, that fails unless every guarded row changes', () => {
